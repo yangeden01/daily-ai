@@ -1,0 +1,254 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    color: #1c1917;
+    background: #f4f4f5;
+    font-synthesis: none;
+  }
+
+  html { color-scheme: light; }
+
+  body {
+    margin: 0;
+    min-width: 320px;
+    min-height: 100dvh;
+    background: #f4f4f5;
+  }
+
+  button, textarea { font: inherit; }
+  button { -webkit-tap-highlight-color: transparent; }
+
+  @media (prefers-color-scheme: dark) {
+    html { color-scheme: dark; }
+    body { color: #f5f5f4; background: #101114; }
+  }
+}
+
+@layer components {
+  .app-header {
+    @apply fixed inset-x-0 top-0 z-20 border-b border-stone-200/70 bg-white/90 pt-[env(safe-area-inset-top)] backdrop-blur-xl dark:border-white/10 dark:bg-[#17181c]/90;
+  }
+
+  .editor-card,
+  .ai-composer,
+  .settings-card,
+  .event-list,
+  .status-card {
+    @apply overflow-hidden rounded-[1.5rem] border border-stone-200/70 bg-white shadow-sm shadow-stone-900/[0.03] dark:border-white/10 dark:bg-[#1c1d22] dark:shadow-black/20;
+  }
+
+  .detail-card {
+    @apply overflow-hidden rounded-[1.5rem] border border-stone-200/70 bg-white shadow-sm shadow-stone-900/[0.03] dark:border-white/10 dark:bg-[#1c1d22] dark:shadow-black/20;
+  }
+
+  .event-row-link {
+    @apply transition hover:bg-stone-50 active:bg-stone-100 dark:hover:bg-white/[0.04] dark:active:bg-white/[0.07];
+  }
+
+  .detail-back-link {
+    @apply inline-flex items-center gap-1.5 text-sm font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-300 dark:hover:text-indigo-200;
+  }
+
+  .edit-button {
+    @apply inline-flex min-h-10 items-center gap-2 rounded-xl bg-indigo-50 px-4 text-sm font-bold text-indigo-600 transition hover:bg-indigo-100 active:scale-95 dark:bg-indigo-500/15 dark:text-indigo-300 dark:hover:bg-indigo-500/25;
+  }
+
+  .detail-label {
+    @apply mb-2 text-[11px] font-bold uppercase tracking-[0.14em] text-stone-400 dark:text-stone-500;
+  }
+
+  .tag-chip {
+    @apply rounded-full bg-stone-100 px-3 py-1.5 text-xs font-semibold text-stone-600 dark:bg-white/[0.07] dark:text-stone-300;
+  }
+
+  .metric-card {
+    @apply flex items-center justify-between rounded-2xl bg-stone-50 px-4 py-3 text-xs font-semibold text-stone-500 dark:bg-white/[0.04] dark:text-stone-400;
+  }
+
+  .metric-card strong {
+    @apply text-lg text-stone-900 dark:text-white;
+  }
+
+  .detail-meta {
+    @apply grid gap-3 border-t border-stone-100 bg-stone-50/70 px-5 py-4 text-xs dark:border-white/10 dark:bg-white/[0.025] sm:grid-cols-2 sm:px-6;
+  }
+
+  .detail-meta div { @apply flex items-center justify-between gap-3 sm:block; }
+  .detail-meta dt { @apply font-semibold text-stone-400; }
+  .detail-meta dd { @apply mt-0 text-right tabular-nums text-stone-600 dark:text-stone-300 sm:mt-1 sm:text-left; }
+
+  .detail-field-label {
+    @apply block text-xs font-bold text-stone-500 dark:text-stone-400;
+  }
+
+  .detail-input {
+    @apply mt-2 w-full rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-[16px] leading-6 text-stone-900 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 dark:border-white/10 dark:bg-white/[0.05] dark:text-white dark:focus:border-indigo-400 dark:focus:ring-indigo-500/10;
+  }
+
+  .detail-secondary-button,
+  .detail-save-button {
+    @apply flex min-h-12 items-center justify-center gap-2 rounded-2xl text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-50 active:scale-[0.98];
+  }
+
+  .detail-secondary-button { @apply bg-stone-100 text-stone-600 hover:bg-stone-200 dark:bg-white/[0.07] dark:text-stone-300 dark:hover:bg-white/10; }
+  .detail-save-button { @apply bg-indigo-600 text-white hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400; }
+
+  .detail-state {
+    @apply flex min-h-[calc(100dvh-13rem)] flex-col items-center justify-center gap-4 text-sm text-stone-400;
+  }
+
+  .status-card {
+    @apply flex min-h-[5.5rem] items-center gap-3.5 px-4 py-4;
+  }
+
+  .status-icon {
+    @apply grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-indigo-50 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300;
+  }
+
+  .status-badge {
+    @apply shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold;
+  }
+
+  .status-idle { @apply bg-stone-100 text-stone-500 dark:bg-white/[0.07] dark:text-stone-400; }
+  .status-working { @apply bg-blue-50 text-blue-600 dark:bg-blue-500/15 dark:text-blue-300; }
+  .status-ready { @apply bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300; }
+  .status-error { @apply bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-300; }
+
+  .cloud-button {
+    @apply flex min-h-[3.25rem] items-center justify-center gap-2 rounded-2xl px-5 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-60 active:scale-[0.98];
+  }
+
+  .cloud-button-primary {
+    @apply bg-indigo-600 text-white shadow-lg shadow-indigo-600/20 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400;
+  }
+
+  .cloud-button-secondary {
+    @apply border border-stone-200 bg-white text-stone-700 hover:bg-stone-50 dark:border-white/10 dark:bg-[#1c1d22] dark:text-stone-200 dark:hover:bg-white/10;
+  }
+
+  .backup-button {
+    @apply flex min-h-[3.25rem] items-center justify-center gap-2 rounded-2xl px-3 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-50 active:scale-[0.98];
+  }
+
+  .backup-button-primary {
+    @apply bg-indigo-600 text-white shadow-lg shadow-indigo-600/20 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400;
+  }
+
+  .backup-button-secondary {
+    @apply border border-stone-200 bg-white text-stone-700 hover:bg-stone-50 dark:border-white/10 dark:bg-[#1c1d22] dark:text-stone-200 dark:hover:bg-white/10;
+  }
+
+  .success-notice {
+    @apply mt-4 flex items-start gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs leading-5 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300;
+  }
+
+  .error-notice {
+    @apply mt-4 flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-xs leading-5 text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300;
+  }
+
+  .event-row {
+    @apply grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 border-b border-stone-100 px-5 py-5 last:border-b-0 dark:border-white/10;
+  }
+
+  .event-date {
+    @apply col-span-2 text-xs font-medium tabular-nums text-stone-400 dark:text-stone-500;
+  }
+
+  .event-title {
+    @apply min-w-0 truncate text-[15px] font-semibold text-stone-900 dark:text-stone-100;
+  }
+
+  .event-category {
+    @apply self-center rounded-full bg-indigo-50 px-2.5 py-1 text-[11px] font-bold text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300;
+  }
+
+  .daily-textarea {
+    @apply min-h-[19rem] w-full resize-none bg-transparent p-5 text-[16px] leading-7 text-stone-900 outline-none placeholder:text-stone-400 dark:text-stone-100 dark:placeholder:text-stone-500 sm:p-6;
+  }
+
+  .create-event-textarea {
+    @apply min-h-[12rem] w-full resize-y bg-transparent p-5 text-[16px] leading-7 text-stone-900 outline-none placeholder:text-stone-400 dark:text-stone-100 dark:placeholder:text-stone-500 sm:p-6;
+  }
+
+  .editor-toolbar {
+    @apply grid grid-cols-3 border-t border-stone-100 p-2 dark:border-white/10;
+  }
+
+  .tool-button {
+    @apply flex min-h-14 flex-col items-center justify-center gap-1.5 rounded-2xl text-[11px] font-semibold text-stone-500 transition hover:bg-stone-50 hover:text-indigo-600 active:scale-95 dark:text-stone-400 dark:hover:bg-white/5 dark:hover:text-indigo-300;
+  }
+
+  .primary-button {
+    @apply mt-5 flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-5 text-base font-bold text-white shadow-lg shadow-indigo-600/20 transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50 active:scale-[0.98] dark:bg-indigo-500 dark:hover:bg-indigo-400;
+  }
+
+  .ai-mark {
+    @apply mx-auto grid h-16 w-16 place-items-center rounded-[1.4rem] bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-xl shadow-indigo-500/20;
+  }
+
+  .ai-composer {
+    @apply p-3 shadow-xl shadow-stone-900/[0.06] dark:shadow-black/30;
+  }
+
+  .ai-textarea {
+    @apply min-h-[14rem] w-full resize-none bg-transparent px-3 py-3 text-[16px] leading-7 text-stone-900 outline-none placeholder:text-stone-400 dark:text-stone-100 dark:placeholder:text-stone-500;
+  }
+
+  .send-button {
+    @apply grid h-10 w-10 place-items-center rounded-xl bg-stone-900 text-white transition hover:bg-indigo-600 active:scale-95 dark:bg-white dark:text-stone-950 dark:hover:bg-indigo-300;
+  }
+
+  .section-label {
+    @apply mb-2.5 px-1 text-xs font-bold uppercase tracking-[0.14em] text-stone-400 dark:text-stone-500;
+  }
+
+  .settings-row {
+    @apply flex min-h-[5rem] items-center gap-3.5 px-4 py-3;
+  }
+
+  .settings-icon {
+    @apply grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-stone-100 text-stone-600 dark:bg-white/[0.07] dark:text-stone-300;
+  }
+
+  .settings-title {
+    @apply text-sm font-semibold text-stone-900 dark:text-stone-100;
+  }
+
+  .settings-detail {
+    @apply mt-0.5 text-xs text-stone-400;
+  }
+
+  .coming-soon {
+    @apply rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-700 dark:bg-amber-400/10 dark:text-amber-300;
+  }
+
+  .bottom-nav {
+    @apply fixed inset-x-0 bottom-0 z-20 border-t border-stone-200/70 bg-white/90 px-4 pb-[max(.6rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl dark:border-white/10 dark:bg-[#17181c]/90;
+  }
+
+  .tab {
+    @apply flex min-h-14 flex-col items-center justify-center gap-1 rounded-2xl text-[11px] font-semibold text-stone-400 transition active:scale-95 dark:text-stone-500;
+  }
+
+  .tab-active {
+    @apply bg-indigo-50 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300;
+  }
+
+  .page-enter { animation: page-enter 0.25s ease-out both; }
+}
+
+@keyframes page-enter {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
