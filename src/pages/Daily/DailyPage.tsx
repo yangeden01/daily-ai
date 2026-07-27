@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
-import { Check, LoaderCircle } from 'lucide-react'
-import { ChevronRight } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
+import { Check, ChevronRight, LoaderCircle, RotateCcw, Search, SlidersHorizontal } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import type { Event } from '../../models/Event'
 import { eventRepository } from '../../repositories'
@@ -20,17 +19,35 @@ const getLocalDate = (): string => {
 export default function DailyPage() {
   const [rawText, setRawText] = useState('')
   const [events, setEvents] = useState<Event[]>([])
+  const [categories, setCategories] = useState<string[]>([])
+  const [keyword, setKeyword] = useState('')
+  const [category, setCategory] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const searchRequest = useRef(0)
 
   const loadEvents = useCallback(async () => {
+    const requestId = ++searchRequest.current
+    const items = await eventRepository.search({ keyword, category, dateFrom, dateTo })
+    if (requestId === searchRequest.current) setEvents(sortNewestFirst(items))
+  }, [category, dateFrom, dateTo, keyword])
+
+  const loadCategories = useCallback(async () => {
     const items = await eventRepository.getAll()
-    setEvents(sortNewestFirst(items))
+    setCategories([...new Set(items.map((event) => event.category))].sort((a, b) => a.localeCompare(b)))
   }, [])
 
   useEffect(() => {
-    void loadEvents()
+    void loadEvents().catch((error) => {
+      setErrorMessage(error instanceof Error ? error.message : '事件載入失敗')
+    })
   }, [loadEvents])
+
+  useEffect(() => {
+    void loadCategories()
+  }, [loadCategories])
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -57,13 +74,21 @@ export default function DailyPage() {
       }
 
       await eventRepository.add(newEvent)
-      await loadEvents()
+      await Promise.all([loadEvents(), loadCategories()])
       setRawText('')
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : '事件儲存失敗')
     } finally {
       setIsSaving(false)
     }
+  }
+
+  const hasFilters = Boolean(keyword || category || dateFrom || dateTo)
+  const resetFilters = () => {
+    setKeyword('')
+    setCategory('')
+    setDateFrom('')
+    setDateTo('')
   }
 
   return (
@@ -88,13 +113,31 @@ export default function DailyPage() {
         </button>
       </form>
 
+      <section className="mt-9" aria-labelledby="filters-title">
+        <div className="mb-3 flex items-center justify-between px-1">
+          <h2 id="filters-title" className="section-label !mb-0 flex items-center gap-2"><SlidersHorizontal size={14} />搜尋與篩選</h2>
+          {hasFilters && <button type="button" className="reset-filter-button" onClick={resetFilters}><RotateCcw size={13} />清除</button>}
+        </div>
+        <div className="filter-card">
+          <label className="search-field" htmlFor="event-search">
+            <Search size={18} />
+            <input id="event-search" type="search" value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜尋標題、內容或 Tag" />
+          </label>
+          <div className="filter-grid">
+            <label className="filter-field"><span>Category</span><select value={category} onChange={(event) => setCategory(event.target.value)}><option value="">全部</option>{categories.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
+            <label className="filter-field"><span>開始日期</span><input type="date" value={dateFrom} max={dateTo || undefined} onChange={(event) => setDateFrom(event.target.value)} /></label>
+            <label className="filter-field"><span>結束日期</span><input type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => setDateTo(event.target.value)} /></label>
+          </div>
+        </div>
+      </section>
+
       <section className="mt-9" aria-labelledby="timeline-title">
         <div className="mb-3 flex items-center justify-between px-1">
           <h2 id="timeline-title" className="section-label !mb-0">Timeline</h2>
           <span className="text-xs tabular-nums text-stone-400">{events.length} events</span>
         </div>
         <div className="event-list">
-          {events.map((event) => (
+          {events.length > 0 ? events.map((event) => (
             <Link className="event-row event-row-link" to={`/daily/${event.id}`} key={event.id}>
               <time className="event-date" dateTime={event.date}>{event.date}</time>
               <h3 className="event-title">{event.title}</h3>
@@ -103,7 +146,7 @@ export default function DailyPage() {
                 <ChevronRight size={16} className="text-stone-300 dark:text-stone-600" />
               </span>
             </Link>
-          ))}
+          )) : <div className="empty-timeline"><Search size={22} /><p>找不到符合條件的事件</p>{hasFilters && <button type="button" onClick={resetFilters}>清除篩選</button>}</div>}
         </div>
       </section>
     </main>

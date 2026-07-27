@@ -46,4 +46,19 @@ describe('IndexedDBRepository', () => {
     const repository = createRepository()
     await expect(repository.update('missing', createTestEvent())).rejects.toThrow('Event not found: missing')
   })
+
+  it('filters by keyword, category, and inclusive date range', async () => {
+    const repository = createRepository()
+    await repository.replaceAll([
+      createTestEvent({ id: 'work-1', date: '2026-07-20', title: 'Dell EVT 會議', detail: '討論時程', category: 'work', tags: ['Dell'] }),
+      createTestEvent({ id: 'travel-1', date: '2026-07-22', title: '九州旅行', detail: '去了福岡', category: 'travel', tags: ['日本'] }),
+      createTestEvent({ id: 'finance-1', date: '2026-07-25', title: '所得稅', detail: '完成報稅', category: 'finance', tags: ['國稅局'] }),
+    ])
+
+    await expect(repository.search({ keyword: '福岡' })).resolves.toMatchObject([{ id: 'travel-1' }])
+    await expect(repository.search({ keyword: '國稅局' })).resolves.toMatchObject([{ id: 'finance-1' }])
+    await expect(repository.search({ category: 'work' })).resolves.toMatchObject([{ id: 'work-1' }])
+    await expect(repository.search({ dateFrom: '2026-07-22', dateTo: '2026-07-25' })).resolves.toHaveLength(2)
+    await expect(repository.search({ keyword: '旅行', category: 'travel', dateFrom: '2026-07-22', dateTo: '2026-07-22' })).resolves.toMatchObject([{ id: 'travel-1' }])
+  })
 })

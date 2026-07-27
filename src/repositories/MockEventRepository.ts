@@ -1,5 +1,7 @@
 import type { Event } from '../models/Event'
+import type { EventSearchCriteria } from '../models/EventSearchCriteria'
 import { mockEvents } from '../mock/events'
+import { filterEvents } from '../utils/filterEvents'
 import type { EventRepository } from './EventRepository'
 
 const copyEvent = (event: Event): Event => ({
@@ -18,6 +20,10 @@ export class MockEventRepository implements EventRepository {
   async getById(id: string): Promise<Event | undefined> {
     const event = this.events.find((item) => item.id === id)
     return event ? copyEvent(event) : undefined
+  }
+
+  async search(criteria: EventSearchCriteria): Promise<Event[]> {
+    return filterEvents(this.events, criteria).map(copyEvent)
   }
 
   async add(event: Event): Promise<Event> {

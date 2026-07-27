@@ -1,5 +1,7 @@
 import type { Event } from '../models/Event'
+import type { EventSearchCriteria } from '../models/EventSearchCriteria'
 import { mockEvents } from '../mock/events'
+import { filterEvents } from '../utils/filterEvents'
 import type { EventRepository } from './EventRepository'
 
 const DATABASE_NAME = 'daily-ai'
@@ -47,6 +49,10 @@ export class IndexedDBRepository implements EventRepository {
     const event = await requestToPromise(transaction.objectStore(EVENT_STORE).get(id) as IDBRequest<Event | undefined>)
     await transactionToPromise(transaction)
     return event ? copyEvent(event) : undefined
+  }
+
+  async search(criteria: EventSearchCriteria): Promise<Event[]> {
+    return filterEvents(await this.getAll(), criteria)
   }
 
   async add(event: Event): Promise<Event> {

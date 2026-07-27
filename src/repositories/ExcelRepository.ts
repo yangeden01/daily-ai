@@ -1,8 +1,10 @@
 import type ExcelJS from 'exceljs'
 import type { Event } from '../models/Event'
+import type { EventSearchCriteria } from '../models/EventSearchCriteria'
 import { oneDriveService, type OneDriveService } from '../services/OneDriveService'
 import { WorkbookService } from '../services/WorkbookService'
 import { WorksheetService } from '../services/WorksheetService'
+import { filterEvents } from '../utils/filterEvents'
 import type { EventRepository } from './EventRepository'
 
 type EventRow = {
@@ -42,6 +44,10 @@ export class ExcelRepository implements EventRepository {
     const worksheet = await this.getEventsWorksheet()
     const row = this.findRow(worksheet, id)
     return row ? this.rowToEvent(row) : undefined
+  }
+
+  async search(criteria: EventSearchCriteria): Promise<Event[]> {
+    return filterEvents(await this.getAll(), criteria)
   }
 
   async add(event: Event): Promise<Event> {
