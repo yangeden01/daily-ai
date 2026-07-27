@@ -1,5 +1,6 @@
 import { useRef, useState, type ChangeEvent } from 'react'
-import { ArchiveRestore, Check, Cloud, Database, Download, FileSpreadsheet, Info, LoaderCircle, Package, Upload, X } from 'lucide-react'
+import { ArchiveRestore, Check, Cloud, Database, Download, FileSpreadsheet, Info, LoaderCircle, Package, ServerCog, Share, Smartphone, Upload, Wifi, WifiOff, X } from 'lucide-react'
+import { usePWA } from '../../contexts/PWAContext'
 
 type BackupStatus = 'idle' | 'working' | 'success' | 'error'
 
@@ -8,6 +9,7 @@ export default function SettingsPage() {
   const fullBackupInputRef = useRef<HTMLInputElement>(null)
   const [status, setStatus] = useState<BackupStatus>('idle')
   const [message, setMessage] = useState<string | null>(null)
+  const { isOnline, isInstalled, isStandalone, installPlatform, canPromptInstall, showInstallExperience, serviceWorkerStatus, install } = usePWA()
 
   const handleExport = async () => {
     setStatus('working')
@@ -97,6 +99,36 @@ export default function SettingsPage() {
 
   return (
     <main className="page-enter">
+      <p className="section-label">App Status</p>
+      <section className="settings-card divide-y divide-stone-100 dark:divide-white/10">
+        <div className="settings-row">
+          <span className="settings-icon"><Info size={20} /></span>
+          <div className="flex-1"><h2 className="settings-title">App Version</h2><p className="settings-detail">v0.1 Alpha</p></div>
+        </div>
+        <div className="settings-row">
+          <span className="settings-icon"><Smartphone size={20} /></span>
+          <div className="flex-1"><h2 className="settings-title">安裝狀態</h2><p className="settings-detail">{isInstalled ? (isStandalone ? '已安裝並以 App 模式執行' : '已安裝') : '尚未安裝'}</p></div>
+          <span className={`status-badge ${isInstalled ? 'status-ready' : 'status-idle'}`}>{isInstalled ? 'Installed' : 'Browser'}</span>
+        </div>
+        <div className="settings-row">
+          <span className="settings-icon">{isOnline ? <Wifi size={20} /> : <WifiOff size={20} />}</span>
+          <div className="flex-1"><h2 className="settings-title">網路狀態</h2><p className="settings-detail">{isOnline ? '已連線' : '離線，仍可使用本機功能'}</p></div>
+          <span className={`status-badge ${isOnline ? 'status-ready' : 'status-error'}`}>{isOnline ? 'Online' : 'Offline'}</span>
+        </div>
+        <div className="settings-row">
+          <span className="settings-icon"><ServerCog size={20} /></span>
+          <div className="flex-1"><h2 className="settings-title">Service Worker</h2><p className="settings-detail">{serviceWorkerStatus === 'ready' ? '離線 App Shell 已就緒' : serviceWorkerStatus === 'registering' ? '正在準備離線功能' : serviceWorkerStatus === 'unsupported' ? '此瀏覽器不支援' : '註冊失敗'}</p></div>
+          <span className={`status-badge ${serviceWorkerStatus === 'ready' ? 'status-ready' : serviceWorkerStatus === 'error' ? 'status-error' : 'status-idle'}`}>{serviceWorkerStatus}</span>
+        </div>
+      </section>
+
+      {showInstallExperience && installPlatform === 'standard' && canPromptInstall && (
+        <button type="button" className="install-app-button" onClick={() => void install()}><Smartphone size={18} />安裝 Daily AI</button>
+      )}
+      {showInstallExperience && installPlatform === 'ios' && (
+        <div className="ios-install-guide"><Share size={18} /><div><strong>加入 iPhone 主畫面</strong><span>在 Safari 點選分享，再選擇「加入主畫面」。</span></div></div>
+      )}
+
       <p className="section-label">Local Data</p>
       <section className="settings-card">
         <div className="settings-row">
@@ -173,16 +205,6 @@ export default function SettingsPage() {
         </div>
       </section>
 
-      <p className="section-label mt-8">About</p>
-      <section className="settings-card">
-        <div className="settings-row">
-          <span className="settings-icon"><Info size={20} /></span>
-          <div className="flex-1">
-            <h2 className="settings-title">Version</h2>
-            <p className="settings-detail">v0.1 Alpha</p>
-          </div>
-        </div>
-      </section>
     </main>
   )
 }
