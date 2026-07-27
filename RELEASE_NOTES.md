@@ -1,0 +1,34 @@
+# Daily AI v0.1 Alpha — Release Notes
+
+發布日期：2026-07-27
+
+Daily AI v0.1 Alpha 是第一個可日常試用的 local-first PWA 版本。此 Alpha 著重於快速記錄、離線可用、本機附件，以及使用者可自行掌控的備份與還原。
+
+## 本版內容
+
+- Daily Timeline：新增、檢視、編輯、刪除與依日期排序事件。
+- 搜尋與篩選：支援關鍵字、Category、Tag 與日期範圍組合查詢。
+- Tags：可在事件編輯畫面新增、刪除與自動去重。
+- Dashboard：指定月份事件總數、TWD 金額合計、Category 分布與最近六個月趨勢。
+- 照片與附件：本機儲存、縮圖／大圖預覽、下載及移除；單檔上限 10 MB，拒絕危險的可執行檔。
+- 備份：保留 Excel 匯出／匯入，另提供包含原始檔案的 ZIP 完整備份與安全還原。
+- PWA：Android／Windows 安裝提示、iPhone 加入主畫面說明、離線 App Shell、更新確認與 safe-area 版面。
+- 外觀與可用性：mobile-first 響應式版面、深色模式、鍵盤 focus 與基本無障礙改善。
+
+## 資料與相容性
+
+- 既有 IndexedDB、Excel 與 ZIP schema 未在此次發布作不相容變更。
+- 更新或重新整理 App 不會主動清除 IndexedDB。
+- Excel 備份只含附件 metadata；只有 ZIP 完整備份含照片與附件 Blob。
+
+## 已知限制
+
+- AI 功能為 Mock Provider，結果只用於 Alpha 操作流程驗證。
+- OneDrive 尚未啟用。
+- 尚無帳號系統及跨裝置同步。
+- 各平台的實際安裝選單名稱可能因作業系統與瀏覽器版本略有不同。
+- 清除瀏覽器網站資料會刪除本機資料；正式使用前請先熟悉完整備份與還原。
+
+## 建議驗收
+
+首次安裝後，請在實機完成一次新增／編輯／刪除事件、附件操作、離線重新啟動，以及 ZIP 完整備份／還原。Android Chrome、Windows Chrome／Edge 與 iPhone Safari 的原生安裝介面仍需分別在實機確認。
