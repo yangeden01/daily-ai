@@ -12,4 +12,13 @@ describe('sortEventsNewestFirst', () => {
 
     expect(sortEventsNewestFirst(events).map(({ id }) => id)).toEqual(['newer-time', 'older-time', 'older-date'])
   })
+
+  it('keeps a backfilled event on its selected historical date', () => {
+    const events = [
+      createTestEvent({ id: 'today', date: '2026-07-27', createdAt: '2026-07-27T01:00:00Z' }),
+      createTestEvent({ id: 'backfilled', date: '2024-03-10', createdAt: '2026-07-27T09:00:00Z' }),
+    ]
+
+    expect(sortEventsNewestFirst(events).map(({ id }) => id)).toEqual(['today', 'backfilled'])
+  })
 })

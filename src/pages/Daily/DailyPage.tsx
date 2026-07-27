@@ -5,16 +5,12 @@ import type { Event } from '../../models/Event'
 import { attachmentRepository, eventRepository } from '../../repositories'
 import { aiParserService } from '../../services/ai'
 import { filesToAttachments, formatFileSize, validateAttachmentFile } from '../../utils/attachments'
+import { toLocalDateInputValue } from '../../utils/localDate'
 import { sortEventsNewestFirst } from '../../utils/sortEvents'
-
-const getLocalDate = (): string => {
-  const now = new Date()
-  const localTime = new Date(now.getTime() - now.getTimezoneOffset() * 60_000)
-  return localTime.toISOString().slice(0, 10)
-}
 
 export default function DailyPage() {
   const [rawText, setRawText] = useState('')
+  const [eventDate, setEventDate] = useState(() => toLocalDateInputValue())
   const [pendingFiles, setPendingFiles] = useState<File[]>([])
   const [events, setEvents] = useState<Event[]>([])
   const [categories, setCategories] = useState<string[]>([])
@@ -62,7 +58,7 @@ export default function DailyPage() {
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const normalizedText = rawText.trim()
-    if (!normalizedText || isSaving) return
+    if (!normalizedText || !eventDate || isSaving) return
 
     setIsSaving(true)
     setErrorMessage(null)
@@ -74,7 +70,7 @@ export default function DailyPage() {
       const attachments = filesToAttachments(pendingFiles, eventId)
       const newEvent: Event = {
         id: eventId,
-        date: getLocalDate(),
+        date: eventDate,
         title: parsedEvent.title,
         detail: parsedEvent.rawText,
         category: parsedEvent.category,
@@ -94,6 +90,7 @@ export default function DailyPage() {
       }
       await Promise.all([loadEvents(), loadCategories()])
       setRawText('')
+      setEventDate(toLocalDateInputValue())
       setPendingFiles([])
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : '事件儲存失敗')
@@ -127,6 +124,16 @@ export default function DailyPage() {
     <main className="page-enter">
       <form onSubmit={handleSubmit}>
         <label className="section-label block" htmlFor="daily-event">新增事件</label>
+        <label className="filter-field mb-3" htmlFor="daily-event-date">
+          <span>事件日期</span>
+          <input
+            id="daily-event-date"
+            type="date"
+            value={eventDate}
+            onChange={(event) => setEventDate(event.target.value)}
+            required
+          />
+        </label>
         <section className="editor-card">
           <textarea
             id="daily-event"
@@ -158,7 +165,7 @@ export default function DailyPage() {
 
         {errorMessage && <p className="error-notice" role="alert">{errorMessage}</p>}
 
-        <button type="submit" className="primary-button" disabled={!rawText.trim() || isSaving}>
+        <button type="submit" className="primary-button" disabled={!rawText.trim() || !eventDate || isSaving}>
           {isSaving ? <LoaderCircle size={19} className="animate-spin" /> : <Check size={19} />}
           {isSaving ? '儲存中' : '儲存'}
         </button>

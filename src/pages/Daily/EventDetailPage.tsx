@@ -28,6 +28,7 @@ export default function EventDetailPage() {
   const [isEditing, setIsEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [eventDate, setEventDate] = useState('')
   const [title, setTitle] = useState('')
   const [detail, setDetail] = useState('')
   const [category, setCategory] = useState('')
@@ -60,6 +61,7 @@ export default function EventDetailPage() {
 
   const startEditing = () => {
     if (!event) return
+    setEventDate(event.date)
     setTitle(event.title)
     setDetail(event.detail)
     setCategory(event.category)
@@ -73,7 +75,7 @@ export default function EventDetailPage() {
 
   const handleSave = async (submitEvent: FormEvent<HTMLFormElement>) => {
     submitEvent.preventDefault()
-    if (!event || !title.trim() || !detail.trim() || !category.trim() || isSaving) return
+    if (!event || !eventDate || !title.trim() || !detail.trim() || !category.trim() || isSaving) return
 
     setIsSaving(true)
     setErrorMessage(null)
@@ -83,11 +85,12 @@ export default function EventDetailPage() {
       await attachmentRepository.addMany(addedAttachments)
       try {
         await eventRepository.update(event.id, {
-        ...event,
-        title: title.trim(),
-        detail: detail.trim(),
-        category: category.trim(),
-        tags: normalizeTags([...tags, tagInput]),
+          ...event,
+          date: eventDate,
+          title: title.trim(),
+          detail: detail.trim(),
+          category: category.trim(),
+          tags: normalizeTags([...tags, tagInput]),
           attachmentIds: [
             ...attachments.filter(({ id }) => !removedAttachmentIds.includes(id)).map(({ id }) => id),
             ...addedAttachments.map(({ id }) => id),
@@ -193,7 +196,10 @@ export default function EventDetailPage() {
 
       {isEditing ? (
         <form onSubmit={handleSave} className="detail-card p-5 sm:p-6">
-          <label className="detail-field-label" htmlFor="event-title">Title</label>
+          <label className="detail-field-label" htmlFor="event-date">事件日期</label>
+          <input id="event-date" type="date" className="detail-input" value={eventDate} onChange={(inputEvent) => setEventDate(inputEvent.target.value)} required />
+
+          <label className="detail-field-label mt-5" htmlFor="event-title">Title</label>
           <input id="event-title" className="detail-input" value={title} onChange={(inputEvent) => setTitle(inputEvent.target.value)} />
 
           <label className="detail-field-label mt-5" htmlFor="event-detail">Detail</label>
@@ -245,7 +251,7 @@ export default function EventDetailPage() {
 
           <div className="mt-6 grid grid-cols-2 gap-3">
             <button type="button" className="detail-secondary-button" onClick={() => setIsEditing(false)} disabled={isSaving}><X size={17} />取消</button>
-            <button type="submit" className="detail-save-button" disabled={!title.trim() || !detail.trim() || !category.trim() || isSaving}>
+            <button type="submit" className="detail-save-button" disabled={!eventDate || !title.trim() || !detail.trim() || !category.trim() || isSaving}>
               {isSaving ? <LoaderCircle size={17} className="animate-spin" /> : <Check size={17} />}
               儲存
             </button>
