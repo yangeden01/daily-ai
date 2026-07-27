@@ -2,7 +2,10 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
+const basePath = process.env.VITE_BASE_PATH || '/'
+
 export default defineConfig({
+  base: basePath,
   plugins: [
     react(),
     VitePWA({
@@ -10,7 +13,7 @@ export default defineConfig({
       injectRegister: false,
       workbox: {
         cleanupOutdatedCaches: true,
-        navigateFallback: '/index.html',
+        navigateFallback: `${basePath}index.html`,
         globPatterns: ['**/*.{js,css,html,png,svg,ico,webmanifest}'],
       },
       manifest: {
@@ -21,18 +24,18 @@ export default defineConfig({
         background_color: '#f4f4f5',
         display: 'standalone',
         orientation: 'portrait-primary',
-        start_url: '/',
-        scope: '/',
+        start_url: './',
+        scope: './',
         lang: 'zh-Hant',
         icons: [
-          { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
-          { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
-          { src: '/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          { src: 'icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: 'icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: 'icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
         shortcuts: [
-          { name: 'Daily', short_name: 'Daily', description: '新增或查看每日事件', url: '/daily', icons: [{ src: '/icon-192.png', sizes: '192x192' }] },
-          { name: 'AI Search', short_name: 'AI Search', description: '開啟 AI Search', url: '/ai', icons: [{ src: '/icon-192.png', sizes: '192x192' }] },
-          { name: 'Dashboard', short_name: 'Dashboard', description: '查看事件統計', url: '/dashboard', icons: [{ src: '/icon-192.png', sizes: '192x192' }] },
+          { name: 'Daily', short_name: 'Daily', description: '新增或查看每日事件', url: 'daily', icons: [{ src: 'icon-192.png', sizes: '192x192' }] },
+          { name: 'AI Search', short_name: 'AI Search', description: '開啟 AI Search', url: 'ai', icons: [{ src: 'icon-192.png', sizes: '192x192' }] },
+          { name: 'Dashboard', short_name: 'Dashboard', description: '查看事件統計', url: 'dashboard', icons: [{ src: 'icon-192.png', sizes: '192x192' }] },
         ],
       }
     })

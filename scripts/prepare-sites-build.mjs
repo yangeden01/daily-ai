@@ -26,6 +26,7 @@ export default {
 `
 
 await mkdir(clientDirectory, { recursive: true })
+await cp(resolve(distDirectory, 'index.html'), resolve(distDirectory, '404.html'))
 const outputEntries = await readdir(distDirectory, { withFileTypes: true })
 await Promise.all(
   outputEntries

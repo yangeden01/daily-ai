@@ -15,7 +15,7 @@ Daily AI 是一個 mobile-first、local-first 的個人事件日誌 PWA。它使
 
 ## 安裝
 
-PWA 安裝需要 HTTPS（本機開發的 `localhost` 除外）。
+網站部署到 GitHub Pages 後會使用免費 HTTPS。PWA 安裝需要 HTTPS（本機開發的 `localhost` 除外）。
 
 - Android Chrome：開啟網站後使用 App 內的「安裝 Daily AI」，或瀏覽器選單的「安裝應用程式」。
 - Windows Chrome／Edge：開啟網站後使用 App 內的安裝按鈕，或網址列的安裝圖示。
@@ -33,6 +33,13 @@ PWA 安裝需要 HTTPS（本機開發的 `localhost` 除外）。
 - **完整備份**：`Daily-AI-Backup-YYYY-MM-DD.zip` 包含 `Daily.xlsx`、`manifest.json` 與所有照片／附件原始檔案。
 
 還原完整備份前，App 會先驗證 ZIP 結構、版本、路徑、附件數量與大小；損壞或不安全的備份不會覆蓋既有資料。
+
+### 備份與還原操作
+
+1. 開啟 **Settings**。
+2. 日常資料交換可使用「匯出備份」建立 Excel；選取 `Daily.xlsx` 後按「匯入備份」即可還原事件資料。
+3. 要保留照片與附件時，請使用「匯出完整備份」建立 ZIP；選取 ZIP 後按「完整還原」。
+4. 匯入前確認提示中的事件與附件範圍，完成後再到 Daily Timeline 抽查資料。
 
 ## 本機開發
 
@@ -52,6 +59,16 @@ pnpm preview
 ```
 
 `dist/` 是可部署的靜態 PWA。部署平台必須提供 HTTPS，並將未知的 SPA 路徑回退到 `/index.html`。
+
+## GitHub Pages 部署
+
+專案包含 `.github/workflows/deploy-pages.yml`。Workflow 會自動判斷 GitHub Pages 專案子路徑，執行測試及 PWA build，再部署 `dist/`。`404.html` 提供 React Router 深層路由重新整理 fallback；localhost 仍使用 `/` 作為 base path。
+
+1. 在 GitHub 建立 Repository，將本機專案推送到 `main` 或 `master`。
+2. Repository → **Settings → Pages → Build and deployment → Source** 選擇 **GitHub Actions**。
+3. 到 **Actions** 查看 `Deploy Daily AI to GitHub Pages`，成功後由該次 deployment 開啟 HTTPS 網址。
+
+不需要 Azure、Microsoft Entra、API Key 或部署用 `.env`。若 Repository 是 private，請先確認你的 GitHub 方案是否允許該 Repository 使用 Pages；公開 Repository 可直接使用 GitHub Pages。
 
 ## 已知限制
 
