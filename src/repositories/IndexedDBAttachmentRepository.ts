@@ -23,6 +23,14 @@ export class IndexedDBAttachmentRepository implements AttachmentRepository {
 
   constructor(private readonly databaseName = DATABASE_NAME) {}
 
+  async getAll(): Promise<Attachment[]> {
+    const database = await this.getDatabase()
+    const transaction = database.transaction(STORE_NAME, 'readonly')
+    const items = await requestToPromise(transaction.objectStore(STORE_NAME).getAll() as IDBRequest<Attachment[]>)
+    await transactionToPromise(transaction)
+    return items
+  }
+
   async getByEventId(eventId: string): Promise<Attachment[]> {
     const database = await this.getDatabase()
     const transaction = database.transaction(STORE_NAME, 'readonly')
@@ -55,6 +63,15 @@ export class IndexedDBAttachmentRepository implements AttachmentRepository {
     const store = transaction.objectStore(STORE_NAME)
     const keys = await requestToPromise(store.index('eventId').getAllKeys(eventId))
     keys.forEach((key) => store.delete(key))
+    await transactionToPromise(transaction)
+  }
+
+  async replaceAll(attachments: Attachment[]): Promise<void> {
+    const database = await this.getDatabase()
+    const transaction = database.transaction(STORE_NAME, 'readwrite')
+    const store = transaction.objectStore(STORE_NAME)
+    store.clear()
+    attachments.forEach((attachment) => store.add(attachment))
     await transactionToPromise(transaction)
   }
 

@@ -74,10 +74,14 @@ export class BackupService {
   }
 
   async importWorkbook(data: ArrayBuffer | Uint8Array): Promise<number> {
-    const workbook = await this.workbookService.openWorkbook(data)
-    const events = this.readAndValidateEvents(workbook)
+    const events = await this.readWorkbook(data)
     await this.repository.replaceAll(events)
     return events.length
+  }
+
+  async readWorkbook(data: ArrayBuffer | Uint8Array): Promise<Event[]> {
+    const workbook = await this.workbookService.openWorkbook(data)
+    return this.readAndValidateEvents(workbook)
   }
 
   private readAndValidateEvents(workbook: ExcelJS.Workbook): Event[] {

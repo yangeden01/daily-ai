@@ -26,4 +26,12 @@ describe('IndexedDBAttachmentRepository', () => {
     await expect(repository.getByEventId('event-1')).resolves.toEqual([])
     await expect(repository.getByEventId('event-2')).resolves.toHaveLength(1)
   })
+
+  it('atomically replaces all attachments', async () => {
+    const repository = new IndexedDBAttachmentRepository(`attachment-test-${crypto.randomUUID()}`)
+    await repository.addMany([attachment()])
+    const replacement = attachment({ id: 'replacement', eventId: 'event-2' })
+    await repository.replaceAll([replacement])
+    await expect(repository.getAll()).resolves.toMatchObject([{ id: 'replacement' }])
+  })
 })
