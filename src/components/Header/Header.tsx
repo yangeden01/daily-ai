@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom'
 const pageTitles: Record<string, string> = {
   '/daily': 'Daily AI',
   '/ai': 'AI Search',
+  '/dashboard': 'Dashboard',
   '/settings': 'Settings',
 }
 
