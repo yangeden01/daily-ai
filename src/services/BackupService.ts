@@ -1,6 +1,7 @@
 import type ExcelJS from 'exceljs'
 import type { Event } from '../models/Event'
-import { eventRepository } from '../repositories'
+import { attachmentRepository, eventRepository } from '../repositories'
+import type { AttachmentRepository } from '../repositories/AttachmentRepository'
 import type { EventRepository } from '../repositories/EventRepository'
 import { WorkbookService } from './WorkbookService'
 import { WorksheetService, worksheetNames } from './WorksheetService'
@@ -12,6 +13,7 @@ export class BackupService {
     private readonly repository: EventRepository = eventRepository,
     private readonly workbookService = new WorkbookService(),
     private readonly worksheetService = new WorksheetService(),
+    private readonly attachments: AttachmentRepository = attachmentRepository,
   ) {}
 
   async exportWorkbook(): Promise<Uint8Array> {
@@ -21,6 +23,7 @@ export class BackupService {
 
     const eventsWorksheet = this.worksheetService.getEventsWorksheet(workbook)
     const tagsWorksheet = this.worksheetService.getTagsWorksheet(workbook)
+    const attachmentsWorksheet = this.worksheetService.getAttachmentsWorksheet(workbook)
     const settingsWorksheet = this.worksheetService.getSettingsWorksheet(workbook)
 
     events.forEach((event) => {
@@ -43,6 +46,20 @@ export class BackupService {
           eventId: event.id,
           name,
         })
+      })
+    })
+
+    const attachmentItems = (await Promise.all(events.map((event) => this.attachments.getByEventId(event.id)))).flat()
+    attachmentItems.forEach((attachment) => {
+      attachmentsWorksheet.addRow({
+        id: attachment.id,
+        eventId: attachment.eventId,
+        filename: attachment.filename,
+        path: attachment.path,
+        type: attachment.type,
+        mimeType: attachment.mimeType,
+        size: attachment.size,
+        createdAt: attachment.createdAt,
       })
     })
 

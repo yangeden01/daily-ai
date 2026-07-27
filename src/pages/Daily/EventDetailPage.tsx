@@ -1,8 +1,10 @@
-import { useEffect, useState, type FormEvent, type KeyboardEvent } from 'react'
-import { ArrowLeft, Check, LoaderCircle, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from 'react'
+import { ArrowLeft, Camera, Check, Download, FilePlus2, FileText, LoaderCircle, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import type { Attachment } from '../../models/Attachment'
 import type { Event } from '../../models/Event'
-import { eventRepository } from '../../repositories'
+import { attachmentRepository, eventRepository } from '../../repositories'
+import { filesToAttachments, formatFileSize, validateAttachmentFile } from '../../utils/attachments'
 import { normalizeTags } from '../../utils/normalizeTags'
 
 const formatDateTime = (value: string): string =>
@@ -18,6 +20,9 @@ export default function EventDetailPage() {
   const { eventId } = useParams<{ eventId: string }>()
   const navigate = useNavigate()
   const [event, setEvent] = useState<Event | null>(null)
+  const [attachments, setAttachments] = useState<Attachment[]>([])
+  const [attachmentUrls, setAttachmentUrls] = useState<Record<string, string>>({})
+  const [activePhoto, setActivePhoto] = useState<Attachment | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isEditing, setIsEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
@@ -27,15 +32,30 @@ export default function EventDetailPage() {
   const [category, setCategory] = useState('')
   const [tags, setTags] = useState<string[]>([])
   const [tagInput, setTagInput] = useState('')
+  const [newFiles, setNewFiles] = useState<File[]>([])
+  const [removedAttachmentIds, setRemovedAttachmentIds] = useState<string[]>([])
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const photoInputRef = useRef<HTMLInputElement>(null)
+  const attachmentInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!eventId) return
-    eventRepository.getById(eventId).then((item) => {
-      setEvent(item ?? null)
-      setIsLoading(false)
-    })
+    Promise.all([eventRepository.getById(eventId), attachmentRepository.getByEventId(eventId)])
+      .then(([item, files]) => {
+        setEvent(item ?? null)
+        setAttachments(files)
+      })
+      .catch(() => setErrorMessage('事件或附件載入失敗'))
+      .finally(() => setIsLoading(false))
   }, [eventId])
+
+  useEffect(() => {
+    const urls = Object.fromEntries(attachments
+      .filter((attachment) => attachment.type === 'image' && attachment.blob)
+      .map((attachment) => [attachment.id, URL.createObjectURL(attachment.blob!)]))
+    setAttachmentUrls(urls)
+    return () => Object.values(urls).forEach(URL.revokeObjectURL)
+  }, [attachments])
 
   const startEditing = () => {
     if (!event) return
@@ -44,6 +64,8 @@ export default function EventDetailPage() {
     setCategory(event.category)
     setTags([...event.tags])
     setTagInput('')
+    setNewFiles([])
+    setRemovedAttachmentIds([])
     setErrorMessage(null)
     setIsEditing(true)
   }
@@ -56,19 +78,56 @@ export default function EventDetailPage() {
     setErrorMessage(null)
 
     try {
-      await eventRepository.update(event.id, {
+      const addedAttachments = filesToAttachments(newFiles, event.id)
+      await attachmentRepository.addMany(addedAttachments)
+      try {
+        await eventRepository.update(event.id, {
         ...event,
         title: title.trim(),
         detail: detail.trim(),
         category: category.trim(),
         tags: normalizeTags([...tags, tagInput]),
-        updatedAt: new Date().toISOString(),
-      })
+          attachmentIds: [
+            ...attachments.filter(({ id }) => !removedAttachmentIds.includes(id)).map(({ id }) => id),
+            ...addedAttachments.map(({ id }) => id),
+          ],
+          updatedAt: new Date().toISOString(),
+        })
+      } catch (error) {
+        await Promise.all(addedAttachments.map(({ id }) => attachmentRepository.delete(id)))
+        throw error
+      }
+      await Promise.all(removedAttachmentIds.map((id) => attachmentRepository.delete(id)))
       navigate('/daily')
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : '事件更新失敗')
       setIsSaving(false)
     }
+  }
+
+  const selectFiles = (inputEvent: ChangeEvent<HTMLInputElement>) => {
+    const selected = Array.from(inputEvent.target.files ?? [])
+    inputEvent.target.value = ''
+    const firstError = selected.map(validateAttachmentFile).find(Boolean)
+    if (firstError) {
+      setErrorMessage(firstError)
+      return
+    }
+    setErrorMessage(null)
+    setNewFiles((current) => [...current, ...selected])
+  }
+
+  const downloadAttachment = (attachment: Attachment) => {
+    if (!attachment.blob) {
+      setErrorMessage('此備份只包含附件 metadata，沒有可下載的實際檔案。')
+      return
+    }
+    const url = URL.createObjectURL(attachment.blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = attachment.filename
+    link.click()
+    setTimeout(() => URL.revokeObjectURL(url), 0)
   }
 
   const addTags = (values: string[]) => {
@@ -106,6 +165,7 @@ export default function EventDetailPage() {
     setErrorMessage(null)
 
     try {
+      await attachmentRepository.deleteByEventId(event.id)
       await eventRepository.delete(event.id)
       navigate('/daily', { replace: true })
     } catch (error) {
@@ -163,6 +223,22 @@ export default function EventDetailPage() {
             </div>
           </div>
           <p className="mt-2 text-xs leading-5 text-stone-400">空白與重複的 Tags 會自動移除。</p>
+
+          <p className="detail-field-label mt-5">照片與附件</p>
+          <div className="attachment-edit-actions">
+            <button type="button" onClick={() => photoInputRef.current?.click()}><Camera size={17} />新增照片</button>
+            <button type="button" onClick={() => attachmentInputRef.current?.click()}><FilePlus2 size={17} />新增附件</button>
+          </div>
+          <input ref={photoInputRef} className="sr-only" type="file" accept="image/*" multiple onChange={selectFiles} />
+          <input ref={attachmentInputRef} className="sr-only" type="file" multiple onChange={selectFiles} />
+          <div className="mt-3 space-y-2">
+            {attachments.filter(({ id }) => !removedAttachmentIds.includes(id)).map((attachment) => (
+              <div className="pending-file" key={attachment.id}><span className="min-w-0 flex-1 truncate">{attachment.filename}</span><small>{formatFileSize(attachment.size)}</small><button type="button" onClick={() => setRemovedAttachmentIds((ids) => [...ids, attachment.id])} aria-label={`移除 ${attachment.filename}`}><X size={15} /></button></div>
+            ))}
+            {newFiles.map((file, index) => (
+              <div className="pending-file" key={`${file.name}-${file.lastModified}-${index}`}><span className="min-w-0 flex-1 truncate">{file.name}</span><small>{formatFileSize(file.size)}</small><button type="button" onClick={() => setNewFiles((files) => files.filter((_, itemIndex) => itemIndex !== index))} aria-label={`移除 ${file.name}`}><X size={15} /></button></div>
+            ))}
+          </div>
           {errorMessage && <p className="error-notice" role="alert">{errorMessage}</p>}
 
           <div className="mt-6 grid grid-cols-2 gap-3">
@@ -191,9 +267,37 @@ export default function EventDetailPage() {
                 {event.tags.length > 0 ? event.tags.map((tag) => <span className="tag-chip" key={tag}>{tag}</span>) : <span className="text-sm text-stone-400">No tags</span>}
               </div>
 
+              {attachments.some(({ type }) => type === 'image') && (
+                <>
+                  <p className="detail-label mt-7">Photos</p>
+                  <div className="photo-grid">
+                    {attachments.filter(({ type }) => type === 'image').map((attachment) => attachmentUrls[attachment.id] ? (
+                      <button type="button" key={attachment.id} onClick={() => setActivePhoto(attachment)} aria-label={`查看 ${attachment.filename}`}>
+                        <img src={attachmentUrls[attachment.id]} alt={attachment.filename} />
+                      </button>
+                    ) : null)}
+                  </div>
+                </>
+              )}
+
+              {attachments.some(({ type }) => type !== 'image') && (
+                <>
+                  <p className="detail-label mt-7">Attachments</p>
+                  <div className="attachment-list">
+                    {attachments.filter(({ type }) => type !== 'image').map((attachment) => (
+                      <div className="attachment-row" key={attachment.id}>
+                        <FileText size={19} aria-hidden="true" />
+                        <div className="min-w-0 flex-1"><strong>{attachment.filename}</strong><span>{attachment.mimeType} · {formatFileSize(attachment.size)}</span></div>
+                        <button type="button" onClick={() => downloadAttachment(attachment)} aria-label={`下載 ${attachment.filename}`}><Download size={17} /></button>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+
               <div className="mt-7 grid grid-cols-2 gap-3">
-                <div className="metric-card"><span>Attachments</span><strong>{event.attachmentIds.length}</strong></div>
-                <div className="metric-card"><span>Photos</span><strong>0</strong></div>
+                <div className="metric-card"><span>Attachments</span><strong>{attachments.filter(({ type }) => type !== 'image').length}</strong></div>
+                <div className="metric-card"><span>Photos</span><strong>{attachments.filter(({ type }) => type === 'image').length}</strong></div>
               </div>
             </div>
 
@@ -208,6 +312,12 @@ export default function EventDetailPage() {
             {isDeleting ? <LoaderCircle size={18} className="animate-spin" /> : <Trash2 size={18} />}
             {isDeleting ? '刪除中' : '刪除事件'}
           </button>
+          {activePhoto && attachmentUrls[activePhoto.id] && (
+            <div className="photo-lightbox" role="dialog" aria-modal="true" aria-label={activePhoto.filename} onClick={() => setActivePhoto(null)}>
+              <button type="button" onClick={() => setActivePhoto(null)} aria-label="關閉照片"><X size={22} /></button>
+              <img src={attachmentUrls[activePhoto.id]} alt={activePhoto.filename} onClick={(clickEvent) => clickEvent.stopPropagation()} />
+            </div>
+          )}
         </>
       )}
     </main>

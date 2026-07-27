@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
-import { Check, ChevronRight, LoaderCircle, RotateCcw, Search, SlidersHorizontal, Tag, X } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
+import { Camera, Check, ChevronRight, FilePlus2, LoaderCircle, RotateCcw, Search, SlidersHorizontal, Tag, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import type { Event } from '../../models/Event'
-import { eventRepository } from '../../repositories'
+import { attachmentRepository, eventRepository } from '../../repositories'
 import { aiParserService } from '../../services/ai'
+import { filesToAttachments, formatFileSize, validateAttachmentFile } from '../../utils/attachments'
 
 const sortNewestFirst = (events: Event[]): Event[] =>
   [...events].sort((a, b) =>
@@ -18,6 +19,7 @@ const getLocalDate = (): string => {
 
 export default function DailyPage() {
   const [rawText, setRawText] = useState('')
+  const [pendingFiles, setPendingFiles] = useState<File[]>([])
   const [events, setEvents] = useState<Event[]>([])
   const [categories, setCategories] = useState<string[]>([])
   const [availableTags, setAvailableTags] = useState<string[]>([])
@@ -29,6 +31,8 @@ export default function DailyPage() {
   const [isSaving, setIsSaving] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const searchRequest = useRef(0)
+  const photoInputRef = useRef<HTMLInputElement>(null)
+  const attachmentInputRef = useRef<HTMLInputElement>(null)
 
   const loadEvents = useCallback(async () => {
     const requestId = ++searchRequest.current
@@ -63,27 +67,48 @@ export default function DailyPage() {
     try {
       const parsedEvent = await aiParserService.parseEvent(normalizedText)
       const timestamp = new Date().toISOString()
+      const eventId = crypto.randomUUID()
+      const attachments = filesToAttachments(pendingFiles, eventId)
       const newEvent: Event = {
-        id: crypto.randomUUID(),
+        id: eventId,
         date: getLocalDate(),
         title: parsedEvent.title,
         detail: parsedEvent.rawText,
         category: parsedEvent.category,
         ...(parsedEvent.amount !== undefined ? { amount: parsedEvent.amount } : {}),
         tags: [...parsedEvent.tags],
-        attachmentIds: [],
+        attachmentIds: attachments.map(({ id }) => id),
         createdAt: timestamp,
         updatedAt: timestamp,
       }
 
-      await eventRepository.add(newEvent)
+      await attachmentRepository.addMany(attachments)
+      try {
+        await eventRepository.add(newEvent)
+      } catch (error) {
+        await attachmentRepository.deleteByEventId(eventId)
+        throw error
+      }
       await Promise.all([loadEvents(), loadCategories()])
       setRawText('')
+      setPendingFiles([])
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : '事件儲存失敗')
     } finally {
       setIsSaving(false)
     }
+  }
+
+  const selectFiles = (inputEvent: ChangeEvent<HTMLInputElement>) => {
+    const selected = Array.from(inputEvent.target.files ?? [])
+    inputEvent.target.value = ''
+    const firstError = selected.map(validateAttachmentFile).find(Boolean)
+    if (firstError) {
+      setErrorMessage(firstError)
+      return
+    }
+    setErrorMessage(null)
+    setPendingFiles((current) => [...current, ...selected])
   }
 
   const hasFilters = Boolean(keyword || category || tag || dateFrom || dateTo)
@@ -107,7 +132,26 @@ export default function DailyPage() {
             onChange={(event) => setRawText(event.target.value)}
             placeholder={'今天發生什麼事？\n\n例如：\n今天跟 Dell VP 討論 Volta EVT 延一週。'}
           />
+          <div className="editor-toolbar">
+            <button type="button" className="tool-button" onClick={() => photoInputRef.current?.click()}><Camera size={19} />照片</button>
+            <button type="button" className="tool-button" onClick={() => attachmentInputRef.current?.click()}><FilePlus2 size={19} />附件</button>
+            <span className="flex items-center justify-center text-xs font-semibold text-stone-400">{pendingFiles.length} 個檔案</span>
+          </div>
         </section>
+
+        <input ref={photoInputRef} className="sr-only" type="file" accept="image/*" multiple onChange={selectFiles} />
+        <input ref={attachmentInputRef} className="sr-only" type="file" multiple onChange={selectFiles} />
+        {pendingFiles.length > 0 && (
+          <div className="pending-file-list">
+            {pendingFiles.map((file, index) => (
+              <div className="pending-file" key={`${file.name}-${file.lastModified}-${index}`}>
+                <span className="min-w-0 flex-1 truncate">{file.name}</span>
+                <small>{formatFileSize(file.size)}</small>
+                <button type="button" onClick={() => setPendingFiles((files) => files.filter((_, itemIndex) => itemIndex !== index))} aria-label={`移除 ${file.name}`}><X size={15} /></button>
+              </div>
+            ))}
+          </div>
+        )}
 
         {errorMessage && <p className="error-notice" role="alert">{errorMessage}</p>}
 

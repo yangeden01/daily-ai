@@ -69,10 +69,12 @@ export default function SettingsPage() {
           <span className="settings-icon"><FileSpreadsheet size={20} /></span>
           <div className="flex-1">
             <h2 className="settings-title">Daily.xlsx</h2>
-            <p className="settings-detail">手動備份與還原</p>
+            <p className="settings-detail">只備份附件 metadata，不包含實際照片與檔案</p>
           </div>
         </div>
       </section>
+
+      <p className="mt-3 px-1 text-xs leading-5 text-amber-700 dark:text-amber-300">Excel 備份不包含照片與附件的二進位內容；實際檔案只保存在目前瀏覽器。</p>
 
       <input ref={fileInputRef} type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="sr-only" onChange={handleImport} />
       <div className="mt-4 grid grid-cols-2 gap-3">

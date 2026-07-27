@@ -31,6 +31,9 @@ const worksheetColumns: Record<string, Partial<ExcelJS.Column>[]> = {
     { header: 'filename', key: 'filename', width: 32 },
     { header: 'path', key: 'path', width: 48 },
     { header: 'type', key: 'type', width: 14 },
+    { header: 'mimeType', key: 'mimeType', width: 28 },
+    { header: 'size', key: 'size', width: 14 },
+    { header: 'createdAt', key: 'createdAt', width: 28 },
   ],
   [worksheetNames.settings]: [
     { header: 'key', key: 'key', width: 28 },

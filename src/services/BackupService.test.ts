@@ -1,6 +1,7 @@
 import 'fake-indexeddb/auto'
 import { describe, expect, it } from 'vitest'
 import { IndexedDBRepository } from '../repositories/IndexedDBRepository'
+import { IndexedDBAttachmentRepository } from '../repositories/IndexedDBAttachmentRepository'
 import { createTestEvent } from '../test/createTestEvent'
 import { BackupService } from './BackupService'
 import { WorkbookService } from './WorkbookService'
@@ -24,7 +25,12 @@ describe('BackupService', () => {
     ]
     await source.replaceAll(events)
 
-    const data = await new BackupService(source).exportWorkbook()
+    const attachments = new IndexedDBAttachmentRepository(`daily-ai-backup-attachments-${crypto.randomUUID()}`)
+    await attachments.addMany([{
+      id: 'attachment-1', eventId: events[0].id, filename: 'photo.jpg', path: '', type: 'image',
+      mimeType: 'image/jpeg', size: 5, blob: new Blob(['photo']), createdAt: '2026-07-27T08:00:00.000Z',
+    }])
+    const data = await new BackupService(source, undefined, undefined, attachments).exportWorkbook()
     const workbook = await new WorkbookService().openWorkbook(data)
     expect(workbook.worksheets.map((worksheet) => worksheet.name)).toEqual([
       worksheetNames.events,
@@ -32,6 +38,10 @@ describe('BackupService', () => {
       worksheetNames.attachments,
       worksheetNames.settings,
     ])
+    const attachmentSheet = workbook.getWorksheet(worksheetNames.attachments)
+    expect(attachmentSheet?.rowCount).toBe(2)
+    expect(attachmentSheet?.getRow(2).getCell(3).text).toBe('photo.jpg')
+    expect(attachmentSheet?.columnCount).toBe(8)
 
     const target = createRepository()
     await expect(new BackupService(target).importWorkbook(data)).resolves.toBe(2)
