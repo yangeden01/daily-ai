@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { ArrowLeft, Check, LoaderCircle, Pencil, X } from 'lucide-react'
+import { ArrowLeft, Check, LoaderCircle, Pencil, Trash2, X } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import type { Event } from '../../models/Event'
 import { eventRepository } from '../../repositories'
@@ -21,6 +21,7 @@ export default function EventDetailPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isEditing, setIsEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
   const [title, setTitle] = useState('')
   const [detail, setDetail] = useState('')
   const [category, setCategory] = useState('')
@@ -67,6 +68,23 @@ export default function EventDetailPage() {
     }
   }
 
+  const handleDelete = async () => {
+    if (!event || isDeleting) return
+    const confirmed = window.confirm(`確定要刪除「${event.title}」嗎？\n\n此動作無法復原。`)
+    if (!confirmed) return
+
+    setIsDeleting(true)
+    setErrorMessage(null)
+
+    try {
+      await eventRepository.delete(event.id)
+      navigate('/daily', { replace: true })
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : '事件刪除失敗')
+      setIsDeleting(false)
+    }
+  }
+
   if (isLoading) {
     return <main className="detail-state"><LoaderCircle className="animate-spin" size={24} /><span>載入事件</span></main>
   }
@@ -105,33 +123,41 @@ export default function EventDetailPage() {
           </div>
         </form>
       ) : (
-        <section className="detail-card">
-          <div className="border-b border-stone-100 p-5 dark:border-white/10 sm:p-6">
-            <time className="event-date !col-span-1" dateTime={event.date}>{event.date}</time>
-            <h2 className="mt-2 text-2xl font-bold tracking-tight text-stone-950 dark:text-white">{event.title}</h2>
-            <span className="event-category mt-3 inline-block">{event.category}</span>
-          </div>
-
-          <div className="p-5 sm:p-6">
-            <p className="detail-label">Detail</p>
-            <p className="whitespace-pre-wrap text-[15px] leading-7 text-stone-700 dark:text-stone-300">{event.detail}</p>
-
-            <p className="detail-label mt-7">Tags</p>
-            <div className="flex flex-wrap gap-2">
-              {event.tags.length > 0 ? event.tags.map((tag) => <span className="tag-chip" key={tag}>{tag}</span>) : <span className="text-sm text-stone-400">No tags</span>}
+        <>
+          <section className="detail-card">
+            <div className="border-b border-stone-100 p-5 dark:border-white/10 sm:p-6">
+              <time className="event-date !col-span-1" dateTime={event.date}>{event.date}</time>
+              <h2 className="mt-2 text-2xl font-bold tracking-tight text-stone-950 dark:text-white">{event.title}</h2>
+              <span className="event-category mt-3 inline-block">{event.category}</span>
             </div>
 
-            <div className="mt-7 grid grid-cols-2 gap-3">
-              <div className="metric-card"><span>Attachments</span><strong>{event.attachmentIds.length}</strong></div>
-              <div className="metric-card"><span>Photos</span><strong>0</strong></div>
-            </div>
-          </div>
+            <div className="p-5 sm:p-6">
+              <p className="detail-label">Detail</p>
+              <p className="whitespace-pre-wrap text-[15px] leading-7 text-stone-700 dark:text-stone-300">{event.detail}</p>
 
-          <dl className="detail-meta">
-            <div><dt>Created</dt><dd>{formatDateTime(event.createdAt)}</dd></div>
-            <div><dt>Updated</dt><dd>{formatDateTime(event.updatedAt)}</dd></div>
-          </dl>
-        </section>
+              <p className="detail-label mt-7">Tags</p>
+              <div className="flex flex-wrap gap-2">
+                {event.tags.length > 0 ? event.tags.map((tag) => <span className="tag-chip" key={tag}>{tag}</span>) : <span className="text-sm text-stone-400">No tags</span>}
+              </div>
+
+              <div className="mt-7 grid grid-cols-2 gap-3">
+                <div className="metric-card"><span>Attachments</span><strong>{event.attachmentIds.length}</strong></div>
+                <div className="metric-card"><span>Photos</span><strong>0</strong></div>
+              </div>
+            </div>
+
+            <dl className="detail-meta">
+              <div><dt>Created</dt><dd>{formatDateTime(event.createdAt)}</dd></div>
+              <div><dt>Updated</dt><dd>{formatDateTime(event.updatedAt)}</dd></div>
+            </dl>
+          </section>
+
+          {errorMessage && <p className="error-notice" role="alert">{errorMessage}</p>}
+          <button type="button" className="delete-event-button" onClick={handleDelete} disabled={isDeleting}>
+            {isDeleting ? <LoaderCircle size={18} className="animate-spin" /> : <Trash2 size={18} />}
+            {isDeleting ? '刪除中' : '刪除事件'}
+          </button>
+        </>
       )}
     </main>
   )

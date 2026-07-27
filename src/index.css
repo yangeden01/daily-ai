@@ -97,6 +97,10 @@
   .detail-secondary-button { @apply bg-stone-100 text-stone-600 hover:bg-stone-200 dark:bg-white/[0.07] dark:text-stone-300 dark:hover:bg-white/10; }
   .detail-save-button { @apply bg-indigo-600 text-white hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400; }
 
+  .delete-event-button {
+    @apply mt-5 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border border-red-200 bg-red-50 text-sm font-bold text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50 active:scale-[0.98] dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300 dark:hover:bg-red-500/20;
+  }
+
   .detail-state {
     @apply flex min-h-[calc(100dvh-13rem)] flex-col items-center justify-center gap-4 text-sm text-stone-400;
   }
