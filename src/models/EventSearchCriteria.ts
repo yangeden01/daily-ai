@@ -1,6 +1,7 @@
 export interface EventSearchCriteria {
   keyword?: string
   category?: string
+  tag?: string
   dateFrom?: string
   dateTo?: string
 }

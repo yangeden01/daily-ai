@@ -4,6 +4,7 @@ import type { EventSearchCriteria } from '../models/EventSearchCriteria'
 export const filterEvents = (events: Event[], criteria: EventSearchCriteria): Event[] => {
   const keyword = criteria.keyword?.trim().toLocaleLowerCase() ?? ''
   const category = criteria.category?.trim().toLocaleLowerCase() ?? ''
+  const tag = criteria.tag?.trim().toLocaleLowerCase() ?? ''
 
   return events.filter((event) => {
     const searchableText = [event.title, event.detail, ...event.tags]
@@ -13,6 +14,7 @@ export const filterEvents = (events: Event[], criteria: EventSearchCriteria): Ev
     return (
       (!keyword || searchableText.includes(keyword)) &&
       (!category || event.category.toLocaleLowerCase() === category) &&
+      (!tag || event.tags.some((eventTag) => eventTag.toLocaleLowerCase() === tag)) &&
       (!criteria.dateFrom || event.date >= criteria.dateFrom) &&
       (!criteria.dateTo || event.date <= criteria.dateTo)
     )

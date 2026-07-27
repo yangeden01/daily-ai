@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
-import { Check, ChevronRight, LoaderCircle, RotateCcw, Search, SlidersHorizontal } from 'lucide-react'
+import { Check, ChevronRight, LoaderCircle, RotateCcw, Search, SlidersHorizontal, Tag, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import type { Event } from '../../models/Event'
 import { eventRepository } from '../../repositories'
@@ -20,8 +20,10 @@ export default function DailyPage() {
   const [rawText, setRawText] = useState('')
   const [events, setEvents] = useState<Event[]>([])
   const [categories, setCategories] = useState<string[]>([])
+  const [availableTags, setAvailableTags] = useState<string[]>([])
   const [keyword, setKeyword] = useState('')
   const [category, setCategory] = useState('')
+  const [tag, setTag] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [isSaving, setIsSaving] = useState(false)
@@ -30,13 +32,14 @@ export default function DailyPage() {
 
   const loadEvents = useCallback(async () => {
     const requestId = ++searchRequest.current
-    const items = await eventRepository.search({ keyword, category, dateFrom, dateTo })
+    const items = await eventRepository.search({ keyword, category, tag, dateFrom, dateTo })
     if (requestId === searchRequest.current) setEvents(sortNewestFirst(items))
-  }, [category, dateFrom, dateTo, keyword])
+  }, [category, dateFrom, dateTo, keyword, tag])
 
   const loadCategories = useCallback(async () => {
     const items = await eventRepository.getAll()
     setCategories([...new Set(items.map((event) => event.category))].sort((a, b) => a.localeCompare(b)))
+    setAvailableTags([...new Set(items.flatMap((event) => event.tags))].sort((a, b) => a.localeCompare(b)))
   }, [])
 
   useEffect(() => {
@@ -83,10 +86,11 @@ export default function DailyPage() {
     }
   }
 
-  const hasFilters = Boolean(keyword || category || dateFrom || dateTo)
+  const hasFilters = Boolean(keyword || category || tag || dateFrom || dateTo)
   const resetFilters = () => {
     setKeyword('')
     setCategory('')
+    setTag('')
     setDateFrom('')
     setDateTo('')
   }
@@ -128,6 +132,14 @@ export default function DailyPage() {
             <label className="filter-field"><span>開始日期</span><input type="date" value={dateFrom} max={dateTo || undefined} onChange={(event) => setDateFrom(event.target.value)} /></label>
             <label className="filter-field"><span>結束日期</span><input type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => setDateTo(event.target.value)} /></label>
           </div>
+          <label className="filter-field mt-2"><span>Tag</span><select value={tag} onChange={(event) => setTag(event.target.value)}><option value="">全部 Tags</option>{availableTags.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
+          {tag && (
+            <div className="active-tag-filter" aria-label="目前使用中的 Tag 篩選">
+              <Tag size={13} aria-hidden="true" />
+              <span>{tag}</span>
+              <button type="button" onClick={() => setTag('')} aria-label="清除 Tag 篩選"><X size={13} /></button>
+            </div>
+          )}
         </div>
       </section>
 

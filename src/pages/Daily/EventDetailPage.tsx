@@ -1,9 +1,9 @@
-import { useEffect, useState, type FormEvent } from 'react'
-import { ArrowLeft, Check, LoaderCircle, Pencil, Trash2, X } from 'lucide-react'
+import { useEffect, useState, type FormEvent, type KeyboardEvent } from 'react'
+import { ArrowLeft, Check, LoaderCircle, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import type { Event } from '../../models/Event'
 import { eventRepository } from '../../repositories'
-import { aiParserService } from '../../services/ai'
+import { normalizeTags } from '../../utils/normalizeTags'
 
 const formatDateTime = (value: string): string =>
   new Intl.DateTimeFormat('zh-TW', {
@@ -25,6 +25,8 @@ export default function EventDetailPage() {
   const [title, setTitle] = useState('')
   const [detail, setDetail] = useState('')
   const [category, setCategory] = useState('')
+  const [tags, setTags] = useState<string[]>([])
+  const [tagInput, setTagInput] = useState('')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   useEffect(() => {
@@ -40,6 +42,8 @@ export default function EventDetailPage() {
     setTitle(event.title)
     setDetail(event.detail)
     setCategory(event.category)
+    setTags([...event.tags])
+    setTagInput('')
     setErrorMessage(null)
     setIsEditing(true)
   }
@@ -52,13 +56,12 @@ export default function EventDetailPage() {
     setErrorMessage(null)
 
     try {
-      const parsed = await aiParserService.parseEvent(detail)
       await eventRepository.update(event.id, {
         ...event,
         title: title.trim(),
         detail: detail.trim(),
         category: category.trim(),
-        tags: [...parsed.tags],
+        tags: normalizeTags([...tags, tagInput]),
         updatedAt: new Date().toISOString(),
       })
       navigate('/daily')
@@ -66,6 +69,32 @@ export default function EventDetailPage() {
       setErrorMessage(error instanceof Error ? error.message : '事件更新失敗')
       setIsSaving(false)
     }
+  }
+
+  const addTags = (values: string[]) => {
+    setTags((current) => normalizeTags([...current, ...values]))
+  }
+
+  const handleTagInput = (value: string) => {
+    if (!value.includes(',')) {
+      setTagInput(value)
+      return
+    }
+
+    const parts = value.split(',')
+    addTags(parts.slice(0, -1))
+    setTagInput(parts[parts.length - 1] ?? '')
+  }
+
+  const handleTagKeyDown = (keyboardEvent: KeyboardEvent<HTMLInputElement>) => {
+    if (keyboardEvent.key !== 'Enter' && keyboardEvent.key !== ',') return
+    keyboardEvent.preventDefault()
+    addTags([tagInput])
+    setTagInput('')
+  }
+
+  const removeTag = (tagToRemove: string) => {
+    setTags((current) => current.filter((tag) => tag !== tagToRemove))
   }
 
   const handleDelete = async () => {
@@ -111,7 +140,29 @@ export default function EventDetailPage() {
           <label className="detail-field-label mt-5" htmlFor="event-category">Category</label>
           <input id="event-category" className="detail-input" value={category} onChange={(inputEvent) => setCategory(inputEvent.target.value)} />
 
-          <p className="mt-4 text-xs leading-5 text-stone-400">儲存時會依照 Detail 重新產生 Tags。</p>
+          <label className="detail-field-label mt-5" htmlFor="event-tags">Tags</label>
+          <div className="tag-editor">
+            <div className="flex flex-wrap gap-2">
+              {tags.map((tag) => (
+                <span className="editable-tag" key={tag}>
+                  {tag}
+                  <button type="button" onClick={() => removeTag(tag)} aria-label={`移除 ${tag}`}><X size={13} /></button>
+                </span>
+              ))}
+            </div>
+            <div className="tag-input-row">
+              <Plus size={16} aria-hidden="true" />
+              <input
+                id="event-tags"
+                value={tagInput}
+                onChange={(inputEvent) => handleTagInput(inputEvent.target.value)}
+                onKeyDown={handleTagKeyDown}
+                onBlur={() => { addTags([tagInput]); setTagInput('') }}
+                placeholder="輸入 Tag，按 Enter 或逗號新增"
+              />
+            </div>
+          </div>
+          <p className="mt-2 text-xs leading-5 text-stone-400">空白與重複的 Tags 會自動移除。</p>
           {errorMessage && <p className="error-notice" role="alert">{errorMessage}</p>}
 
           <div className="mt-6 grid grid-cols-2 gap-3">
