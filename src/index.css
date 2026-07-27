@@ -14,7 +14,7 @@
 
   body {
     margin: 0;
-    min-width: 320px;
+    min-width: 0;
     min-height: 100dvh;
     background: #f4f4f5;
   }
@@ -23,6 +23,11 @@
 
   button, textarea { font: inherit; }
   button { -webkit-tap-highlight-color: transparent; }
+
+  :focus-visible {
+    outline: 3px solid #818cf8;
+    outline-offset: 3px;
+  }
 
   @media (prefers-color-scheme: dark) {
     html { color-scheme: dark; }
@@ -33,6 +38,11 @@
 @layer components {
   .app-header {
     @apply fixed inset-x-0 top-0 z-20 border-b border-stone-200/70 bg-white/90 pt-[env(safe-area-inset-top)] backdrop-blur-xl dark:border-white/10 dark:bg-[#17181c]/90;
+  }
+
+  .app-content {
+    padding-top: calc(6rem + env(safe-area-inset-top));
+    padding-bottom: calc(7rem + env(safe-area-inset-bottom));
   }
 
   .network-pill {

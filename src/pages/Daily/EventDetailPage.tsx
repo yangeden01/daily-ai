@@ -6,6 +6,7 @@ import type { Event } from '../../models/Event'
 import { attachmentRepository, eventRepository } from '../../repositories'
 import { filesToAttachments, formatFileSize, validateAttachmentFile } from '../../utils/attachments'
 import { normalizeTags } from '../../utils/normalizeTags'
+import { deleteEventWithAttachments } from '../../services/EventDeletionService'
 
 const formatDateTime = (value: string): string =>
   new Intl.DateTimeFormat('zh-TW', {
@@ -126,7 +127,9 @@ export default function EventDetailPage() {
     const link = document.createElement('a')
     link.href = url
     link.download = attachment.filename
+    document.body.appendChild(link)
     link.click()
+    link.remove()
     setTimeout(() => URL.revokeObjectURL(url), 0)
   }
 
@@ -165,8 +168,7 @@ export default function EventDetailPage() {
     setErrorMessage(null)
 
     try {
-      await attachmentRepository.deleteByEventId(event.id)
-      await eventRepository.delete(event.id)
+      await deleteEventWithAttachments(event)
       navigate('/daily', { replace: true })
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : '事件刪除失敗')
@@ -179,7 +181,7 @@ export default function EventDetailPage() {
   }
 
   if (!event) {
-    return <main className="detail-state"><p>找不到這筆事件。</p><Link to="/daily" className="detail-back-link">返回 Timeline</Link></main>
+    return <main className="detail-state"><p>{errorMessage ?? '找不到這筆事件。'}</p><Link to="/daily" className="detail-back-link">返回 Timeline</Link></main>
   }
 
   return (
@@ -229,8 +231,8 @@ export default function EventDetailPage() {
             <button type="button" onClick={() => photoInputRef.current?.click()}><Camera size={17} />新增照片</button>
             <button type="button" onClick={() => attachmentInputRef.current?.click()}><FilePlus2 size={17} />新增附件</button>
           </div>
-          <input ref={photoInputRef} className="sr-only" type="file" accept="image/*" multiple onChange={selectFiles} />
-          <input ref={attachmentInputRef} className="sr-only" type="file" multiple onChange={selectFiles} />
+          <input ref={photoInputRef} aria-label="選擇新增照片" className="sr-only" type="file" accept="image/*" multiple onChange={selectFiles} />
+          <input ref={attachmentInputRef} aria-label="選擇新增附件" className="sr-only" type="file" multiple onChange={selectFiles} />
           <div className="mt-3 space-y-2">
             {attachments.filter(({ id }) => !removedAttachmentIds.includes(id)).map((attachment) => (
               <div className="pending-file" key={attachment.id}><span className="min-w-0 flex-1 truncate">{attachment.filename}</span><small>{formatFileSize(attachment.size)}</small><button type="button" onClick={() => setRemovedAttachmentIds((ids) => [...ids, attachment.id])} aria-label={`移除 ${attachment.filename}`}><X size={15} /></button></div>

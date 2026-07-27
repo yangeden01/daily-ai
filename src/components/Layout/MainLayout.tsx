@@ -9,7 +9,7 @@ export default function MainLayout() {
   return (
     <div className="min-h-[100dvh]">
       <Header />
-      <div className="mx-auto w-full max-w-2xl px-5 pb-28 pt-24 sm:px-8">
+      <div className="app-content mx-auto w-full max-w-2xl px-5 sm:px-8">
         <Outlet />
       </div>
       <BottomNavigation />

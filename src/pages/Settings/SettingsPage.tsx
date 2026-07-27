@@ -25,7 +25,9 @@ export default function SettingsPage() {
       const link = document.createElement('a')
       link.href = url
       link.download = 'Daily.xlsx'
+      document.body.appendChild(link)
       link.click()
+      link.remove()
       URL.revokeObjectURL(url)
       setStatus('success')
       setMessage('Daily.xlsx 備份已匯出。')
@@ -68,7 +70,9 @@ export default function SettingsPage() {
       const link = document.createElement('a')
       link.href = url
       link.download = `Daily-AI-Backup-${date}.zip`
+      document.body.appendChild(link)
       link.click()
+      link.remove()
       setTimeout(() => URL.revokeObjectURL(url), 0)
       setStatus('success')
       setMessage('完整 ZIP 備份已匯出，包含事件、照片與附件。')
@@ -151,7 +155,7 @@ export default function SettingsPage() {
           </div>
         </div>
       </section>
-      <input ref={fullBackupInputRef} type="file" accept=".zip,application/zip" className="sr-only" onChange={handleFullImport} />
+      <input ref={fullBackupInputRef} aria-label="選擇完整 ZIP 備份" type="file" accept=".zip,application/zip" className="sr-only" onChange={handleFullImport} />
       <div className="mt-4 grid grid-cols-2 gap-3">
         <button type="button" className="backup-button backup-button-primary" onClick={handleFullExport} disabled={status === 'working'}>
           {status === 'working' ? <LoaderCircle size={18} className="animate-spin" /> : <Download size={18} />}
@@ -175,7 +179,7 @@ export default function SettingsPage() {
 
       <p className="mt-3 px-1 text-xs leading-5 text-amber-700 dark:text-amber-300">Excel 備份不包含照片與附件的二進位內容；實際檔案只保存在目前瀏覽器。</p>
 
-      <input ref={fileInputRef} type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="sr-only" onChange={handleImport} />
+      <input ref={fileInputRef} aria-label="選擇 Excel 備份" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="sr-only" onChange={handleImport} />
       <div className="mt-4 grid grid-cols-2 gap-3">
         <button type="button" className="backup-button backup-button-primary" onClick={handleExport} disabled={status === 'working'}>
           {status === 'working' ? <LoaderCircle size={18} className="animate-spin" /> : <Download size={18} />}

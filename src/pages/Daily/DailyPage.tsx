@@ -5,11 +5,7 @@ import type { Event } from '../../models/Event'
 import { attachmentRepository, eventRepository } from '../../repositories'
 import { aiParserService } from '../../services/ai'
 import { filesToAttachments, formatFileSize, validateAttachmentFile } from '../../utils/attachments'
-
-const sortNewestFirst = (events: Event[]): Event[] =>
-  [...events].sort((a, b) =>
-    b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt),
-  )
+import { sortEventsNewestFirst } from '../../utils/sortEvents'
 
 const getLocalDate = (): string => {
   const now = new Date()
@@ -29,6 +25,7 @@ export default function DailyPage() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [isSaving, setIsSaving] = useState(false)
+  const [isLoadingEvents, setIsLoadingEvents] = useState(true)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const searchRequest = useRef(0)
   const photoInputRef = useRef<HTMLInputElement>(null)
@@ -37,7 +34,10 @@ export default function DailyPage() {
   const loadEvents = useCallback(async () => {
     const requestId = ++searchRequest.current
     const items = await eventRepository.search({ keyword, category, tag, dateFrom, dateTo })
-    if (requestId === searchRequest.current) setEvents(sortNewestFirst(items))
+    if (requestId === searchRequest.current) {
+      setEvents(sortEventsNewestFirst(items))
+      setIsLoadingEvents(false)
+    }
   }, [category, dateFrom, dateTo, keyword, tag])
 
   const loadCategories = useCallback(async () => {
@@ -49,11 +49,14 @@ export default function DailyPage() {
   useEffect(() => {
     void loadEvents().catch((error) => {
       setErrorMessage(error instanceof Error ? error.message : '事件載入失敗')
+      setIsLoadingEvents(false)
     })
   }, [loadEvents])
 
   useEffect(() => {
-    void loadCategories()
+    void loadCategories().catch((error) => {
+      setErrorMessage(error instanceof Error ? error.message : '篩選選項載入失敗')
+    })
   }, [loadCategories])
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -139,8 +142,8 @@ export default function DailyPage() {
           </div>
         </section>
 
-        <input ref={photoInputRef} className="sr-only" type="file" accept="image/*" multiple onChange={selectFiles} />
-        <input ref={attachmentInputRef} className="sr-only" type="file" multiple onChange={selectFiles} />
+        <input ref={photoInputRef} aria-label="選擇照片檔案" className="sr-only" type="file" accept="image/*" multiple onChange={selectFiles} />
+        <input ref={attachmentInputRef} aria-label="選擇附件檔案" className="sr-only" type="file" multiple onChange={selectFiles} />
         {pendingFiles.length > 0 && (
           <div className="pending-file-list">
             {pendingFiles.map((file, index) => (
@@ -193,7 +196,7 @@ export default function DailyPage() {
           <span className="text-xs tabular-nums text-stone-400">{events.length} events</span>
         </div>
         <div className="event-list">
-          {events.length > 0 ? events.map((event) => (
+          {isLoadingEvents ? <div className="empty-timeline"><LoaderCircle className="animate-spin" size={22} /><p>載入 Timeline…</p></div> : events.length > 0 ? events.map((event) => (
             <Link className="event-row event-row-link" to={`/daily/${event.id}`} key={event.id}>
               <time className="event-date" dateTime={event.date}>{event.date}</time>
               <h3 className="event-title">{event.title}</h3>

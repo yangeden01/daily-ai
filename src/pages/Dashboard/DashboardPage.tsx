@@ -12,6 +12,7 @@ const currentMonth = () => {
 const formatCurrency = new Intl.NumberFormat('zh-TW', {
   style: 'currency',
   currency: 'TWD',
+  currencyDisplay: 'code',
   maximumFractionDigits: 0,
 })
 
