@@ -12,6 +12,7 @@ Daily AI 是一個 mobile-first、local-first 的個人事件日誌 PWA。它使
 - 包含事件與原始附件的 ZIP 完整備份、合併及覆蓋還原
 - PWA 安裝提示、離線操作與使用者確認後才套用的新版本更新
 - 淺色／深色模式與行動裝置 safe-area 支援
+- Settings Danger Zone 可在兩次確認後清除目前裝置的所有事件與附件
 
 ## 安裝
 
@@ -28,6 +29,8 @@ Daily AI 是一個 mobile-first、local-first 的個人事件日誌 PWA。它使
 事件、Tags、照片與附件全部儲存在目前瀏覽器／PWA 安裝項目的 IndexedDB。資料不會自動上傳，也不會跨瀏覽器或跨裝置同步。
 
 > **重要：** 清除網站資料、瀏覽器儲存空間或移除 PWA 時選擇刪除資料，可能永久刪除所有本機事件與附件。請定期建立完整 ZIP 備份。
+
+Settings 的「清除所有本機資料」同樣無法復原；執行前請先下載完整 ZIP 備份。此操作不會刪除已下載到裝置的備份檔。
 
 - **Excel 備份**：`Daily.xlsx` 包含事件、Tags 與附件 metadata，但**不包含實際照片或附件檔案**。
 - **完整備份**：`Daily-AI-Backup-YYYY-MM-DD.zip` 包含 `Daily.xlsx`、`manifest.json` 與所有照片／附件原始檔案。

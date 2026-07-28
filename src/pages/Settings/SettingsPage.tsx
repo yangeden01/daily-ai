@@ -1,5 +1,5 @@
 import { useRef, useState, type ChangeEvent } from 'react'
-import { ArchiveRestore, Check, Cloud, Database, Download, FileSpreadsheet, GitMerge, Info, LoaderCircle, Package, ServerCog, Share, Smartphone, Upload, Wifi, WifiOff, X } from 'lucide-react'
+import { ArchiveRestore, Check, Cloud, Database, Download, FileSpreadsheet, GitMerge, Info, LoaderCircle, Package, ServerCog, Share, Smartphone, Trash2, Upload, Wifi, WifiOff, X } from 'lucide-react'
 import { usePWA } from '../../contexts/PWAContext'
 
 type BackupStatus = 'idle' | 'working' | 'success' | 'error'
@@ -142,6 +142,23 @@ export default function SettingsPage() {
     }
   }
 
+  const handleLocalDataReset = async () => {
+    if (!window.confirm('這會永久刪除目前裝置上的所有事件、照片與附件。建議先匯出完整 ZIP 備份。要繼續嗎？')) return
+    if (!window.confirm('最後確認：清除後無法復原，確定清除所有本機資料嗎？')) return
+
+    setStatus('working')
+    setMessage(null)
+    try {
+      const { localDataService } = await import('../../services/LocalDataService')
+      const result = await localDataService.reset()
+      setStatus('success')
+      setMessage(`本機資料已清除：${result.eventCount} 筆事件、${result.attachmentCount} 個附件。`)
+    } catch (error) {
+      setStatus('error')
+      setMessage(error instanceof Error ? error.message : '本機資料清除失敗')
+    }
+  }
+
   return (
     <main className="page-enter">
       <p className="section-label">App Status</p>
@@ -245,6 +262,27 @@ export default function SettingsPage() {
           <span>{message}</span>
         </div>
       )}
+
+      <p className="section-label mt-8">Danger Zone</p>
+      <section className="settings-card border border-red-200 dark:border-red-900/60">
+        <div className="settings-row">
+          <span className="settings-icon text-red-600 dark:text-red-400"><Trash2 size={20} /></span>
+          <div className="min-w-0 flex-1">
+            <h2 className="settings-title">清除本機資料</h2>
+            <p className="settings-detail">永久刪除目前裝置上的所有事件、照片與附件</p>
+          </div>
+        </div>
+      </section>
+      <p className="mt-3 px-1 text-xs leading-5 text-red-700 dark:text-red-300">此操作不會刪除你已下載的 Excel 或 ZIP 備份，但 App 內資料無法復原。</p>
+      <button
+        type="button"
+        className="backup-button mt-4 w-full border border-red-300 bg-white text-red-700 hover:bg-red-50 focus-visible:ring-red-500 dark:border-red-800 dark:bg-stone-900 dark:text-red-300 dark:hover:bg-red-950/40"
+        onClick={() => void handleLocalDataReset()}
+        disabled={status === 'working'}
+      >
+        {status === 'working' ? <LoaderCircle size={18} className="animate-spin" /> : <Trash2 size={18} />}
+        清除所有本機資料
+      </button>
 
       <p className="section-label mt-8">Cloud</p>
       <section className="settings-card">
