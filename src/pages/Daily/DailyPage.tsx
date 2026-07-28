@@ -13,6 +13,8 @@ export default function DailyPage() {
   const [eventDate, setEventDate] = useState(() => toLocalDateInputValue())
   const [pendingFiles, setPendingFiles] = useState<File[]>([])
   const [events, setEvents] = useState<Event[]>([])
+  const [eventCategory, setEventCategory] = useState('')
+  const [categoryOptions, setCategoryOptions] = useState<string[]>([])
   const [isSaving, setIsSaving] = useState(false)
   const [isLoadingEvents, setIsLoadingEvents] = useState(true)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -22,6 +24,8 @@ export default function DailyPage() {
   const loadEvents = useCallback(async () => {
     const items = await eventRepository.getAll()
     setEvents(sortEventsNewestFirst(items))
+    setCategoryOptions([...new Set(items.map(({ category }) => category.trim()).filter(Boolean))]
+      .sort((left, right) => left.localeCompare(right, 'zh-TW')))
     setIsLoadingEvents(false)
   }, [])
 
@@ -50,7 +54,7 @@ export default function DailyPage() {
         date: eventDate,
         title: parsedEvent.title,
         detail: parsedEvent.rawText,
-        category: parsedEvent.category,
+        category: eventCategory.trim() || parsedEvent.category,
         ...(parsedEvent.amount !== undefined ? { amount: parsedEvent.amount } : {}),
         tags: [...parsedEvent.tags],
         attachmentIds: attachments.map(({ id }) => id),
@@ -68,6 +72,7 @@ export default function DailyPage() {
       await loadEvents()
       setRawText('')
       setEventDate(toLocalDateInputValue())
+      setEventCategory('')
       setPendingFiles([])
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : '事件儲存失敗')
@@ -91,7 +96,7 @@ export default function DailyPage() {
   return (
     <main className="page-enter">
       <form onSubmit={handleSubmit}>
-        <label className="section-label block" htmlFor="daily-event">新增事件</label>
+        <label className="section-label block !text-sm !font-bold !text-stone-700 dark:!text-stone-200" htmlFor="daily-event">新增事件</label>
         <label className="filter-field mb-3" htmlFor="daily-event-date">
           <span>事件日期</span>
           <input
@@ -128,6 +133,35 @@ export default function DailyPage() {
                 <button type="button" onClick={() => setPendingFiles((files) => files.filter((_, itemIndex) => itemIndex !== index))} aria-label={`移除 ${file.name}`}><X size={15} /></button>
               </div>
             ))}
+          </div>
+        )}
+
+        <label className="filter-field mt-3" htmlFor="daily-event-category">
+          <span className="!text-sm !font-bold !text-stone-700 dark:!text-stone-200">分類</span>
+          <input
+            id="daily-event-category"
+            type="text"
+            value={eventCategory}
+            onChange={(event) => setEventCategory(event.target.value)}
+            placeholder="輸入新分類或從下方選擇"
+            autoComplete="off"
+          />
+        </label>
+        {categoryOptions.length > 0 && (
+          <div className="mt-3 rounded-2xl border border-stone-200 bg-stone-50 p-3 dark:border-white/10 dark:bg-white/5" aria-label="過去資料分類">
+            <p className="mb-2 text-xs font-semibold text-stone-500 dark:text-stone-400">過去資料分類</p>
+            <div className="flex flex-wrap gap-2">
+              {categoryOptions.map((option) => (
+                <button
+                  type="button"
+                  key={option}
+                  className={`rounded-full border px-3 py-1.5 text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${eventCategory === option ? 'border-indigo-500 bg-indigo-50 font-semibold text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-200' : 'border-stone-200 bg-white text-stone-700 hover:border-indigo-300 dark:border-white/10 dark:bg-stone-900 dark:text-stone-300'}`}
+                  onClick={() => setEventCategory(option)}
+                >
+                  {option}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 

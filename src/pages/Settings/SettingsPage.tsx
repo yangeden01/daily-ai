@@ -1,84 +1,15 @@
 import { useRef, useState, type ChangeEvent } from 'react'
-import { ArchiveRestore, Check, Database, Download, GitMerge, Info, LoaderCircle, ServerCog, Share, Smartphone, Trash2, Upload, Wifi, WifiOff, X } from 'lucide-react'
+import { ArchiveRestore, Check, Database, Download, GitMerge, Info, LoaderCircle, ServerCog, Share, Smartphone, Trash2, Wifi, WifiOff, X } from 'lucide-react'
 import { usePWA } from '../../contexts/PWAContext'
 
 type BackupStatus = 'idle' | 'working' | 'success' | 'error'
 
 export default function SettingsPage() {
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const mergeFileInputRef = useRef<HTMLInputElement>(null)
   const fullBackupInputRef = useRef<HTMLInputElement>(null)
   const fullMergeInputRef = useRef<HTMLInputElement>(null)
   const [status, setStatus] = useState<BackupStatus>('idle')
   const [message, setMessage] = useState<string | null>(null)
   const { isOnline, isInstalled, isStandalone, installPlatform, canPromptInstall, showInstallExperience, serviceWorkerStatus, install } = usePWA()
-
-  const handleExport = async () => {
-    setStatus('working')
-    setMessage(null)
-    try {
-      const { backupService } = await import('../../services/BackupService')
-      const data = await backupService.exportWorkbook()
-      const copy = new Uint8Array(data.byteLength)
-      copy.set(data)
-      const url = URL.createObjectURL(new Blob([copy.buffer], {
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      }))
-      const link = document.createElement('a')
-      link.href = url
-      link.download = 'Daily.xlsx'
-      document.body.appendChild(link)
-      link.click()
-      link.remove()
-      URL.revokeObjectURL(url)
-      setStatus('success')
-      setMessage('Daily.xlsx 備份已匯出。')
-    } catch (error) {
-      setStatus('error')
-      setMessage(error instanceof Error ? error.message : '備份匯出失敗')
-    }
-  }
-
-  const handleImport = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    event.target.value = ''
-    if (!file) return
-
-    const confirmed = window.confirm(`匯入 ${file.name} 將覆蓋目前所有事件，確定繼續嗎？`)
-    if (!confirmed) return
-
-    setStatus('working')
-    setMessage(null)
-    try {
-      const { backupService } = await import('../../services/BackupService')
-      const count = await backupService.importWorkbook(await file.arrayBuffer())
-      setStatus('success')
-      setMessage(`已從備份還原 ${count} 筆事件。`)
-    } catch (error) {
-      setStatus('error')
-      setMessage(error instanceof Error ? error.message : '備份匯入失敗')
-    }
-  }
-
-  const handleMergeImport = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    event.target.value = ''
-    if (!file) return
-    if (!window.confirm(`合併 ${file.name}？既有事件會保留，重複事件將略過。`)) return
-
-    setStatus('working')
-    setMessage(null)
-    try {
-      const { backupService } = await import('../../services/BackupService')
-      const result = await backupService.mergeWorkbook(await file.arrayBuffer())
-      setStatus('success')
-      const source = result.format === 'legacy' ? '舊版 Excel' : 'Daily.xlsx'
-      setMessage(`${source} 合併完成：新增 ${result.added} 筆、略過重複 ${result.skipped} 筆，目前共 ${result.total} 筆事件。`)
-    } catch (error) {
-      setStatus('error')
-      setMessage(error instanceof Error ? error.message : 'Excel 合併匯入失敗')
-    }
-  }
 
   const handleFullExport = async () => {
     setStatus('working')
@@ -222,31 +153,10 @@ export default function SettingsPage() {
           匯出完整備份
         </button>
         <button type="button" className="backup-button backup-button-secondary" onClick={() => fullMergeInputRef.current?.click()} disabled={status === 'working'}>
-          <GitMerge size={18} />合併完整備份
+          <GitMerge size={18} />匯入備份（合併）
         </button>
         <button type="button" className="backup-button backup-button-secondary" onClick={() => fullBackupInputRef.current?.click()} disabled={status === 'working'}>
-          <ArchiveRestore size={18} />覆蓋完整還原
-        </button>
-      </div>
-
-      <p className="section-label mt-8">Excel 備份</p>
-      <section className="px-1" aria-label="Excel 備份說明">
-        <h2 className="text-base font-semibold text-stone-900 dark:text-stone-100">Daily.xlsx</h2>
-        <p className="mt-1 text-sm leading-6 text-stone-500 dark:text-stone-400">只包含事件資料，不含實際照片與附件；用於匯出、合併或覆蓋匯入。</p>
-      </section>
-
-      <input ref={fileInputRef} aria-label="選擇 Excel 備份" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="sr-only" onChange={handleImport} />
-      <input ref={mergeFileInputRef} aria-label="選擇要合併的 Excel" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="sr-only" onChange={handleMergeImport} />
-      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <button type="button" className="backup-button backup-button-primary" onClick={handleExport} disabled={status === 'working'}>
-          {status === 'working' ? <LoaderCircle size={18} className="animate-spin" /> : <Download size={18} />}
-          匯出備份
-        </button>
-        <button type="button" className="backup-button backup-button-secondary" onClick={() => mergeFileInputRef.current?.click()} disabled={status === 'working'}>
-          <GitMerge size={18} />合併匯入
-        </button>
-        <button type="button" className="backup-button backup-button-secondary" onClick={() => fileInputRef.current?.click()} disabled={status === 'working'}>
-          <Upload size={18} />覆蓋匯入
+          <ArchiveRestore size={18} />匯入備份（覆蓋）
         </button>
       </div>
 
@@ -258,14 +168,9 @@ export default function SettingsPage() {
       )}
 
       <p className="section-label mt-8">Danger Zone</p>
-      <section className="settings-card border border-red-200 dark:border-red-900/60">
-        <div className="settings-row">
-          <span className="settings-icon text-red-600 dark:text-red-400"><Trash2 size={20} /></span>
-          <div className="min-w-0 flex-1">
-            <h2 className="settings-title">清除本機資料</h2>
-            <p className="settings-detail">永久刪除目前裝置上的所有事件、照片與附件</p>
-          </div>
-        </div>
+      <section className="px-1" aria-label="清除本機資料說明">
+        <h2 className="text-base font-semibold text-red-700 dark:text-red-300">清除本機資料</h2>
+        <p className="mt-1 text-sm leading-6 text-stone-500 dark:text-stone-400">永久刪除目前裝置上的所有事件、照片與附件。</p>
       </section>
       <p className="mt-3 px-1 text-xs leading-5 text-red-700 dark:text-red-300">此操作不會刪除你已下載的 Excel 或 ZIP 備份，但 App 內資料無法復原。</p>
       <button
