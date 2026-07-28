@@ -7,6 +7,11 @@ const createRepository = () =>
   new IndexedDBRepository(`daily-ai-test-${crypto.randomUUID()}`, [])
 
 describe('IndexedDBRepository', () => {
+  it('starts with no default events', async () => {
+    const repository = new IndexedDBRepository(`daily-ai-empty-default-${crypto.randomUUID()}`)
+    await expect(repository.getAll()).resolves.toEqual([])
+  })
+
   it('creates, reads, updates, and deletes an event', async () => {
     const repository = createRepository()
     const event = createTestEvent()

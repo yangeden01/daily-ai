@@ -108,7 +108,7 @@ export default function DailyPage() {
             className="create-event-textarea"
             value={rawText}
             onChange={(event) => setRawText(event.target.value)}
-            placeholder={'今天發生什麼事？\n\n例如：\n今天跟 Dell VP 討論 Volta EVT 延一週。'}
+            placeholder={'寫下想記錄的事\n\n例如：\nEden 計畫環遊世界'}
           />
           <div className="editor-toolbar">
             <button type="button" className="tool-button" onClick={() => photoInputRef.current?.click()}><Camera size={19} />照片</button>

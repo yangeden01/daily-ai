@@ -3,7 +3,7 @@ import { Wifi, WifiOff } from 'lucide-react'
 import { usePWA } from '../../contexts/PWAContext'
 
 const pageTitles: Record<string, string> = {
-  '/daily': 'Daily AI',
+  '/daily': 'Daily Record',
   '/ai': 'AI Search',
   '/dashboard': 'Dashboard',
   '/settings': 'Settings',

@@ -1,6 +1,5 @@
 import type { Event } from '../models/Event'
 import type { EventSearchCriteria } from '../models/EventSearchCriteria'
-import { mockEvents } from '../mock/events'
 import { filterEvents } from '../utils/filterEvents'
 import type { EventRepository } from './EventRepository'
 
@@ -32,7 +31,7 @@ export class IndexedDBRepository implements EventRepository {
 
   constructor(
     private readonly databaseName = DATABASE_NAME,
-    private readonly seedEvents: Event[] = mockEvents,
+    private readonly seedEvents: Event[] = [],
   ) {}
 
   async getAll(): Promise<Event[]> {

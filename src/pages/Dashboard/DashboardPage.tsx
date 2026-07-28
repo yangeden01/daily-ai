@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CalendarDays, CircleDollarSign, Inbox, LayoutGrid } from 'lucide-react'
+import { CalendarDays, Inbox, LayoutGrid } from 'lucide-react'
 import type { Event } from '../../models/Event'
 import { eventRepository } from '../../repositories'
 import { calculateEventStatistics } from '../../utils/calculateEventStatistics'
@@ -8,13 +8,6 @@ const currentMonth = () => {
   const now = new Date()
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 }
-
-const formatCurrency = new Intl.NumberFormat('zh-TW', {
-  style: 'currency',
-  currency: 'TWD',
-  currencyDisplay: 'code',
-  maximumFractionDigits: 0,
-})
 
 const formatMonth = (month: string) => {
   const [year, monthNumber] = month.split('-')
@@ -67,28 +60,24 @@ export default function DashboardPage() {
         <div className="dashboard-empty">正在整理事件統計…</div>
       ) : (
         <>
-          <section className="dashboard-summary-grid" aria-label="月份摘要">
-            <article className="dashboard-summary-card">
-              <span className="dashboard-summary-icon"><LayoutGrid size={19} /></span>
-              <p>本月事件</p>
-              <strong>{statistics.eventCount}<small> 筆</small></strong>
-            </article>
-            <article className="dashboard-summary-card">
-              <span className="dashboard-summary-icon"><CircleDollarSign size={19} /></span>
-              <p>本月金額</p>
-              <strong>{formatCurrency.format(statistics.amountTotal)}</strong>
-            </article>
-          </section>
-
-          {statistics.eventCount === 0 ? (
-            <section className="dashboard-empty">
-              <Inbox size={28} aria-hidden="true" />
-              <strong>這個月份還沒有事件</strong>
-              <span>新增事件後，統計會自動出現在這裡。</span>
-            </section>
-          ) : (
-            <section className="dashboard-card">
-              <h3>Category 分布</h3>
+          <section className="dashboard-card" aria-labelledby="category-distribution-title">
+            <div className="mb-5 flex items-center justify-between gap-4 border-b border-stone-100 pb-5 dark:border-white/10">
+              <div>
+                <p className="text-xs font-semibold text-stone-400">本月事件</p>
+                <strong className="mt-1 block text-2xl font-bold tracking-tight text-stone-950 dark:text-white">
+                  {statistics.eventCount}<small className="ml-1 text-xs font-semibold text-stone-400">筆</small>
+                </strong>
+              </div>
+              <span className="dashboard-summary-icon !mb-0"><LayoutGrid size={19} /></span>
+            </div>
+            <h3 id="category-distribution-title">Category 分布</h3>
+            {statistics.eventCount === 0 ? (
+              <div className="flex flex-col items-center justify-center gap-2 py-8 text-center text-sm text-stone-400">
+                <Inbox size={28} aria-hidden="true" />
+                <strong className="text-stone-700 dark:text-stone-200">這個月份還沒有事件</strong>
+                <span>新增事件後，統計會自動出現在這裡。</span>
+              </div>
+            ) : (
               <div className="stat-list">
                 {statistics.categories.map(({ category, count }) => (
                   <div className="stat-row" key={category}>
@@ -97,8 +86,8 @@ export default function DashboardPage() {
                   </div>
                 ))}
               </div>
-            </section>
-          )}
+            )}
+          </section>
 
           <section className="dashboard-card">
             <h3>最近 6 個月</h3>

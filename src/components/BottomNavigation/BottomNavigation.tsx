@@ -1,9 +1,9 @@
 import { NavLink } from 'react-router-dom'
-import { Bot, ChartNoAxesColumnIncreasing, NotebookPen, Settings } from 'lucide-react'
+import { ChartNoAxesColumnIncreasing, NotebookPen, Search, Settings } from 'lucide-react'
 
 const navigationItems = [
   { to: '/daily', icon: NotebookPen, label: 'Daily' },
-  { to: '/ai', icon: Bot, label: 'AI' },
+  { to: '/ai', icon: Search, label: 'Search' },
   { to: '/dashboard', icon: ChartNoAxesColumnIncreasing, label: 'Dashboard' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ]

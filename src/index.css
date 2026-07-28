@@ -472,7 +472,7 @@
   }
 
   .ai-textarea {
-    @apply min-h-[14rem] w-full resize-none bg-transparent px-3 py-3 text-[16px] leading-7 text-stone-900 outline-none placeholder:text-stone-400 dark:text-stone-100 dark:placeholder:text-stone-500;
+    @apply h-[8.5rem] w-full resize-none overflow-y-auto bg-transparent px-3 py-3 text-[16px] leading-7 text-stone-900 outline-none placeholder:text-stone-400 dark:text-stone-100 dark:placeholder:text-stone-500;
   }
 
   .send-button {

@@ -1,5 +1,5 @@
 import { useRef, useState, type ChangeEvent } from 'react'
-import { ArchiveRestore, Check, Cloud, Database, Download, FileSpreadsheet, GitMerge, Info, LoaderCircle, Package, ServerCog, Share, Smartphone, Trash2, Upload, Wifi, WifiOff, X } from 'lucide-react'
+import { ArchiveRestore, Check, Database, Download, GitMerge, Info, LoaderCircle, ServerCog, Share, Smartphone, Trash2, Upload, Wifi, WifiOff, X } from 'lucide-react'
 import { usePWA } from '../../contexts/PWAContext'
 
 type BackupStatus = 'idle' | 'working' | 'success' | 'error'
@@ -187,8 +187,14 @@ export default function SettingsPage() {
       {showInstallExperience && installPlatform === 'standard' && canPromptInstall && (
         <button type="button" className="install-app-button" onClick={() => void install()}><Smartphone size={18} />安裝 Daily AI</button>
       )}
-      {showInstallExperience && installPlatform === 'ios' && (
-        <div className="ios-install-guide"><Share size={18} /><div><strong>加入 iPhone 主畫面</strong><span>在 Safari 點選分享，再選擇「加入主畫面」。</span></div></div>
+      {showInstallExperience && installPlatform === 'android' && (
+        <div className="ios-install-guide"><Smartphone size={18} /><div><strong>安裝到 Android</strong><span>開啟 Chrome 選單，選擇「安裝應用程式」或「加到主畫面」。</span></div></div>
+      )}
+      {showInstallExperience && installPlatform === 'ios-safari' && (
+        <div className="ios-install-guide"><Share size={18} /><div><strong>加入 iPhone 主畫面</strong><span>點選 Safari 的分享按鈕，再選擇「加入主畫面」。</span></div></div>
+      )}
+      {showInstallExperience && installPlatform === 'ios-browser' && (
+        <div className="ios-install-guide"><Share size={18} /><div><strong>請改用 Safari 安裝</strong><span>在 Safari 開啟 Daily AI，點選分享，再選擇「加入主畫面」。</span></div></div>
       )}
 
       <p className="section-label">Local Data</p>
@@ -204,14 +210,9 @@ export default function SettingsPage() {
       </section>
 
       <p className="section-label mt-8">完整備份</p>
-      <section className="settings-card">
-        <div className="settings-row">
-          <span className="settings-icon"><Package size={20} /></span>
-          <div className="flex-1">
-            <h2 className="settings-title">ZIP 完整備份</h2>
-            <p className="settings-detail">包含事件、照片與附件原始檔案</p>
-          </div>
-        </div>
+      <section className="px-1" aria-label="完整備份說明">
+        <h2 className="text-base font-semibold text-stone-900 dark:text-stone-100">Daily-AI-Backup-YYYY-MM-DD.zip</h2>
+        <p className="mt-1 text-sm leading-6 text-stone-500 dark:text-stone-400">包含事件、照片與附件；用於完整備份、合併或還原。</p>
       </section>
       <input ref={fullBackupInputRef} aria-label="選擇完整 ZIP 備份" type="file" accept=".zip,application/zip" className="sr-only" onChange={handleFullImport} />
       <input ref={fullMergeInputRef} aria-label="選擇要合併的完整 ZIP 備份" type="file" accept=".zip,application/zip" className="sr-only" onChange={handleFullMerge} />
@@ -229,17 +230,10 @@ export default function SettingsPage() {
       </div>
 
       <p className="section-label mt-8">Excel 備份</p>
-      <section className="settings-card">
-        <div className="settings-row">
-          <span className="settings-icon"><FileSpreadsheet size={20} /></span>
-          <div className="flex-1">
-            <h2 className="settings-title">Daily.xlsx</h2>
-            <p className="settings-detail">支援 Daily.xlsx 與舊版 Record 工作表；不包含實際照片與檔案</p>
-          </div>
-        </div>
+      <section className="px-1" aria-label="Excel 備份說明">
+        <h2 className="text-base font-semibold text-stone-900 dark:text-stone-100">Daily.xlsx</h2>
+        <p className="mt-1 text-sm leading-6 text-stone-500 dark:text-stone-400">只包含事件資料，不含實際照片與附件；用於匯出、合併或覆蓋匯入。</p>
       </section>
-
-      <p className="mt-3 px-1 text-xs leading-5 text-amber-700 dark:text-amber-300">Excel 備份不包含照片與附件的二進位內容；實際檔案只保存在目前瀏覽器。</p>
 
       <input ref={fileInputRef} aria-label="選擇 Excel 備份" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="sr-only" onChange={handleImport} />
       <input ref={mergeFileInputRef} aria-label="選擇要合併的 Excel" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="sr-only" onChange={handleMergeImport} />
@@ -283,18 +277,6 @@ export default function SettingsPage() {
         {status === 'working' ? <LoaderCircle size={18} className="animate-spin" /> : <Trash2 size={18} />}
         清除所有本機資料
       </button>
-
-      <p className="section-label mt-8">Cloud</p>
-      <section className="settings-card">
-        <div className="settings-row">
-          <span className="settings-icon"><Cloud size={20} /></span>
-          <div className="flex-1">
-            <h2 className="settings-title">OneDrive Sync</h2>
-            <p className="settings-detail">未來可選同步功能</p>
-          </div>
-          <span className="coming-soon">Coming Soon</span>
-        </div>
-      </section>
 
     </main>
   )

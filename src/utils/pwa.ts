@@ -1,4 +1,4 @@
-export type InstallPlatform = 'ios' | 'standard' | 'unsupported'
+export type InstallPlatform = 'ios-safari' | 'ios-browser' | 'android' | 'standard' | 'unsupported'
 
 interface DisplayEnvironment {
   userAgent: string
@@ -9,8 +9,12 @@ interface DisplayEnvironment {
 
 export const getInstallPlatform = ({ userAgent, supportsInstallPrompt }: DisplayEnvironment): InstallPlatform => {
   const isIOS = /iPad|iPhone|iPod/i.test(userAgent) || (/Macintosh/i.test(userAgent) && /Mobile/i.test(userAgent))
-  if (isIOS) return 'ios'
-  return supportsInstallPrompt ? 'standard' : 'unsupported'
+  if (isIOS) {
+    const isAlternativeIOSBrowser = /CriOS|FxiOS|EdgiOS|OPiOS|DuckDuckGo/i.test(userAgent)
+    return isAlternativeIOSBrowser ? 'ios-browser' : 'ios-safari'
+  }
+  if (supportsInstallPrompt) return 'standard'
+  return /Android/i.test(userAgent) ? 'android' : 'unsupported'
 }
 
 export const isStandaloneDisplay = ({ standaloneMedia, iosStandalone }: DisplayEnvironment): boolean =>

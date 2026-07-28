@@ -3,12 +3,18 @@ import { getInstallPlatform, isStandaloneDisplay, shouldShowInstallExperience } 
 
 describe('PWA state logic', () => {
   it('detects iPhone and iPadOS install guidance', () => {
-    expect(getInstallPlatform({ userAgent: 'Mozilla/5.0 (iPhone)', standaloneMedia: false, supportsInstallPrompt: false })).toBe('ios')
-    expect(getInstallPlatform({ userAgent: 'Macintosh Mobile', standaloneMedia: false, supportsInstallPrompt: false })).toBe('ios')
+    expect(getInstallPlatform({ userAgent: 'Mozilla/5.0 (iPhone) Version/18.0 Mobile Safari/604.1', standaloneMedia: false, supportsInstallPrompt: false })).toBe('ios-safari')
+    expect(getInstallPlatform({ userAgent: 'Macintosh Mobile Safari', standaloneMedia: false, supportsInstallPrompt: false })).toBe('ios-safari')
+    expect(getInstallPlatform({ userAgent: 'Mozilla/5.0 (iPhone) CriOS/126.0 Mobile Safari/604.1', standaloneMedia: false, supportsInstallPrompt: false })).toBe('ios-browser')
   })
 
-  it('detects standard prompt support and standalone modes', () => {
+  it('detects Android fallback guidance and standard prompt support', () => {
+    expect(getInstallPlatform({ userAgent: 'Mozilla/5.0 (Linux; Android 15) Chrome/126 Mobile', standaloneMedia: false, supportsInstallPrompt: false })).toBe('android')
+    expect(getInstallPlatform({ userAgent: 'Mozilla/5.0 (Linux; Android 15) Chrome/126 Mobile', standaloneMedia: false, supportsInstallPrompt: true })).toBe('standard')
     expect(getInstallPlatform({ userAgent: 'Windows', standaloneMedia: false, supportsInstallPrompt: true })).toBe('standard')
+  })
+
+  it('detects standalone modes', () => {
     expect(isStandaloneDisplay({ userAgent: '', standaloneMedia: true, supportsInstallPrompt: false })).toBe(true)
     expect(isStandaloneDisplay({ userAgent: '', standaloneMedia: false, iosStandalone: true, supportsInstallPrompt: false })).toBe(true)
   })

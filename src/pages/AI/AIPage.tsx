@@ -78,6 +78,7 @@ export default function AIPage() {
         <textarea
           id="ai-query"
           className="ai-textarea"
+          rows={4}
           value={input}
           onChange={(event) => setInput(event.target.value)}
           onKeyDown={handleKeyDown}
