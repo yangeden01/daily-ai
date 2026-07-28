@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
-import { Camera, Check, ChevronRight, FilePlus2, LoaderCircle, RotateCcw, Search, SlidersHorizontal, Tag, X } from 'lucide-react'
+import { Camera, Check, ChevronRight, FilePlus2, Inbox, LoaderCircle, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import type { Event } from '../../models/Event'
 import { attachmentRepository, eventRepository } from '../../repositories'
@@ -13,33 +13,16 @@ export default function DailyPage() {
   const [eventDate, setEventDate] = useState(() => toLocalDateInputValue())
   const [pendingFiles, setPendingFiles] = useState<File[]>([])
   const [events, setEvents] = useState<Event[]>([])
-  const [categories, setCategories] = useState<string[]>([])
-  const [availableTags, setAvailableTags] = useState<string[]>([])
-  const [keyword, setKeyword] = useState('')
-  const [category, setCategory] = useState('')
-  const [tag, setTag] = useState('')
-  const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [isLoadingEvents, setIsLoadingEvents] = useState(true)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const searchRequest = useRef(0)
   const photoInputRef = useRef<HTMLInputElement>(null)
   const attachmentInputRef = useRef<HTMLInputElement>(null)
 
   const loadEvents = useCallback(async () => {
-    const requestId = ++searchRequest.current
-    const items = await eventRepository.search({ keyword, category, tag, dateFrom, dateTo })
-    if (requestId === searchRequest.current) {
-      setEvents(sortEventsNewestFirst(items))
-      setIsLoadingEvents(false)
-    }
-  }, [category, dateFrom, dateTo, keyword, tag])
-
-  const loadCategories = useCallback(async () => {
     const items = await eventRepository.getAll()
-    setCategories([...new Set(items.map((event) => event.category))].sort((a, b) => a.localeCompare(b)))
-    setAvailableTags([...new Set(items.flatMap((event) => event.tags))].sort((a, b) => a.localeCompare(b)))
+    setEvents(sortEventsNewestFirst(items))
+    setIsLoadingEvents(false)
   }, [])
 
   useEffect(() => {
@@ -48,12 +31,6 @@ export default function DailyPage() {
       setIsLoadingEvents(false)
     })
   }, [loadEvents])
-
-  useEffect(() => {
-    void loadCategories().catch((error) => {
-      setErrorMessage(error instanceof Error ? error.message : '篩選選項載入失敗')
-    })
-  }, [loadCategories])
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -88,7 +65,7 @@ export default function DailyPage() {
         await attachmentRepository.deleteByEventId(eventId)
         throw error
       }
-      await Promise.all([loadEvents(), loadCategories()])
+      await loadEvents()
       setRawText('')
       setEventDate(toLocalDateInputValue())
       setPendingFiles([])
@@ -109,15 +86,6 @@ export default function DailyPage() {
     }
     setErrorMessage(null)
     setPendingFiles((current) => [...current, ...selected])
-  }
-
-  const hasFilters = Boolean(keyword || category || tag || dateFrom || dateTo)
-  const resetFilters = () => {
-    setKeyword('')
-    setCategory('')
-    setTag('')
-    setDateFrom('')
-    setDateTo('')
   }
 
   return (
@@ -171,32 +139,6 @@ export default function DailyPage() {
         </button>
       </form>
 
-      <section className="mt-9" aria-labelledby="filters-title">
-        <div className="mb-3 flex items-center justify-between px-1">
-          <h2 id="filters-title" className="section-label !mb-0 flex items-center gap-2"><SlidersHorizontal size={14} />搜尋與篩選</h2>
-          {hasFilters && <button type="button" className="reset-filter-button" onClick={resetFilters}><RotateCcw size={13} />清除</button>}
-        </div>
-        <div className="filter-card">
-          <label className="search-field" htmlFor="event-search">
-            <Search size={18} />
-            <input id="event-search" type="search" value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜尋標題、內容或 Tag" />
-          </label>
-          <div className="filter-grid">
-            <label className="filter-field"><span>Category</span><select value={category} onChange={(event) => setCategory(event.target.value)}><option value="">全部</option>{categories.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
-            <label className="filter-field"><span>開始日期</span><input type="date" value={dateFrom} max={dateTo || undefined} onChange={(event) => setDateFrom(event.target.value)} /></label>
-            <label className="filter-field"><span>結束日期</span><input type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => setDateTo(event.target.value)} /></label>
-          </div>
-          <label className="filter-field mt-2"><span>Tag</span><select value={tag} onChange={(event) => setTag(event.target.value)}><option value="">全部 Tags</option>{availableTags.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
-          {tag && (
-            <div className="active-tag-filter" aria-label="目前使用中的 Tag 篩選">
-              <Tag size={13} aria-hidden="true" />
-              <span>{tag}</span>
-              <button type="button" onClick={() => setTag('')} aria-label="清除 Tag 篩選"><X size={13} /></button>
-            </div>
-          )}
-        </div>
-      </section>
-
       <section className="mt-9" aria-labelledby="timeline-title">
         <div className="mb-3 flex items-center justify-between px-1">
           <h2 id="timeline-title" className="section-label !mb-0">Timeline</h2>
@@ -212,7 +154,7 @@ export default function DailyPage() {
                 <ChevronRight size={16} className="text-stone-300 dark:text-stone-600" />
               </span>
             </Link>
-          )) : <div className="empty-timeline"><Search size={22} /><p>找不到符合條件的事件</p>{hasFilters && <button type="button" onClick={resetFilters}>清除篩選</button>}</div>}
+          )) : <div className="empty-timeline"><Inbox size={22} /><p>目前還沒有事件</p></div>}
         </div>
       </section>
     </main>
