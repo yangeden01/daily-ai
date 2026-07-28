@@ -78,4 +78,44 @@ describe('FullBackupService', () => {
     await expect(new FullBackupService(target.events, target.attachments).restoreBackup(unsafe))
       .rejects.toThrow('不安全的路徑')
   })
+
+  it('merges missing attachments into an existing matching event', async () => {
+    const source = repositories()
+    const event = createTestEvent({ id: 'event-1', attachmentIds: ['attachment-1'] })
+    await source.events.replaceAll([event])
+    await source.attachments.replaceAll([createAttachment()])
+    const backup = await new FullBackupService(source.events, source.attachments).exportBackup()
+
+    const target = repositories()
+    await target.events.replaceAll([{ ...event, attachmentIds: [] }])
+    await target.attachments.replaceAll([])
+    const result = await new FullBackupService(target.events, target.attachments).mergeBackup(backup)
+
+    expect(result).toEqual({
+      addedEvents: 0,
+      skippedEvents: 1,
+      addedAttachments: 1,
+      skippedAttachments: 0,
+      eventCount: 1,
+      attachmentCount: 1,
+    })
+    await expect(target.events.getById('event-1')).resolves.toMatchObject({ attachmentIds: ['attachment-1'] })
+    await expect((await target.attachments.getAll())[0].blob?.text()).resolves.toBe('photo')
+  })
+
+  it('does not duplicate events or attachments when the same ZIP is merged twice', async () => {
+    const source = repositories()
+    await source.events.replaceAll([createTestEvent({ id: 'event-1', attachmentIds: ['attachment-1'] })])
+    await source.attachments.replaceAll([createAttachment()])
+    const backup = await new FullBackupService(source.events, source.attachments).exportBackup()
+    const target = repositories()
+    const service = new FullBackupService(target.events, target.attachments)
+
+    await service.mergeBackup(backup)
+    const second = await service.mergeBackup(backup)
+
+    expect(second).toMatchObject({ addedEvents: 0, skippedEvents: 1, addedAttachments: 0, skippedAttachments: 1 })
+    await expect(target.events.getAll()).resolves.toHaveLength(1)
+    await expect(target.attachments.getAll()).resolves.toHaveLength(1)
+  })
 })

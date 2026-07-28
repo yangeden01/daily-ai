@@ -38,6 +38,25 @@ export interface RestoreResult {
   attachmentCount: number
 }
 
+export interface MergeRestoreResult {
+  addedEvents: number
+  skippedEvents: number
+  addedAttachments: number
+  skippedAttachments: number
+  eventCount: number
+  attachmentCount: number
+}
+
+interface ParsedBackup {
+  events: Event[]
+  attachments: Attachment[]
+}
+
+const eventFingerprint = (event: Event): string => JSON.stringify([
+  event.date, event.title.trim(), event.detail.trim(), event.category.trim(), event.amount ?? null,
+  [...event.tags].map((tag) => tag.trim()).filter(Boolean).sort(),
+])
+
 const isSafePath = (path: string): boolean =>
   Boolean(path) && !path.includes('\\') && !path.startsWith('/') && !path.includes('\0') &&
   path.split('/').every((part) => part !== '' && part !== '.' && part !== '..')
@@ -105,6 +124,82 @@ export class FullBackupService {
   }
 
   async restoreBackup(data: ArrayBuffer | Uint8Array): Promise<RestoreResult> {
+    const { events, attachments: restoredAttachments } = await this.readBackup(data)
+    const [previousEvents, previousAttachments] = await Promise.all([this.events.getAll(), this.attachments.getAll()])
+    try {
+      await this.events.replaceAll(events)
+      await this.attachments.replaceAll(restoredAttachments)
+    } catch (error) {
+      await this.rollback(previousEvents, previousAttachments)
+      throw error
+    }
+
+    return { eventCount: events.length, attachmentCount: restoredAttachments.length }
+  }
+
+  async mergeBackup(data: ArrayBuffer | Uint8Array): Promise<MergeRestoreResult> {
+    const imported = await this.readBackup(data)
+    const [previousEvents, previousAttachments] = await Promise.all([this.events.getAll(), this.attachments.getAll()])
+    const mergedEvents = previousEvents.map((event) => ({ ...event, tags: [...event.tags], attachmentIds: [...event.attachmentIds] }))
+    const mergedAttachments = [...previousAttachments]
+    const eventsById = new Map(mergedEvents.map((event) => [event.id, event]))
+    const eventsByFingerprint = new Map(mergedEvents.map((event) => [eventFingerprint(event), event]))
+    const attachmentIds = new Set(mergedAttachments.map(({ id }) => id))
+    let addedEvents = 0
+    let skippedEvents = 0
+    let addedAttachments = 0
+    let skippedAttachments = 0
+
+    for (const importedEvent of imported.events) {
+      let target = eventsById.get(importedEvent.id) ?? eventsByFingerprint.get(eventFingerprint(importedEvent))
+      if (target) {
+        skippedEvents += 1
+      } else {
+        let id = importedEvent.id
+        let suffix = 2
+        while (eventsById.has(id)) id = `${importedEvent.id}-import-${suffix++}`
+        target = { ...importedEvent, id, tags: [...importedEvent.tags], attachmentIds: [] }
+        mergedEvents.push(target)
+        eventsById.set(id, target)
+        eventsByFingerprint.set(eventFingerprint(target), target)
+        addedEvents += 1
+      }
+
+      const importedAttachments = imported.attachments.filter(({ eventId }) => eventId === importedEvent.id)
+      for (const attachment of importedAttachments) {
+        const duplicate = mergedAttachments.some((item) => item.eventId === target.id &&
+          item.filename === attachment.filename && item.mimeType === attachment.mimeType && item.size === attachment.size)
+        if (duplicate) {
+          skippedAttachments += 1
+          continue
+        }
+        let id = attachment.id
+        let suffix = 2
+        while (attachmentIds.has(id)) id = `${attachment.id}-import-${suffix++}`
+        const addition = { ...attachment, id, eventId: target.id }
+        mergedAttachments.push(addition)
+        attachmentIds.add(id)
+        target.attachmentIds.push(id)
+        addedAttachments += 1
+      }
+    }
+
+    this.validateAttachmentLimits(mergedAttachments)
+    try {
+      await this.events.replaceAll(mergedEvents)
+      await this.attachments.replaceAll(mergedAttachments)
+    } catch (error) {
+      await this.rollback(previousEvents, previousAttachments)
+      throw error
+    }
+
+    return {
+      addedEvents, skippedEvents, addedAttachments, skippedAttachments,
+      eventCount: mergedEvents.length, attachmentCount: mergedAttachments.length,
+    }
+  }
+
+  private async readBackup(data: ArrayBuffer | Uint8Array): Promise<ParsedBackup> {
     const bytes = data instanceof Uint8Array ? data : new Uint8Array(data)
     let files: Record<string, Uint8Array>
     try {
@@ -167,21 +262,16 @@ export class FullBackupService {
       }
     })
 
-    const [previousEvents, previousAttachments] = await Promise.all([this.events.getAll(), this.attachments.getAll()])
+    return { events, attachments: restoredAttachments }
+  }
+
+  private async rollback(events: Event[], attachments: Attachment[]): Promise<void> {
     try {
       await this.events.replaceAll(events)
-      await this.attachments.replaceAll(restoredAttachments)
-    } catch (error) {
-      try {
-        await this.events.replaceAll(previousEvents)
-        await this.attachments.replaceAll(previousAttachments)
-      } catch {
-        throw new Error('還原失敗，且無法完整回復原有資料。')
-      }
-      throw error
+      await this.attachments.replaceAll(attachments)
+    } catch {
+      throw new Error('還原失敗，且無法完整回復原有資料。')
     }
-
-    return { eventCount: events.length, attachmentCount: restoredAttachments.length }
   }
 
   private validateAttachmentLimits(attachments: Attachment[]): void {

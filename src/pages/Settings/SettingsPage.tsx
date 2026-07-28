@@ -1,12 +1,14 @@
 import { useRef, useState, type ChangeEvent } from 'react'
-import { ArchiveRestore, Check, Cloud, Database, Download, FileSpreadsheet, Info, LoaderCircle, Package, ServerCog, Share, Smartphone, Upload, Wifi, WifiOff, X } from 'lucide-react'
+import { ArchiveRestore, Check, Cloud, Database, Download, FileSpreadsheet, GitMerge, Info, LoaderCircle, Package, ServerCog, Share, Smartphone, Upload, Wifi, WifiOff, X } from 'lucide-react'
 import { usePWA } from '../../contexts/PWAContext'
 
 type BackupStatus = 'idle' | 'working' | 'success' | 'error'
 
 export default function SettingsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const mergeFileInputRef = useRef<HTMLInputElement>(null)
   const fullBackupInputRef = useRef<HTMLInputElement>(null)
+  const fullMergeInputRef = useRef<HTMLInputElement>(null)
   const [status, setStatus] = useState<BackupStatus>('idle')
   const [message, setMessage] = useState<string | null>(null)
   const { isOnline, isInstalled, isStandalone, installPlatform, canPromptInstall, showInstallExperience, serviceWorkerStatus, install } = usePWA()
@@ -58,6 +60,26 @@ export default function SettingsPage() {
     }
   }
 
+  const handleMergeImport = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    if (!window.confirm(`合併 ${file.name}？既有事件會保留，重複事件將略過。`)) return
+
+    setStatus('working')
+    setMessage(null)
+    try {
+      const { backupService } = await import('../../services/BackupService')
+      const result = await backupService.mergeWorkbook(await file.arrayBuffer())
+      setStatus('success')
+      const source = result.format === 'legacy' ? '舊版 Excel' : 'Daily.xlsx'
+      setMessage(`${source} 合併完成：新增 ${result.added} 筆、略過重複 ${result.skipped} 筆，目前共 ${result.total} 筆事件。`)
+    } catch (error) {
+      setStatus('error')
+      setMessage(error instanceof Error ? error.message : 'Excel 合併匯入失敗')
+    }
+  }
+
   const handleFullExport = async () => {
     setStatus('working')
     setMessage(null)
@@ -98,6 +120,25 @@ export default function SettingsPage() {
     } catch (error) {
       setStatus('error')
       setMessage(error instanceof Error ? error.message : '完整備份還原失敗')
+    }
+  }
+
+  const handleFullMerge = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    if (!window.confirm(`合併 ${file.name}？既有資料會保留，並補入缺少的事件與附件。`)) return
+
+    setStatus('working')
+    setMessage(null)
+    try {
+      const { fullBackupService } = await import('../../services/FullBackupService')
+      const result = await fullBackupService.mergeBackup(await file.arrayBuffer())
+      setStatus('success')
+      setMessage(`完整備份合併完成：新增 ${result.addedEvents} 筆事件、${result.addedAttachments} 個附件；略過 ${result.skippedEvents} 筆重複事件、${result.skippedAttachments} 個重複附件。`)
+    } catch (error) {
+      setStatus('error')
+      setMessage(error instanceof Error ? error.message : '完整備份合併失敗')
     }
   }
 
@@ -156,13 +197,17 @@ export default function SettingsPage() {
         </div>
       </section>
       <input ref={fullBackupInputRef} aria-label="選擇完整 ZIP 備份" type="file" accept=".zip,application/zip" className="sr-only" onChange={handleFullImport} />
-      <div className="mt-4 grid grid-cols-2 gap-3">
+      <input ref={fullMergeInputRef} aria-label="選擇要合併的完整 ZIP 備份" type="file" accept=".zip,application/zip" className="sr-only" onChange={handleFullMerge} />
+      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <button type="button" className="backup-button backup-button-primary" onClick={handleFullExport} disabled={status === 'working'}>
           {status === 'working' ? <LoaderCircle size={18} className="animate-spin" /> : <Download size={18} />}
           匯出完整備份
         </button>
+        <button type="button" className="backup-button backup-button-secondary" onClick={() => fullMergeInputRef.current?.click()} disabled={status === 'working'}>
+          <GitMerge size={18} />合併完整備份
+        </button>
         <button type="button" className="backup-button backup-button-secondary" onClick={() => fullBackupInputRef.current?.click()} disabled={status === 'working'}>
-          <ArchiveRestore size={18} />完整還原
+          <ArchiveRestore size={18} />覆蓋完整還原
         </button>
       </div>
 
@@ -172,7 +217,7 @@ export default function SettingsPage() {
           <span className="settings-icon"><FileSpreadsheet size={20} /></span>
           <div className="flex-1">
             <h2 className="settings-title">Daily.xlsx</h2>
-            <p className="settings-detail">只備份附件 metadata，不包含實際照片與檔案</p>
+            <p className="settings-detail">支援 Daily.xlsx 與舊版 Record 工作表；不包含實際照片與檔案</p>
           </div>
         </div>
       </section>
@@ -180,13 +225,17 @@ export default function SettingsPage() {
       <p className="mt-3 px-1 text-xs leading-5 text-amber-700 dark:text-amber-300">Excel 備份不包含照片與附件的二進位內容；實際檔案只保存在目前瀏覽器。</p>
 
       <input ref={fileInputRef} aria-label="選擇 Excel 備份" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="sr-only" onChange={handleImport} />
-      <div className="mt-4 grid grid-cols-2 gap-3">
+      <input ref={mergeFileInputRef} aria-label="選擇要合併的 Excel" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="sr-only" onChange={handleMergeImport} />
+      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <button type="button" className="backup-button backup-button-primary" onClick={handleExport} disabled={status === 'working'}>
           {status === 'working' ? <LoaderCircle size={18} className="animate-spin" /> : <Download size={18} />}
           匯出備份
         </button>
+        <button type="button" className="backup-button backup-button-secondary" onClick={() => mergeFileInputRef.current?.click()} disabled={status === 'working'}>
+          <GitMerge size={18} />合併匯入
+        </button>
         <button type="button" className="backup-button backup-button-secondary" onClick={() => fileInputRef.current?.click()} disabled={status === 'working'}>
-          <Upload size={18} />匯入備份
+          <Upload size={18} />覆蓋匯入
         </button>
       </div>
 

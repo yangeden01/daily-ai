@@ -67,4 +67,41 @@ describe('BackupService', () => {
     ).rejects.toThrow('不支援的備份版本：99')
     await expect(target.getAll()).resolves.toEqual([existing])
   })
+
+  it('migrates a legacy Record worksheet and maps privacy categories', async () => {
+    const workbookService = new WorkbookService()
+    const workbook = workbookService.createWorkbook()
+    const record = workbook.addWorksheet('Record')
+    record.addRow(['Date', '', 'Type', '', 'Record'])
+    record.addRow([new Date('2026-07-14T00:00:00.000Z'), '', 'P', '', '九州旅行第五天。'])
+    record.addRow([new Date('2026-07-15T00:00:00.000Z'), '', 'CP', '', '機密會議紀錄。'])
+
+    const target = createRepository()
+    const result = await new BackupService(target).mergeWorkbook(await workbookService.saveWorkbook(workbook))
+
+    expect(result).toMatchObject({ added: 2, skipped: 0, format: 'legacy' })
+    await expect(target.getAll()).resolves.toMatchObject([
+      { date: '2026-07-14', title: '九州旅行第五天。', category: '私事' },
+      { date: '2026-07-15', title: '機密會議紀錄。', category: '機密公事' },
+    ])
+  })
+
+  it('merges new events while skipping duplicates without overwriting existing data', async () => {
+    const source = createRepository()
+    const duplicate = createTestEvent({ id: 'imported-duplicate' })
+    const newEvent = createTestEvent({ id: 'new-event', title: '新事件', detail: '新事件內容' })
+    await source.replaceAll([duplicate, newEvent])
+    const data = await new BackupService(source).exportWorkbook()
+
+    const target = createRepository()
+    const existing = createTestEvent({ id: 'existing-local' })
+    await target.replaceAll([existing])
+    const result = await new BackupService(target).mergeWorkbook(data)
+
+    expect(result).toEqual({ added: 1, skipped: 1, total: 2, format: 'daily-ai' })
+    await expect(target.getAll()).resolves.toMatchObject([
+      { id: 'existing-local', title: '測試事件' },
+      { id: 'new-event', title: '新事件' },
+    ])
+  })
 })

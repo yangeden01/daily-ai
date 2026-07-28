@@ -13,6 +13,7 @@ Daily AI v0.1 Alpha 是第一個可日常試用的 local-first PWA 版本。此 
 - Dashboard：指定月份事件總數、TWD 金額合計、Category 分布與最近六個月趨勢。
 - 照片與附件：本機儲存、縮圖／大圖預覽、下載及移除；單檔上限 10 MB，拒絕危險的可執行檔。
 - 備份：保留 Excel 匯出／匯入，另提供包含原始檔案的 ZIP 完整備份與安全還原。
+- 資料遷移：可直接匯入舊版 `Record` Excel，並支援 Excel／ZIP 去重合併；ZIP 可將缺少的附件補到既有事件。
 - PWA：Android／Windows 安裝提示、iPhone 加入主畫面說明、離線 App Shell、更新確認與 safe-area 版面。
 - 外觀與可用性：mobile-first 響應式版面、深色模式、鍵盤 focus 與基本無障礙改善。
 
@@ -40,7 +41,7 @@ Daily AI v0.1 Alpha 是第一個可日常試用的 local-first PWA 版本。此 
 ## 未來規劃
 
 - 串接真正的 AI Provider。
-- 支援 ZIP 備份合併匯入策略。
+- 改善大量舊資料的預覽、錯誤報告與附件遷移工具。
 - 提供可選的雲端與跨裝置同步。
 
 ## 建議驗收

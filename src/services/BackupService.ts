@@ -4,9 +4,26 @@ import { attachmentRepository, eventRepository } from '../repositories'
 import type { AttachmentRepository } from '../repositories/AttachmentRepository'
 import type { EventRepository } from '../repositories/EventRepository'
 import { WorkbookService } from './WorkbookService'
+import { LegacyWorkbookMigrationService } from './LegacyWorkbookMigrationService'
 import { WorksheetService, worksheetNames } from './WorksheetService'
 
 const BACKUP_SCHEMA_VERSION = 1
+
+export interface MergeImportResult {
+  added: number
+  skipped: number
+  total: number
+  format: 'daily-ai' | 'legacy'
+}
+
+const eventFingerprint = (event: Event): string => JSON.stringify([
+  event.date,
+  event.title.trim(),
+  event.detail.trim(),
+  event.category.trim(),
+  event.amount ?? null,
+  [...event.tags].map((tag) => tag.trim()).filter(Boolean).sort(),
+])
 
 export class BackupService {
   constructor(
@@ -14,6 +31,7 @@ export class BackupService {
     private readonly workbookService = new WorkbookService(),
     private readonly worksheetService = new WorksheetService(),
     private readonly attachments: AttachmentRepository = attachmentRepository,
+    private readonly legacyMigration = new LegacyWorkbookMigrationService(),
   ) {}
 
   async exportWorkbook(): Promise<Uint8Array> {
@@ -79,9 +97,44 @@ export class BackupService {
     return events.length
   }
 
+  async mergeWorkbook(data: ArrayBuffer | Uint8Array): Promise<MergeImportResult> {
+    const imported = await this.readWorkbookWithFormat(data)
+    const existing = await this.repository.getAll()
+    const fingerprints = new Set(existing.map(eventFingerprint))
+    const ids = new Set(existing.map(({ id }) => id))
+    const additions: Event[] = []
+    let skipped = 0
+
+    imported.events.forEach((event) => {
+      const fingerprint = eventFingerprint(event)
+      if (fingerprints.has(fingerprint)) {
+        skipped += 1
+        return
+      }
+
+      let id = event.id
+      let suffix = 2
+      while (ids.has(id)) id = `${event.id}-import-${suffix++}`
+      const addition = { ...event, id, tags: [...event.tags], attachmentIds: [] }
+      additions.push(addition)
+      ids.add(id)
+      fingerprints.add(fingerprint)
+    })
+
+    if (additions.length > 0) await this.repository.replaceAll([...existing, ...additions])
+    return { added: additions.length, skipped, total: existing.length + additions.length, format: imported.format }
+  }
+
   async readWorkbook(data: ArrayBuffer | Uint8Array): Promise<Event[]> {
+    return (await this.readWorkbookWithFormat(data)).events
+  }
+
+  async readWorkbookWithFormat(data: ArrayBuffer | Uint8Array): Promise<{ events: Event[]; format: 'daily-ai' | 'legacy' }> {
     const workbook = await this.workbookService.openWorkbook(data)
-    return this.readAndValidateEvents(workbook)
+    if (this.legacyMigration.canMigrate(workbook)) {
+      return { events: this.legacyMigration.migrate(workbook), format: 'legacy' }
+    }
+    return { events: this.readAndValidateEvents(workbook), format: 'daily-ai' }
   }
 
   private readAndValidateEvents(workbook: ExcelJS.Workbook): Event[] {
