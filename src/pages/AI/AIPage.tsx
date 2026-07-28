@@ -11,10 +11,8 @@ const operationLabels: Record<EventQueryOperation, string> = {
 }
 
 const examples = [
-  '今年有幾筆公事？',
-  '去年去了幾次日本？',
-  '2025 年所得稅總共多少？',
-  '這個月有哪些 Dell 事件？',
+  '所得稅',
+  '家庭旅遊',
 ]
 
 const currency = new Intl.NumberFormat('zh-TW', { style: 'currency', currency: 'TWD', maximumFractionDigits: 0 })
@@ -68,8 +66,8 @@ export default function AIPage() {
     <main className="page-enter pb-6">
       <section className="mb-6 text-center">
         <span className="ai-mark"><Sparkles size={27} /></span>
-        <h2 className="mt-5 text-2xl font-bold tracking-tight text-stone-950 dark:text-white">本機自然語言查詢</h2>
-        <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">用中文搜尋目前裝置中的 Daily 事件</p>
+        <h2 className="mt-5 text-2xl font-bold tracking-tight text-stone-950 dark:text-white">關鍵字查詢</h2>
+        <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">搜尋目前裝置中的 Daily 事件</p>
         <div className="mx-auto mt-3 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
           <LockKeyhole size={13} />完全離線執行，不會上傳資料
         </div>
@@ -83,7 +81,7 @@ export default function AIPage() {
           value={input}
           onChange={(event) => setInput(event.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={'今天想查什麼？\n\n例如：\n今年有幾筆公事？\n去年去了幾次日本？'}
+          placeholder={'輸入關鍵字\n\n例如：\n所得稅\n家庭旅遊'}
         />
         <div className="flex items-center justify-between border-t border-stone-100 px-3 pt-3 dark:border-white/10">
           <span className="px-1 text-xs text-stone-400">Enter 查詢 · Shift+Enter 換行</span>
