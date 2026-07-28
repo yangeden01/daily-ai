@@ -1,5 +1,5 @@
-import { ArrowUp, CalendarDays, CircleAlert, LoaderCircle, LockKeyhole, Search, Sparkles, Tag } from 'lucide-react'
-import { useState, type FormEvent, type KeyboardEvent } from 'react'
+import { CalendarDays, CircleAlert, LoaderCircle, LockKeyhole, Search, Sparkles, Tag } from 'lucide-react'
+import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import type { EventQueryOperation, EventQueryResult } from '../../models/EventQuery'
 
@@ -55,13 +55,6 @@ export default function AIPage() {
     void submit()
   }
 
-  const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault()
-      void submit()
-    }
-  }
-
   return (
     <main className="page-enter pb-6">
       <section className="mb-6 text-center">
@@ -81,13 +74,14 @@ export default function AIPage() {
           rows={4}
           value={input}
           onChange={(event) => setInput(event.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={'輸入關鍵字\n\n例如：\n所得稅\n家庭旅遊'}
+          enterKeyHint="enter"
+          placeholder={'輸入關鍵字（Enter 換行）\n\n例如：\n所得稅\n家庭旅遊'}
         />
-        <div className="flex items-center justify-between border-t border-stone-100 px-3 pt-3 dark:border-white/10">
-          <span className="px-1 text-xs text-stone-400">Enter 查詢 · Shift+Enter 換行</span>
+        <div className="flex items-center justify-between gap-3 border-t border-stone-100 px-3 pt-3 dark:border-white/10">
+          <span className="text-sm font-medium text-stone-500 dark:text-stone-400">搜尋結果如下</span>
           <button type="submit" className="send-button" aria-label="送出本機查詢" disabled={!input.trim() || loading}>
-            {loading ? <LoaderCircle size={19} className="animate-spin" /> : <ArrowUp size={19} />}
+            {loading && <LoaderCircle size={18} className="animate-spin" />}
+            <span>查詢</span>
           </button>
         </div>
       </form>

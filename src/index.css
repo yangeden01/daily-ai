@@ -476,7 +476,7 @@
   }
 
   .send-button {
-    @apply grid h-10 w-10 place-items-center rounded-xl bg-stone-900 text-white transition hover:bg-indigo-600 active:scale-95 dark:bg-white dark:text-stone-950 dark:hover:bg-indigo-300;
+    @apply flex h-12 min-w-24 items-center justify-center gap-2 rounded-xl bg-stone-900 px-5 text-sm font-bold text-white transition hover:bg-indigo-600 disabled:cursor-not-allowed disabled:opacity-50 active:scale-95 dark:bg-white dark:text-stone-950 dark:hover:bg-indigo-300;
   }
 
   .section-label {
