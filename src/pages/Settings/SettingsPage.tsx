@@ -3,11 +3,13 @@ import { ArchiveRestore, Check, Database, Download, GitMerge, Info, LoaderCircle
 import { usePWA } from '../../contexts/PWAContext'
 
 type BackupStatus = 'idle' | 'working' | 'success' | 'error'
+type BackupAction = 'export' | 'merge' | 'replace'
 
 export default function SettingsPage() {
   const fullBackupInputRef = useRef<HTMLInputElement>(null)
   const fullMergeInputRef = useRef<HTMLInputElement>(null)
   const [status, setStatus] = useState<BackupStatus>('idle')
+  const [selectedBackupAction, setSelectedBackupAction] = useState<BackupAction>('export')
   const [message, setMessage] = useState<string | null>(null)
   const { isOnline, isInstalled, isStandalone, installPlatform, canPromptInstall, showInstallExperience, serviceWorkerStatus, install } = usePWA()
 
@@ -148,14 +150,14 @@ export default function SettingsPage() {
       <input ref={fullBackupInputRef} aria-label="選擇完整 ZIP 備份" type="file" accept=".zip,application/zip" className="sr-only" onChange={handleFullImport} />
       <input ref={fullMergeInputRef} aria-label="選擇要合併的完整 ZIP 備份" type="file" accept=".zip,application/zip" className="sr-only" onChange={handleFullMerge} />
       <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <button type="button" className="backup-button backup-button-primary" onClick={handleFullExport} disabled={status === 'working'}>
+        <button type="button" className={`backup-button ${selectedBackupAction === 'export' ? 'backup-button-primary' : 'backup-button-secondary'}`} onClick={() => { setSelectedBackupAction('export'); void handleFullExport() }} disabled={status === 'working'}>
           {status === 'working' ? <LoaderCircle size={18} className="animate-spin" /> : <Download size={18} />}
           匯出完整備份
         </button>
-        <button type="button" className="backup-button backup-button-secondary" onClick={() => fullMergeInputRef.current?.click()} disabled={status === 'working'}>
+        <button type="button" className={`backup-button ${selectedBackupAction === 'merge' ? 'backup-button-primary' : 'backup-button-secondary'}`} onClick={() => { setSelectedBackupAction('merge'); fullMergeInputRef.current?.click() }} disabled={status === 'working'}>
           <GitMerge size={18} />匯入備份（合併）
         </button>
-        <button type="button" className="backup-button backup-button-secondary" onClick={() => fullBackupInputRef.current?.click()} disabled={status === 'working'}>
+        <button type="button" className={`backup-button ${selectedBackupAction === 'replace' ? 'backup-button-primary' : 'backup-button-secondary'}`} onClick={() => { setSelectedBackupAction('replace'); fullBackupInputRef.current?.click() }} disabled={status === 'working'}>
           <ArchiveRestore size={18} />匯入備份（覆蓋）
         </button>
       </div>
