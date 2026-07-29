@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { CalendarDays } from 'lucide-react'
 import { toLocalDateInputValue } from '../../utils/localDate'
 
@@ -53,7 +54,7 @@ export default function DateWheelPicker({ id, value, onChange, required }: DateW
       </button>
       {required && <input className="sr-only" tabIndex={-1} aria-hidden="true" value={value} required readOnly />}
 
-      {open && (
+      {open && createPortal(
         <div className="date-picker-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setOpen(false) }}>
           <section className="date-picker-dialog" role="dialog" aria-modal="true" aria-labelledby={`${id}-title`}>
             <h2 id={`${id}-title`}>設定日期</h2>
@@ -82,7 +83,8 @@ export default function DateWheelPicker({ id, value, onChange, required }: DateW
               <button type="button" className="date-picker-confirm" onClick={apply}>設定</button>
             </div>
           </section>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   )

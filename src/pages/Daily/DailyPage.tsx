@@ -170,7 +170,7 @@ export default function DailyPage() {
             placeholder="輸入事件標題"
             required
           />
-          {eventTitle && <button type="button" className="clear-field-button" onClick={() => setEventTitle('')} aria-label="清除事件標題"><X size={17} /></button>}
+          <button type="button" className="clear-field-button" onClick={() => setEventTitle('')} aria-label="清除事件標題" disabled={!eventTitle}><X size={17} /></button>
         </div>
 
         <label className="detail-field-label mt-4" htmlFor="daily-event">Detail</label>
@@ -183,7 +183,7 @@ export default function DailyPage() {
             placeholder={'寫下想記錄的事\n\n例如：\nEden 計畫環遊世界'}
             required
           />
-          {eventDetail && <button type="button" className="clear-field-button !top-3 !translate-y-0" onClick={() => setEventDetail('')} aria-label="清除事件內容"><X size={17} /></button>}
+          <button type="button" className="clear-field-button !top-3 !translate-y-0" onClick={() => setEventDetail('')} aria-label="清除事件內容" disabled={!eventDetail}><X size={17} /></button>
           <div className="editor-toolbar">
             <button type="button" className="tool-button" onClick={() => photoInputRef.current?.click()}><Camera size={19} />照片</button>
             <button type="button" className="tool-button" onClick={() => attachmentInputRef.current?.click()}><FilePlus2 size={19} />附件</button>

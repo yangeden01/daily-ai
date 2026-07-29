@@ -232,13 +232,13 @@ export default function EventDetailPage() {
           <label className="detail-field-label mt-5" htmlFor="event-title">Title</label>
           <div className="clearable-field mt-2">
             <input id="event-title" className="detail-input !mt-0 !pr-12" value={title} onChange={(inputEvent) => setTitle(inputEvent.target.value)} />
-            {title && <button type="button" className="clear-field-button" onClick={() => setTitle('')} aria-label="清除事件標題"><X size={17} /></button>}
+            <button type="button" className="clear-field-button" onClick={() => setTitle('')} aria-label="清除事件標題" disabled={!title}><X size={17} /></button>
           </div>
 
           <label className="detail-field-label mt-5" htmlFor="event-detail">Detail</label>
           <div className="clearable-field mt-2">
             <textarea id="event-detail" className="detail-input !mt-0 min-h-40 resize-y !pr-12" value={detail} onChange={(inputEvent) => setDetail(inputEvent.target.value)} />
-            {detail && <button type="button" className="clear-field-button !top-3 !translate-y-0" onClick={() => setDetail('')} aria-label="清除事件內容"><X size={17} /></button>}
+            <button type="button" className="clear-field-button !top-3 !translate-y-0" onClick={() => setDetail('')} aria-label="清除事件內容" disabled={!detail}><X size={17} /></button>
           </div>
 
           <div className="category-composer mt-5">
