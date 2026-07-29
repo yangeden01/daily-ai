@@ -151,6 +151,7 @@
 
   .date-picker-modal {
     @apply fixed inset-0 m-0 h-full max-h-none w-full max-w-none border-0 bg-transparent p-0;
+    overscroll-behavior: none;
   }
 
   .date-picker-modal::backdrop {
@@ -159,6 +160,7 @@
 
   .date-picker-modal-shell {
     @apply flex min-h-full w-full items-end justify-center p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:items-center;
+    overscroll-behavior: none;
   }
 
   .date-picker-dialog {
@@ -170,19 +172,39 @@
   }
 
   .date-wheel-grid {
-    @apply mt-5 grid grid-cols-3 gap-2;
+    @apply relative mt-5 grid grid-cols-3 gap-2;
   }
 
-  .date-wheel-grid label > span {
+  .date-wheel-column {
+    @apply relative z-10 min-w-0;
+  }
+
+  .date-wheel-column > span {
     @apply mb-2 block text-center text-xs font-bold text-stone-400;
   }
 
-  .date-wheel-grid select {
-    @apply h-52 w-full overflow-y-auto rounded-xl border-0 bg-stone-50 px-1 text-center text-lg font-semibold tabular-nums text-stone-800 outline-none focus:ring-2 focus:ring-indigo-400 dark:bg-white/[0.05] dark:text-stone-100;
+  .date-wheel-scroll {
+    @apply h-60 w-full snap-y snap-mandatory overflow-y-auto rounded-xl border-0 bg-stone-50 px-1 py-24 text-center text-lg font-semibold tabular-nums text-stone-800 outline-none focus:ring-0 dark:bg-white/[0.05] dark:text-stone-100;
+    scrollbar-width: none;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+    -webkit-overflow-scrolling: touch;
   }
 
-  .date-wheel-grid option {
-    @apply py-2;
+  .date-wheel-scroll::-webkit-scrollbar {
+    display: none;
+  }
+
+  .date-wheel-option {
+    @apply flex h-12 w-full snap-center items-center justify-center rounded-lg text-lg font-semibold tabular-nums text-stone-500 transition hover:bg-stone-100 focus-visible:outline-none dark:text-stone-400 dark:hover:bg-white/[0.06];
+  }
+
+  .date-wheel-option[aria-selected='true'] {
+    @apply text-xl font-black text-stone-950 dark:text-white;
+  }
+
+  .date-wheel-selection {
+    @apply pointer-events-none absolute inset-x-0 top-[7.75rem] z-20 h-12 border-y-2 border-indigo-400/80 bg-indigo-50/25 dark:border-indigo-300/70 dark:bg-indigo-400/5;
   }
 
   .date-picker-actions {

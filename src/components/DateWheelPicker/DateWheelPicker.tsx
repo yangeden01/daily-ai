@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { CalendarDays } from 'lucide-react'
 import { toLocalDateInputValue } from '../../utils/localDate'
@@ -18,6 +18,66 @@ const parseDate = (value: string) => {
 
 const daysInMonth = (year: number, month: number) => new Date(year, month, 0).getDate()
 const pad = (value: number) => String(value).padStart(2, '0')
+const WHEEL_ITEM_HEIGHT = 48
+
+interface WheelColumnProps {
+  label: string
+  values: number[]
+  value: number
+  onChange(value: number): void
+  wheelRef: RefObject<HTMLDivElement | null>
+}
+
+function WheelColumn({ label, values, value, onChange, wheelRef }: WheelColumnProps) {
+  const selectFromScroll = () => {
+    const wheel = wheelRef.current
+    if (!wheel) return
+    const index = Math.max(0, Math.min(values.length - 1, Math.round(wheel.scrollTop / WHEEL_ITEM_HEIGHT)))
+    onChange(values[index])
+  }
+
+  const selectValue = (nextValue: number) => {
+    onChange(nextValue)
+    const index = values.indexOf(nextValue)
+    wheelRef.current?.scrollTo({ top: index * WHEEL_ITEM_HEIGHT, behavior: 'smooth' })
+  }
+
+  return (
+    <div className="date-wheel-column">
+      <span id={`date-wheel-${label}`}>{label}</span>
+      <div
+        ref={wheelRef}
+        className="date-wheel-scroll"
+        role="listbox"
+        aria-labelledby={`date-wheel-${label}`}
+        aria-activedescendant={`date-wheel-${label}-${value}`}
+        tabIndex={0}
+        onScroll={selectFromScroll}
+        onKeyDown={(event) => {
+          if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return
+          event.preventDefault()
+          const currentIndex = values.indexOf(value)
+          const nextIndex = Math.max(0, Math.min(values.length - 1, currentIndex + (event.key === 'ArrowDown' ? 1 : -1)))
+          selectValue(values[nextIndex])
+        }}
+      >
+        {values.map((option) => (
+          <button
+            id={`date-wheel-${label}-${option}`}
+            type="button"
+            role="option"
+            aria-selected={option === value}
+            className="date-wheel-option"
+            onClick={() => selectValue(option)}
+            key={option}
+          >
+            {option}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 export default function DateWheelPicker({ id, value, onChange, required }: DateWheelPickerProps) {
   const initial = parseDate(value)
@@ -26,6 +86,9 @@ export default function DateWheelPicker({ id, value, onChange, required }: DateW
   const [month, setMonth] = useState(initial.month)
   const [day, setDay] = useState(initial.day)
   const dialogRef = useRef<HTMLDialogElement>(null)
+  const yearSelectRef = useRef<HTMLDivElement>(null)
+  const monthSelectRef = useRef<HTMLDivElement>(null)
+  const daySelectRef = useRef<HTMLDivElement>(null)
   const currentYear = new Date().getFullYear()
   const years = useMemo(() => Array.from({ length: currentYear - 1899 + 20 }, (_, index) => 1900 + index), [currentYear])
   const days = useMemo(() => Array.from({ length: daysInMonth(year, month) }, (_, index) => index + 1), [month, year])
@@ -35,11 +98,38 @@ export default function DateWheelPicker({ id, value, onChange, required }: DateW
   }, [day, days.length])
 
   useEffect(() => {
+    if (!open) return
+
+    const previousOverflow = document.body.style.overflow
+    const previousOverscrollBehavior = document.body.style.overscrollBehavior
+    document.body.style.overflow = 'hidden'
+    document.body.style.overscrollBehavior = 'none'
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+      document.body.style.overscrollBehavior = previousOverscrollBehavior
+    }
+  }, [open])
+
+  useEffect(() => {
     const dialog = dialogRef.current
     if (!dialog) return
-    if (open && !dialog.open) dialog.showModal()
+    if (open && !dialog.open) {
+      dialog.showModal()
+      const scrollTimer = window.setTimeout(() => {
+        for (const [wheel, values, selectedValue] of [
+          [yearSelectRef.current, years, year],
+          [monthSelectRef.current, Array.from({ length: 12 }, (_, index) => index + 1), month],
+          [daySelectRef.current, days, day],
+        ] as const) {
+          if (!wheel) continue
+          wheel.scrollTop = Math.max(0, values.indexOf(selectedValue) * WHEEL_ITEM_HEIGHT)
+        }
+      }, 50)
+      return () => window.clearTimeout(scrollTimer)
+    }
     if (!open && dialog.open) dialog.close()
-  }, [open])
+  }, [day, days, month, open, year, years])
 
   const show = () => {
     const selected = parseDate(value)
@@ -68,24 +158,10 @@ export default function DateWheelPicker({ id, value, onChange, required }: DateW
           <section className="date-picker-dialog" aria-labelledby={`${id}-title`}>
             <h2 id={`${id}-title`}>設定日期</h2>
             <div className="date-wheel-grid">
-              <label>
-                <span>年</span>
-                <select size={5} value={year} onChange={(event) => setYear(Number(event.target.value))}>
-                  {years.map((option) => <option value={option} key={option}>{option}</option>)}
-                </select>
-              </label>
-              <label>
-                <span>月</span>
-                <select size={5} value={month} onChange={(event) => setMonth(Number(event.target.value))}>
-                  {Array.from({ length: 12 }, (_, index) => index + 1).map((option) => <option value={option} key={option}>{option}</option>)}
-                </select>
-              </label>
-              <label>
-                <span>日</span>
-                <select size={5} value={day} onChange={(event) => setDay(Number(event.target.value))}>
-                  {days.map((option) => <option value={option} key={option}>{option}</option>)}
-                </select>
-              </label>
+              <div className="date-wheel-selection" aria-hidden="true" />
+              <WheelColumn label="年" values={years} value={year} onChange={setYear} wheelRef={yearSelectRef} />
+              <WheelColumn label="月" values={Array.from({ length: 12 }, (_, index) => index + 1)} value={month} onChange={setMonth} wheelRef={monthSelectRef} />
+              <WheelColumn label="日" values={days} value={day} onChange={setDay} wheelRef={daySelectRef} />
             </div>
             <div className="date-picker-actions">
               <button type="button" onClick={() => setOpen(false)}>取消</button>
