@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from 'react'
-import { Camera, Check, ChevronRight, FilePlus2, Inbox, Layers3, LoaderCircle, NotebookPen, Plus, X } from 'lucide-react'
+import { Camera, Check, ChevronRight, FilePlus2, Inbox, Layers3, LoaderCircle, NotebookPen, Plus, Tag, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import type { Event } from '../../models/Event'
 import { attachmentRepository, eventRepository } from '../../repositories'
@@ -21,6 +21,7 @@ export default function DailyPage() {
   const [tags, setTags] = useState<string[]>([])
   const [tagInput, setTagInput] = useState('')
   const [categoryOptions, setCategoryOptions] = useState<string[]>([])
+  const [tagOptions, setTagOptions] = useState<string[]>([])
   const [isSaving, setIsSaving] = useState(false)
   const [isProcessingFiles, setIsProcessingFiles] = useState(false)
   const [isLoadingEvents, setIsLoadingEvents] = useState(true)
@@ -32,6 +33,8 @@ export default function DailyPage() {
     const items = await eventRepository.getAll()
     setEvents(sortEventsNewestFirst(items))
     setCategoryOptions([...new Set(items.map(({ category }) => category.trim()).filter(Boolean))]
+      .sort((left, right) => left.localeCompare(right, 'zh-TW')))
+    setTagOptions([...new Set(items.flatMap(({ tags }) => tags).map((tag) => tag.trim()).filter(Boolean))]
       .sort((left, right) => left.localeCompare(right, 'zh-TW')))
     setIsLoadingEvents(false)
   }, [])
@@ -254,6 +257,23 @@ export default function DailyPage() {
               placeholder="輸入 Tag，按 Enter 或逗號新增"
             />
           </div>
+          {tagOptions.length > 0 && (
+            <label className="existing-tag-select">
+              <Tag size={16} aria-hidden="true" />
+              <span>選擇既有 Tag</span>
+              <select
+                defaultValue=""
+                onChange={(selectEvent) => {
+                  if (!selectEvent.target.value) return
+                  addTags([selectEvent.target.value])
+                  selectEvent.target.value = ''
+                }}
+              >
+                <option value="">請選擇</option>
+                {tagOptions.map((tag) => <option value={tag} key={tag} disabled={tags.includes(tag)}>{tag}</option>)}
+              </select>
+            </label>
+          )}
         </div>
         <p className="mt-2 text-xs leading-5 text-stone-400">空白與重複的 Tags 會自動移除。</p>
 
