@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { CalendarDays } from 'lucide-react'
 import { toLocalDateInputValue } from '../../utils/localDate'
@@ -25,6 +25,7 @@ export default function DateWheelPicker({ id, value, onChange, required }: DateW
   const [year, setYear] = useState(initial.year)
   const [month, setMonth] = useState(initial.month)
   const [day, setDay] = useState(initial.day)
+  const dialogRef = useRef<HTMLDialogElement>(null)
   const currentYear = new Date().getFullYear()
   const years = useMemo(() => Array.from({ length: currentYear - 1899 + 20 }, (_, index) => 1900 + index), [currentYear])
   const days = useMemo(() => Array.from({ length: daysInMonth(year, month) }, (_, index) => index + 1), [month, year])
@@ -32,6 +33,13 @@ export default function DateWheelPicker({ id, value, onChange, required }: DateW
   useEffect(() => {
     if (day > days.length) setDay(days.length)
   }, [day, days.length])
+
+  useEffect(() => {
+    const dialog = dialogRef.current
+    if (!dialog) return
+    if (open && !dialog.open) dialog.showModal()
+    if (!open && dialog.open) dialog.close()
+  }, [open])
 
   const show = () => {
     const selected = parseDate(value)
@@ -54,9 +62,10 @@ export default function DateWheelPicker({ id, value, onChange, required }: DateW
       </button>
       {required && <input className="sr-only" tabIndex={-1} aria-hidden="true" value={value} required readOnly />}
 
-      {open && createPortal(
-        <div className="date-picker-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setOpen(false) }}>
-          <section className="date-picker-dialog" role="dialog" aria-modal="true" aria-labelledby={`${id}-title`}>
+      {createPortal(
+        <dialog ref={dialogRef} className="date-picker-modal" onCancel={() => setOpen(false)} onClose={() => setOpen(false)}>
+          <div className="date-picker-modal-shell" onMouseDown={(event) => { if (event.target === event.currentTarget) setOpen(false) }}>
+          <section className="date-picker-dialog" aria-labelledby={`${id}-title`}>
             <h2 id={`${id}-title`}>設定日期</h2>
             <div className="date-wheel-grid">
               <label>
@@ -83,7 +92,8 @@ export default function DateWheelPicker({ id, value, onChange, required }: DateW
               <button type="button" className="date-picker-confirm" onClick={apply}>設定</button>
             </div>
           </section>
-        </div>,
+          </div>
+        </dialog>,
         document.body,
       )}
     </>
