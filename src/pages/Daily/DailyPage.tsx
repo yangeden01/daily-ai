@@ -10,6 +10,7 @@ import { normalizeTags } from '../../utils/normalizeTags'
 import { loadPhotoStorageMode, optimizeSelectedFiles } from '../../utils/photoStorage'
 import { sortEventsNewestFirst } from '../../utils/sortEvents'
 import { restoreListPosition, saveListPosition } from '../../utils/listPosition'
+import DateWheelPicker from '../../components/DateWheelPicker/DateWheelPicker'
 
 export default function DailyPage() {
   const [eventTitle, setEventTitle] = useState('')
@@ -149,16 +150,10 @@ export default function DailyPage() {
             <p>建立一筆新的 Daily Record</p>
           </div>
         </div>
-        <label className="filter-field mb-3" htmlFor="daily-event-date">
-          <span>事件日期</span>
-          <input
-            id="daily-event-date"
-            type="date"
-            value={eventDate}
-            onChange={(event) => setEventDate(event.target.value)}
-            required
-          />
-        </label>
+        <div className="mb-3">
+          <label className="detail-field-label mb-2" htmlFor="daily-event-date">事件日期</label>
+          <DateWheelPicker id="daily-event-date" value={eventDate} onChange={setEventDate} required />
+        </div>
         <div className="form-section-heading mt-4">
           <label className="detail-field-label" htmlFor="daily-event-title">Title</label>
           <button type="submit" className="inline-save-button" disabled={!eventTitle.trim() || !eventDetail.trim() || !eventCategory.trim() || !eventDate || isSaving || isProcessingFiles}>
@@ -166,25 +161,29 @@ export default function DailyPage() {
             儲存
           </button>
         </div>
-        <input
-          id="daily-event-title"
-          className="detail-input"
-          value={eventTitle}
-          onChange={(event) => setEventTitle(event.target.value)}
-          placeholder="輸入事件標題"
-          required
-        />
+        <div className="clearable-field mt-2">
+          <input
+            id="daily-event-title"
+            className="detail-input !mt-0 !pr-12"
+            value={eventTitle}
+            onChange={(event) => setEventTitle(event.target.value)}
+            placeholder="輸入事件標題"
+            required
+          />
+          {eventTitle && <button type="button" className="clear-field-button" onClick={() => setEventTitle('')} aria-label="清除事件標題"><X size={17} /></button>}
+        </div>
 
         <label className="detail-field-label mt-4" htmlFor="daily-event">Detail</label>
-        <section className="editor-card mt-2">
+        <section className="editor-card relative mt-2">
           <textarea
             id="daily-event"
-            className="create-event-textarea"
+            className="create-event-textarea !pr-14"
             value={eventDetail}
             onChange={(event) => setEventDetail(event.target.value)}
             placeholder={'寫下想記錄的事\n\n例如：\nEden 計畫環遊世界'}
             required
           />
+          {eventDetail && <button type="button" className="clear-field-button !top-3 !translate-y-0" onClick={() => setEventDetail('')} aria-label="清除事件內容"><X size={17} /></button>}
           <div className="editor-toolbar">
             <button type="button" className="tool-button" onClick={() => photoInputRef.current?.click()}><Camera size={19} />照片</button>
             <button type="button" className="tool-button" onClick={() => attachmentInputRef.current?.click()}><FilePlus2 size={19} />附件</button>

@@ -133,6 +133,62 @@
     @apply inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 text-xs font-bold text-white shadow-sm shadow-indigo-500/20 transition hover:bg-indigo-700 active:scale-95 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-400 disabled:shadow-none dark:bg-indigo-500 dark:hover:bg-indigo-400 dark:disabled:bg-white/10 dark:disabled:text-stone-500;
   }
 
+  .clearable-field {
+    @apply relative;
+  }
+
+  .clear-field-button {
+    @apply absolute right-3 top-1/2 z-10 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full bg-stone-100 text-stone-500 transition hover:bg-red-50 hover:text-red-600 active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:bg-white/10 dark:text-stone-300 dark:hover:bg-red-500/15 dark:hover:text-red-300;
+  }
+
+  .date-picker-trigger {
+    @apply flex min-h-14 w-full items-center justify-between rounded-2xl border border-stone-200 bg-white px-4 text-left text-base font-semibold tabular-nums text-stone-800 shadow-sm transition hover:border-indigo-300 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-indigo-100 dark:border-white/10 dark:bg-white/[0.05] dark:text-stone-100 dark:focus-visible:ring-indigo-500/10;
+  }
+
+  .date-picker-trigger svg {
+    @apply text-indigo-600 dark:text-indigo-300;
+  }
+
+  .date-picker-backdrop {
+    @apply fixed inset-0 z-[100] flex items-end justify-center bg-black/45 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-[2px] sm:items-center;
+  }
+
+  .date-picker-dialog {
+    @apply w-full max-w-md rounded-[1.75rem] bg-white p-5 shadow-2xl dark:bg-[#202126];
+  }
+
+  .date-picker-dialog h2 {
+    @apply text-xl font-black tracking-tight text-stone-950 dark:text-white;
+  }
+
+  .date-wheel-grid {
+    @apply mt-5 grid grid-cols-3 gap-2;
+  }
+
+  .date-wheel-grid label > span {
+    @apply mb-2 block text-center text-xs font-bold text-stone-400;
+  }
+
+  .date-wheel-grid select {
+    @apply h-52 w-full overflow-y-auto rounded-xl border-0 bg-stone-50 px-1 text-center text-lg font-semibold tabular-nums text-stone-800 outline-none focus:ring-2 focus:ring-indigo-400 dark:bg-white/[0.05] dark:text-stone-100;
+  }
+
+  .date-wheel-grid option {
+    @apply py-2;
+  }
+
+  .date-picker-actions {
+    @apply mt-5 grid grid-cols-2 gap-3;
+  }
+
+  .date-picker-actions button {
+    @apply min-h-12 rounded-xl text-sm font-bold text-stone-600 transition hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-white/[0.06];
+  }
+
+  .date-picker-actions .date-picker-confirm {
+    @apply bg-indigo-600 text-white hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400;
+  }
+
   .detail-input {
     @apply mt-2 w-full rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-[16px] leading-6 text-stone-900 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 dark:border-white/10 dark:bg-white/[0.05] dark:text-white dark:focus:border-indigo-400 dark:focus:ring-indigo-500/10;
   }

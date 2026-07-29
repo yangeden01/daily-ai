@@ -8,6 +8,7 @@ import { filesToAttachments, formatFileSize, validateAttachmentFile } from '../.
 import { normalizeTags } from '../../utils/normalizeTags'
 import { loadPhotoStorageMode, optimizeSelectedFiles } from '../../utils/photoStorage'
 import { deleteEventWithAttachments } from '../../services/EventDeletionService'
+import DateWheelPicker from '../../components/DateWheelPicker/DateWheelPicker'
 
 const formatDateTime = (value: string): string =>
   new Intl.DateTimeFormat('zh-TW', {
@@ -226,13 +227,19 @@ export default function EventDetailPage() {
               儲存
             </button>
           </div>
-          <input id="event-date" type="date" className="detail-input" value={eventDate} onChange={(inputEvent) => setEventDate(inputEvent.target.value)} required />
+          <DateWheelPicker id="event-date" value={eventDate} onChange={setEventDate} required />
 
           <label className="detail-field-label mt-5" htmlFor="event-title">Title</label>
-          <input id="event-title" className="detail-input" value={title} onChange={(inputEvent) => setTitle(inputEvent.target.value)} />
+          <div className="clearable-field mt-2">
+            <input id="event-title" className="detail-input !mt-0 !pr-12" value={title} onChange={(inputEvent) => setTitle(inputEvent.target.value)} />
+            {title && <button type="button" className="clear-field-button" onClick={() => setTitle('')} aria-label="清除事件標題"><X size={17} /></button>}
+          </div>
 
           <label className="detail-field-label mt-5" htmlFor="event-detail">Detail</label>
-          <textarea id="event-detail" className="detail-input min-h-40 resize-y" value={detail} onChange={(inputEvent) => setDetail(inputEvent.target.value)} />
+          <div className="clearable-field mt-2">
+            <textarea id="event-detail" className="detail-input !mt-0 min-h-40 resize-y !pr-12" value={detail} onChange={(inputEvent) => setDetail(inputEvent.target.value)} />
+            {detail && <button type="button" className="clear-field-button !top-3 !translate-y-0" onClick={() => setDetail('')} aria-label="清除事件內容"><X size={17} /></button>}
+          </div>
 
           <div className="category-composer mt-5">
             <label className="category-input-field" htmlFor="event-category">
