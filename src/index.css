@@ -125,6 +125,14 @@
     @apply block border-l-[3px] border-indigo-500 pl-2 text-sm font-extrabold tracking-wide text-stone-700 dark:border-indigo-400 dark:text-stone-200;
   }
 
+  .form-section-heading {
+    @apply flex min-h-10 items-center justify-between gap-3;
+  }
+
+  .inline-save-button {
+    @apply inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 text-xs font-bold text-white shadow-sm shadow-indigo-500/20 transition hover:bg-indigo-700 active:scale-95 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-400 disabled:shadow-none dark:bg-indigo-500 dark:hover:bg-indigo-400 dark:disabled:bg-white/10 dark:disabled:text-stone-500;
+  }
+
   .detail-input {
     @apply mt-2 w-full rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-[16px] leading-6 text-stone-900 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 dark:border-white/10 dark:bg-white/[0.05] dark:text-white dark:focus:border-indigo-400 dark:focus:ring-indigo-500/10;
   }

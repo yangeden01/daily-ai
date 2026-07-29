@@ -159,7 +159,13 @@ export default function DailyPage() {
             required
           />
         </label>
-        <label className="detail-field-label mt-4" htmlFor="daily-event-title">Title</label>
+        <div className="form-section-heading mt-4">
+          <label className="detail-field-label" htmlFor="daily-event-title">Title</label>
+          <button type="submit" className="inline-save-button" disabled={!eventTitle.trim() || !eventDetail.trim() || !eventCategory.trim() || !eventDate || isSaving || isProcessingFiles}>
+            {isSaving ? <LoaderCircle size={15} className="animate-spin" /> : <Check size={15} />}
+            儲存
+          </button>
+        </div>
         <input
           id="daily-event-title"
           className="detail-input"

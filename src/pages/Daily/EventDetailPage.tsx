@@ -219,7 +219,13 @@ export default function EventDetailPage() {
 
       {isEditing ? (
         <form onSubmit={handleSave} className="detail-card p-5 sm:p-6">
-          <label className="detail-field-label" htmlFor="event-date">事件日期</label>
+          <div className="form-section-heading">
+            <label className="detail-field-label" htmlFor="event-date">事件日期</label>
+            <button type="submit" className="inline-save-button" disabled={!eventDate || !title.trim() || !detail.trim() || !category.trim() || isSaving || isProcessingFiles}>
+              {isSaving ? <LoaderCircle size={15} className="animate-spin" /> : <Check size={15} />}
+              儲存
+            </button>
+          </div>
           <input id="event-date" type="date" className="detail-input" value={eventDate} onChange={(inputEvent) => setEventDate(inputEvent.target.value)} required />
 
           <label className="detail-field-label mt-5" htmlFor="event-title">Title</label>
