@@ -104,7 +104,25 @@ export function PWAProvider({ children }: { children: ReactNode }) {
       return outcome === 'accepted'
     },
     applyUpdate: async () => {
-      if (updateServiceWorker) await updateServiceWorker(true)
+      if (!('serviceWorker' in navigator)) return
+
+      const registration = registrationRef.current ?? await navigator.serviceWorker.getRegistration()
+      const controllerChanged = new Promise<void>((resolve) => {
+        const timeoutId = window.setTimeout(resolve, 3000)
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          window.clearTimeout(timeoutId)
+          resolve()
+        }, { once: true })
+      })
+
+      if (updateServiceWorker) {
+        await updateServiceWorker(false)
+      } else if (registration?.waiting) {
+        registration.waiting.postMessage({ type: 'SKIP_WAITING' })
+      }
+
+      await controllerChanged
+      window.location.reload()
     },
     checkForUpdate: async () => {
       if (!('serviceWorker' in navigator)) return 'unsupported'

@@ -7,7 +7,7 @@ import { loadPhotoStorageMode, savePhotoStorageMode, type PhotoStorageMode } fro
 
 type BackupStatus = 'idle' | 'working' | 'success' | 'error'
 type BackupAction = 'export' | 'merge' | 'replace'
-type UpdateCheckStatus = 'idle' | 'checking' | 'current' | 'available' | 'offline' | 'unsupported' | 'error'
+type UpdateCheckStatus = 'idle' | 'checking' | 'applying' | 'current' | 'available' | 'offline' | 'unsupported' | 'error'
 
 export default function SettingsPage() {
   const fullBackupInputRef = useRef<HTMLInputElement>(null)
@@ -38,19 +38,28 @@ export default function SettingsPage() {
 
   const handleUpdateCheck = async () => {
     if (updateAvailable || updateCheckStatus === 'available') {
-      await applyUpdate()
+      setUpdateCheckStatus('applying')
+      try {
+        await applyUpdate()
+      } catch {
+        setUpdateCheckStatus('error')
+      }
       return
     }
     setUpdateCheckStatus('checking')
     setUpdateCheckStatus(await checkForUpdate())
   }
 
-  const updateCheckLabel = updateAvailable || updateCheckStatus === 'available'
-    ? '立即升級'
-    : updateCheckStatus === 'checking' ? '檢查中' : '檢查更新'
-  const updateCheckDetail = updateAvailable || updateCheckStatus === 'available'
-    ? '發現新版本'
-    : updateCheckStatus === 'current' ? '目前已是最新版'
+  const updateCheckLabel = updateCheckStatus === 'applying'
+    ? '升級中'
+    : updateAvailable || updateCheckStatus === 'available'
+      ? '立即升級'
+      : updateCheckStatus === 'checking' ? '檢查中' : '檢查更新'
+  const updateCheckDetail = updateCheckStatus === 'applying'
+    ? '正在套用新版，完成後會自動重新開啟'
+    : updateAvailable || updateCheckStatus === 'available'
+      ? '發現新版本'
+      : updateCheckStatus === 'current' ? '目前已是最新版'
       : updateCheckStatus === 'offline' ? '離線時無法檢查'
         : updateCheckStatus === 'unsupported' ? '此瀏覽器不支援更新檢查'
           : updateCheckStatus === 'error' ? '更新檢查失敗' : null
@@ -177,8 +186,8 @@ export default function SettingsPage() {
         <div className="settings-row">
           <span className="settings-icon"><Info size={20} /></span>
           <div className="min-w-0 flex-1"><h2 className="settings-title">App Version</h2><p className="settings-detail">v0.1 Alpha</p>{updateCheckDetail && <p className={`mt-1 text-[10px] font-semibold ${updateAvailable || updateCheckStatus === 'available' ? 'text-indigo-600 dark:text-indigo-300' : 'text-stone-400'}`}>{updateCheckDetail}</p>}</div>
-          <button type="button" className={`update-check-button ${updateAvailable || updateCheckStatus === 'available' ? 'update-check-button-ready' : ''}`} onClick={() => void handleUpdateCheck()} disabled={updateCheckStatus === 'checking'}>
-            <RefreshCw size={14} className={updateCheckStatus === 'checking' ? 'animate-spin' : ''} />{updateCheckLabel}
+          <button type="button" className={`update-check-button ${updateAvailable || updateCheckStatus === 'available' ? 'update-check-button-ready' : ''}`} onClick={() => void handleUpdateCheck()} disabled={updateCheckStatus === 'checking' || updateCheckStatus === 'applying'}>
+            <RefreshCw size={14} className={updateCheckStatus === 'checking' || updateCheckStatus === 'applying' ? 'animate-spin' : ''} />{updateCheckLabel}
           </button>
         </div>
         <div className="settings-row">
