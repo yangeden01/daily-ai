@@ -20,8 +20,17 @@ const operationFor = (text: string): EventQueryOperation | null => {
 }
 
 const parseTag = (text: string): string | undefined => {
+  const hashtag = text.match(/#([^\s#，。？！]+)/)
+  if (hashtag?.[1]) return hashtag[1].trim()
   const match = text.match(/(?:標籤|tag)\s*(?:是|為|:|：)?\s*([^\s，。？！]+?)(?=的(?:機密公事|私事|公事)|[，。？！\s]|$)/i)
   return match?.[1]?.trim()
+}
+
+const parseAttachmentKind = (text: string): EventSearchCriteria['attachmentKind'] => {
+  if (/(附件或照片|照片或附件|照片[與和]附檔|附檔[與和]照片)/.test(text)) return 'any'
+  if (/照片/.test(text)) return 'photo'
+  if (/(附件|附檔)/.test(text)) return 'file'
+  return undefined
 }
 
 const parseTime = (text: string, now: Date): { criteria: Pick<EventSearchCriteria, 'dateFrom' | 'dateTo'>; label?: string; consumed: RegExp[] } => {
@@ -64,6 +73,8 @@ const keywordFor = (text: string, consumed: RegExp[], category?: string, tag?: s
   consumed.forEach((pattern) => { remainder = remainder.replace(pattern, ' ') })
   if (category) remainder = remainder.replace(new RegExp(category, 'g'), ' ')
   remainder = remainder.replace(/(?:標籤|tag)\s*(?:是|為|:|：)?\s*[^\s，。？！]+/gi, ' ')
+  remainder = remainder.replace(/#[^\s#，。？！]+/g, ' ')
+  remainder = remainder.replace(/(?:有|含|包含|搜尋)?(?:附件或照片|照片或附件|照片[與和]附檔|附檔[與和]照片|附件|附檔|照片)(?:的)?/g, ' ')
   if (tag) remainder = remainder.replace(new RegExp(tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), ' ')
   remainder = remainder
     .replace(/(總共多少|金額合計|合計金額|總金額|總額|多少錢|花了多少|繳了多少|有幾筆|有幾次|幾筆|幾次|事件數|紀錄數|記錄數|多少筆|多少次|找出|搜尋|查詢|相關|哪些|列出|事件|紀錄|記錄|去了|有|的|請問)/gi, ' ')
@@ -81,16 +92,17 @@ export class LocalQueryParser implements QueryParser {
     const time = parseTime(text, now)
     const category = categories.find((item) => text.includes(item))
     const tag = parseTag(text)
+    const attachmentKind = parseAttachmentKind(text)
     const operation = operationFor(text)
     const keyword = keywordFor(text, time.consumed, category, tag)
-    if (!operation && !category && !tag && !time.label && /^(你好|哈囉|嗨|謝謝|你是誰|今天天氣)$/.test(keyword ?? '')) return null
-    if (!operation && !category && !tag && !keyword && !time.label) return null
+    if (!operation && !category && !tag && !attachmentKind && !time.label && /^(你好|哈囉|嗨|謝謝|你是誰|今天天氣)$/.test(keyword ?? '')) return null
+    if (!operation && !category && !tag && !attachmentKind && !keyword && !time.label) return null
     if (!operation && keyword && !category && !tag && !time.label && keyword.length < 2) return null
 
     return {
       rawText: text,
       operation: operation ?? 'related',
-      criteria: { ...time.criteria, ...(category ? { category } : {}), ...(tag ? { tag } : {}), ...(keyword ? { keyword } : {}) },
+      criteria: { ...time.criteria, ...(category ? { category } : {}), ...(tag ? { tag } : {}), ...(keyword ? { keyword } : {}), ...(attachmentKind ? { attachmentKind } : {}) },
       ...(time.label ? { dateLabel: time.label } : {}),
     }
   }

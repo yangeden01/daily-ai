@@ -1,6 +1,9 @@
 import { useRef, useState, type ChangeEvent } from 'react'
-import { ArchiveRestore, Check, Database, Download, GitMerge, Info, LoaderCircle, ServerCog, Share, Smartphone, Trash2, Wifi, WifiOff, X } from 'lucide-react'
+import { ArchiveRestore, Check, Database, Download, GitMerge, Images, Info, LoaderCircle, Palette, ServerCog, Share, Smartphone, Trash2, Type, Wifi, WifiOff, X } from 'lucide-react'
 import { usePWA } from '../../contexts/PWAContext'
+import { useAppearance } from '../../contexts/AppearanceContext'
+import type { BackgroundTheme, TextTheme } from '../../utils/appearance'
+import { loadPhotoStorageMode, savePhotoStorageMode, type PhotoStorageMode } from '../../utils/photoStorage'
 
 type BackupStatus = 'idle' | 'working' | 'success' | 'error'
 type BackupAction = 'export' | 'merge' | 'replace'
@@ -11,7 +14,25 @@ export default function SettingsPage() {
   const [status, setStatus] = useState<BackupStatus>('idle')
   const [selectedBackupAction, setSelectedBackupAction] = useState<BackupAction>('export')
   const [message, setMessage] = useState<string | null>(null)
+  const [photoStorageMode, setPhotoStorageMode] = useState<PhotoStorageMode>(loadPhotoStorageMode)
   const { isOnline, isInstalled, isStandalone, installPlatform, canPromptInstall, showInstallExperience, serviceWorkerStatus, install } = usePWA()
+  const { background, text, setBackground, setText } = useAppearance()
+
+  const backgroundOptions: Array<{ value: BackgroundTheme; label: string; swatch: string }> = [
+    { value: 'system', label: '跟隨系統', swatch: 'appearance-system' },
+    { value: 'light', label: '淺色', swatch: 'appearance-light' },
+    { value: 'dark', label: '深色', swatch: 'appearance-dark' },
+    { value: 'paper', label: '紙張', swatch: 'appearance-paper' },
+  ]
+  const textOptions: Array<{ value: TextTheme; label: string; sample: string }> = [
+    { value: 'sans', label: '現代', sample: 'Aa 日記' },
+    { value: 'serif', label: '閱讀', sample: 'Aa 日記' },
+  ]
+
+  const selectPhotoStorageMode = (mode: PhotoStorageMode) => {
+    setPhotoStorageMode(mode)
+    savePhotoStorageMode(mode)
+  }
 
   const handleFullExport = async () => {
     setStatus('working')
@@ -94,7 +115,43 @@ export default function SettingsPage() {
 
   return (
     <main className="page-enter">
-      <p className="section-label">App Status</p>
+      <p className="section-label">外觀</p>
+      <section className="settings-card p-3.5 sm:p-4" aria-label="背景與文字設定">
+        <div className="flex items-center gap-2 text-stone-900 dark:text-stone-100"><Palette size={16} /><h2 className="text-sm font-bold">背景</h2></div>
+        <div className="mt-2.5 grid grid-cols-4 gap-2">
+          {backgroundOptions.map((option) => (
+            <button key={option.value} type="button" className={`appearance-option ${background === option.value ? 'appearance-option-active' : ''}`} aria-pressed={background === option.value} onClick={() => setBackground(option.value)}>
+              <span className={`appearance-swatch ${option.swatch}`} aria-hidden="true" />
+              <span>{option.label}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="mt-4 flex items-center gap-2 text-stone-900 dark:text-stone-100"><Type size={16} /><h2 className="text-sm font-bold">文字</h2></div>
+        <div className="mt-2.5 grid grid-cols-2 gap-2">
+          {textOptions.map((option) => (
+            <button key={option.value} type="button" className={`appearance-text-option ${text === option.value ? 'appearance-option-active' : ''} ${option.value === 'serif' ? 'font-serif' : 'font-sans'}`} aria-pressed={text === option.value} onClick={() => setText(option.value)}>
+              <strong>{option.sample}</strong><span>{option.label}</span>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <p className="section-label mt-8">照片儲存</p>
+      <section className="settings-card p-3.5 sm:p-4" aria-label="照片畫質設定">
+        <div className="flex items-center gap-2 text-stone-900 dark:text-stone-100"><Images size={16} /><h2 className="text-sm font-bold">照片畫質</h2></div>
+        <div className="mt-2.5 grid grid-cols-2 gap-2">
+          <button type="button" className={`appearance-text-option !min-h-16 ${photoStorageMode === 'original' ? 'appearance-option-active' : ''}`} aria-pressed={photoStorageMode === 'original'} onClick={() => selectPhotoStorageMode('original')}>
+            <span className="!text-xs"><strong className="!block !text-sm">原始畫質</strong>保留原始照片</span>
+          </button>
+          <button type="button" className={`appearance-text-option !min-h-16 ${photoStorageMode === 'space' ? 'appearance-option-active' : ''}`} aria-pressed={photoStorageMode === 'space'} onClick={() => selectPhotoStorageMode('space')}>
+            <span className="!text-xs"><strong className="!block !text-sm">節省空間</strong>1920px WebP</span>
+          </button>
+        </div>
+        <p className="mt-2 text-xs leading-5 text-stone-400">只處理之後新增的照片；既有照片與一般附件不會改變。</p>
+      </section>
+
+      <p className="section-label mt-8">App Status</p>
       <section className="settings-card divide-y divide-stone-100 dark:divide-white/10">
         <div className="settings-row">
           <span className="settings-icon"><Info size={20} /></span>

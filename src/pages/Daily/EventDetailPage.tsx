@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from 'react'
 import { ArrowLeft, Camera, Check, Download, FilePlus2, FileText, LoaderCircle, Pencil, Plus, Trash2, X } from 'lucide-react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import type { Attachment } from '../../models/Attachment'
 import type { Event } from '../../models/Event'
 import { attachmentRepository, eventRepository } from '../../repositories'
 import { filesToAttachments, formatFileSize, validateAttachmentFile } from '../../utils/attachments'
 import { normalizeTags } from '../../utils/normalizeTags'
+import { loadPhotoStorageMode, optimizeSelectedFiles } from '../../utils/photoStorage'
 import { deleteEventWithAttachments } from '../../services/EventDeletionService'
 
 const formatDateTime = (value: string): string =>
@@ -20,6 +21,15 @@ const formatDateTime = (value: string): string =>
 export default function EventDetailPage() {
   const { eventId } = useParams<{ eventId: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
+  const routeState = location.state as { returnTo?: string; returnLabel?: string } | null
+  const requestedReturnTo = routeState?.returnTo
+  const returnTo = requestedReturnTo?.startsWith('/ai?') || requestedReturnTo?.startsWith('/dashboard?')
+    ? requestedReturnTo
+    : '/daily'
+  const returnLabel = returnTo.startsWith('/ai?')
+    ? (routeState?.returnLabel ?? 'Search')
+    : returnTo.startsWith('/dashboard?') ? (routeState?.returnLabel ?? 'Dashboard') : 'Timeline'
   const [event, setEvent] = useState<Event | null>(null)
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [attachmentUrls, setAttachmentUrls] = useState<Record<string, string>>({})
@@ -27,6 +37,7 @@ export default function EventDetailPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isEditing, setIsEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [isProcessingFiles, setIsProcessingFiles] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [eventDate, setEventDate] = useState('')
   const [title, setTitle] = useState('')
@@ -78,7 +89,7 @@ export default function EventDetailPage() {
 
   const handleSave = async (submitEvent: FormEvent<HTMLFormElement>) => {
     submitEvent.preventDefault()
-    if (!event || !eventDate || !title.trim() || !detail.trim() || !category.trim() || isSaving) return
+    if (!event || !eventDate || !title.trim() || !detail.trim() || !category.trim() || isSaving || isProcessingFiles) return
 
     setIsSaving(true)
     setErrorMessage(null)
@@ -105,14 +116,14 @@ export default function EventDetailPage() {
         throw error
       }
       await Promise.all(removedAttachmentIds.map((id) => attachmentRepository.delete(id)))
-      navigate('/daily')
+      navigate(returnTo)
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : '事件更新失敗')
       setIsSaving(false)
     }
   }
 
-  const selectFiles = (inputEvent: ChangeEvent<HTMLInputElement>) => {
+  const selectFiles = async (inputEvent: ChangeEvent<HTMLInputElement>) => {
     const selected = Array.from(inputEvent.target.files ?? [])
     inputEvent.target.value = ''
     const firstError = selected.map(validateAttachmentFile).find(Boolean)
@@ -121,7 +132,13 @@ export default function EventDetailPage() {
       return
     }
     setErrorMessage(null)
-    setNewFiles((current) => [...current, ...selected])
+    setIsProcessingFiles(true)
+    try {
+      const prepared = await optimizeSelectedFiles(selected, loadPhotoStorageMode())
+      setNewFiles((current) => [...current, ...prepared])
+    } finally {
+      setIsProcessingFiles(false)
+    }
   }
 
   const downloadAttachment = (attachment: Attachment) => {
@@ -175,7 +192,7 @@ export default function EventDetailPage() {
 
     try {
       await deleteEventWithAttachments(event)
-      navigate('/daily', { replace: true })
+      navigate(returnTo, { replace: true })
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : '事件刪除失敗')
       setIsDeleting(false)
@@ -187,13 +204,13 @@ export default function EventDetailPage() {
   }
 
   if (!event) {
-    return <main className="detail-state"><p>{errorMessage ?? '找不到這筆事件。'}</p><Link to="/daily" className="detail-back-link">返回 Timeline</Link></main>
+    return <main className="detail-state"><p>{errorMessage ?? '找不到這筆事件。'}</p><Link to={returnTo} className="detail-back-link">返回 {returnLabel}</Link></main>
   }
 
   return (
     <main className="page-enter">
       <div className="mb-5 flex items-center justify-between">
-        <Link to="/daily" className="detail-back-link"><ArrowLeft size={17} />Timeline</Link>
+        <Link to={returnTo} className="detail-back-link"><ArrowLeft size={17} />{returnLabel}</Link>
         {!isEditing && <button type="button" className="edit-button" onClick={startEditing}><Pencil size={16} />Edit</button>}
       </div>
 
@@ -212,8 +229,8 @@ export default function EventDetailPage() {
           <input id="event-category" className="detail-input" value={category} onChange={(inputEvent) => setCategory(inputEvent.target.value)} autoComplete="off" />
           <p className="mt-2 text-xs leading-5 text-stone-400">可直接輸入新分類，或從下方現有分類選擇。</p>
           {categoryOptions.length > 0 && (
-            <div className="mt-3 rounded-2xl border border-stone-200 bg-stone-50 p-3 dark:border-white/10 dark:bg-white/5" aria-label="過去資料分類">
-              <p className="mb-2 text-xs font-semibold text-stone-500 dark:text-stone-400">過去資料分類</p>
+            <div className="mt-3 rounded-2xl border border-stone-200 bg-stone-50 p-3 dark:border-white/10 dark:bg-white/5" aria-label="資料分類">
+              <p className="mb-2 text-xs font-semibold text-stone-500 dark:text-stone-400">資料分類</p>
               <div className="flex flex-wrap gap-2">
                 {categoryOptions.map((option) => (
                   <button
@@ -261,6 +278,7 @@ export default function EventDetailPage() {
           <input ref={photoInputRef} aria-label="選擇新增照片" className="sr-only" type="file" accept="image/*" multiple onChange={selectFiles} />
           <input ref={attachmentInputRef} aria-label="選擇新增附件" className="sr-only" type="file" multiple onChange={selectFiles} />
           <div className="mt-3 space-y-2">
+            {isProcessingFiles && <p className="text-xs text-stone-400">正在處理照片…</p>}
             {attachments.filter(({ id }) => !removedAttachmentIds.includes(id)).map((attachment) => (
               <div className="pending-file" key={attachment.id}><span className="min-w-0 flex-1 truncate">{attachment.filename}</span><small>{formatFileSize(attachment.size)}</small><button type="button" onClick={() => setRemovedAttachmentIds((ids) => [...ids, attachment.id])} aria-label={`移除 ${attachment.filename}`}><X size={15} /></button></div>
             ))}
@@ -272,7 +290,7 @@ export default function EventDetailPage() {
 
           <div className="mt-6 grid grid-cols-2 gap-3">
             <button type="button" className="detail-secondary-button" onClick={() => setIsEditing(false)} disabled={isSaving}><X size={17} />取消</button>
-            <button type="submit" className="detail-save-button" disabled={!eventDate || !title.trim() || !detail.trim() || !category.trim() || isSaving}>
+            <button type="submit" className="detail-save-button" disabled={!eventDate || !title.trim() || !detail.trim() || !category.trim() || isSaving || isProcessingFiles}>
               {isSaving ? <LoaderCircle size={17} className="animate-spin" /> : <Check size={17} />}
               儲存
             </button>

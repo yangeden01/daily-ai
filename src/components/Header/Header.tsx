@@ -4,7 +4,7 @@ import { usePWA } from '../../contexts/PWAContext'
 
 const pageTitles: Record<string, string> = {
   '/daily': 'Daily Record',
-  '/ai': 'AI Search',
+  '/ai': 'Search',
   '/dashboard': 'Dashboard',
   '/settings': 'Settings',
 }

@@ -4,4 +4,5 @@ export interface EventSearchCriteria {
   tag?: string
   dateFrom?: string
   dateTo?: string
+  attachmentKind?: 'any' | 'photo' | 'file'
 }

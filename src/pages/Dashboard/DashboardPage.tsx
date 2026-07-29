@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { CalendarDays, ChevronRight, Inbox, LayoutGrid } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import type { Event } from '../../models/Event'
 import { eventRepository } from '../../repositories'
 import { calculateEventStatistics } from '../../utils/calculateEventStatistics'
+import { restoreListPosition, saveListPosition } from '../../utils/listPosition'
 
 const currentMonth = () => {
   const now = new Date()
@@ -16,8 +17,11 @@ const formatMonth = (month: string) => {
 }
 
 export default function DashboardPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const monthFromUrl = searchParams.get('month')
+  const initialMonth = monthFromUrl && /^\d{4}-(0[1-9]|1[0-2])$/.test(monthFromUrl) ? monthFromUrl : currentMonth()
   const [events, setEvents] = useState<Event[]>([])
-  const [selectedMonth, setSelectedMonth] = useState(currentMonth)
+  const [selectedMonth, setSelectedMonth] = useState(initialMonth)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -27,6 +31,16 @@ export default function DashboardPage() {
       .catch(() => setError('暫時無法讀取統計資料，請稍後再試。'))
       .finally(() => setIsLoading(false))
   }, [])
+
+  useEffect(() => {
+    if (monthFromUrl && /^\d{4}-(0[1-9]|1[0-2])$/.test(monthFromUrl)) setSelectedMonth(monthFromUrl)
+  }, [monthFromUrl])
+
+  const selectMonth = (month: string) => {
+    const nextMonth = month || currentMonth()
+    setSelectedMonth(nextMonth)
+    setSearchParams({ month: nextMonth })
+  }
 
   const statistics = useMemo(
     () => calculateEventStatistics(events, selectedMonth),
@@ -39,6 +53,12 @@ export default function DashboardPage() {
       .sort((left, right) => right.date.localeCompare(left.date) || right.createdAt.localeCompare(left.createdAt)),
     [events, selectedMonth],
   )
+
+  const dashboardRouteKey = `/dashboard?month=${selectedMonth}`
+
+  useEffect(() => {
+    if (!isLoading) restoreListPosition(dashboardRouteKey)
+  }, [dashboardRouteKey, isLoading])
 
   return (
     <main className="page-enter space-y-5">
@@ -55,7 +75,7 @@ export default function DashboardPage() {
           <input
             type="month"
             value={selectedMonth}
-            onChange={(event) => setSelectedMonth(event.target.value || currentMonth())}
+            onChange={(event) => selectMonth(event.target.value)}
           />
         </label>
       </section>
@@ -108,6 +128,9 @@ export default function DashboardPage() {
                   <Link
                     className="flex items-center gap-3 py-3 transition hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:hover:text-indigo-300"
                     to={`/daily/${event.id}`}
+                    state={{ returnTo: `/dashboard?month=${selectedMonth}`, returnLabel: 'Dashboard' }}
+                    data-event-id={event.id}
+                    onClick={() => saveListPosition(dashboardRouteKey, event.id)}
                     key={event.id}
                   >
                     <div className="min-w-0 flex-1">

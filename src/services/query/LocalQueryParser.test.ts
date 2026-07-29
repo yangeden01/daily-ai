@@ -36,6 +36,25 @@ describe('LocalQueryParser', () => {
     })
   })
 
+  it('parses hashtag searches as exact tag filters', () => {
+    expect(parser.parse('#日本', now)).toMatchObject({
+      operation: 'related',
+      criteria: { tag: '日本' },
+    })
+    expect(parser.parse('今年 #報稅 的私事', now)).toMatchObject({
+      criteria: { category: '私事', tag: '報稅', dateFrom: '2026-01-01', dateTo: '2026-12-31' },
+    })
+  })
+
+  it('parses photo and attachment filters', () => {
+    expect(parser.parse('有照片的事件', now)).toMatchObject({ criteria: { attachmentKind: 'photo' } })
+    expect(parser.parse('有附件的事件', now)).toMatchObject({ criteria: { attachmentKind: 'file' } })
+    expect(parser.parse('今年有附件或照片的私事', now)).toMatchObject({
+      criteria: { attachmentKind: 'any', category: '私事', dateFrom: '2026-01-01', dateTo: '2026-12-31' },
+    })
+    expect(parser.parse('搜尋照片與附檔事件', now)).toMatchObject({ criteria: { attachmentKind: 'any' } })
+  })
+
   it('uses local calendar boundaries instead of UTC truncation', () => {
     const localNewYear = new Date(2026, 0, 1, 0, 5)
     expect(parser.parse('今天有哪些事件？', localNewYear)).toMatchObject({

@@ -21,7 +21,7 @@
 
   #root { min-height: 100dvh; }
 
-  button, textarea { font: inherit; }
+  button, input, select, textarea { font: inherit; }
   button { -webkit-tap-highlight-color: transparent; }
 
   :focus-visible {
@@ -29,9 +29,20 @@
     outline-offset: 3px;
   }
 
-  @media (prefers-color-scheme: dark) {
-    html { color-scheme: dark; }
-    body { color: #f5f5f4; background: #101114; }
+  html.dark { color-scheme: dark; }
+  html.dark body { color: #f5f5f4; background: #101114; }
+
+  html[data-text="serif"] body {
+    font-family: ui-serif, Georgia, Cambria, "Times New Roman", "Noto Serif TC", serif;
+  }
+
+  html[data-background="paper"] body {
+    color: #3f3528;
+    background-color: #f3ead7;
+    background-image:
+      radial-gradient(circle at 20% 10%, rgb(120 88 45 / 0.04) 0 1px, transparent 1.5px),
+      radial-gradient(circle at 70% 60%, rgb(120 88 45 / 0.03) 0 1px, transparent 1.5px);
+    background-size: 18px 18px, 23px 23px;
   }
 }
 
@@ -472,7 +483,7 @@
   }
 
   .ai-textarea {
-    @apply h-[8.5rem] w-full resize-none overflow-y-auto bg-transparent px-3 py-3 text-[16px] leading-7 text-stone-900 outline-none placeholder:text-stone-400 dark:text-stone-100 dark:placeholder:text-stone-500;
+    @apply h-[5rem] w-full resize-none overflow-y-auto bg-transparent px-3 py-3 text-[16px] leading-7 text-stone-900 outline-none placeholder:text-stone-400 dark:text-stone-100 dark:placeholder:text-stone-500;
   }
 
   .send-button {
@@ -498,6 +509,34 @@
   .settings-detail {
     @apply mt-0.5 text-xs text-stone-400;
   }
+
+  .appearance-option {
+    @apply flex min-h-16 flex-col items-center justify-center gap-1 rounded-xl border border-stone-200 bg-stone-50 px-1 py-2 text-[10px] font-semibold text-stone-600 transition hover:border-indigo-300 focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-white/10 dark:bg-white/[0.04] dark:text-stone-300;
+  }
+
+  .appearance-option-active {
+    @apply border-indigo-500 bg-indigo-50 text-indigo-700 ring-2 ring-indigo-100 dark:border-indigo-400 dark:bg-indigo-500/15 dark:text-indigo-200 dark:ring-indigo-500/20;
+  }
+
+  .appearance-swatch {
+    @apply block h-7 w-7 rounded-full border border-stone-300 shadow-inner dark:border-white/20;
+  }
+
+  .appearance-system { background: linear-gradient(90deg, #fff 0 50%, #17181c 50% 100%); }
+  .appearance-light { background: #fff; }
+  .appearance-dark { background: #17181c; }
+  .appearance-paper {
+    background-color: #efe2c6;
+    background-image: radial-gradient(circle, rgb(120 88 45 / 0.16) 0 1px, transparent 1.5px);
+    background-size: 8px 8px;
+  }
+
+  .appearance-text-option {
+    @apply flex min-h-14 items-center justify-between rounded-xl border border-stone-200 bg-stone-50 px-3 text-left text-stone-600 transition hover:border-indigo-300 focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-white/10 dark:bg-white/[0.04] dark:text-stone-300;
+  }
+
+  .appearance-text-option strong { @apply text-sm text-stone-900 dark:text-stone-100; }
+  .appearance-text-option span { @apply text-[10px] font-semibold; }
 
   .coming-soon {
     @apply rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-700 dark:bg-amber-400/10 dark:text-amber-300;
@@ -533,4 +572,20 @@
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+html[data-background="paper"] .app-header,
+html[data-background="paper"] .bottom-nav {
+  background-color: rgb(250 244 231 / 0.94);
+}
+
+html[data-background="paper"] .editor-card,
+html[data-background="paper"] .ai-composer,
+html[data-background="paper"] .settings-card,
+html[data-background="paper"] .event-list,
+html[data-background="paper"] .status-card,
+html[data-background="paper"] .detail-card,
+html[data-background="paper"] .dashboard-card {
+  border-color: #dfd1b5;
+  background-color: rgb(255 251 242 / 0.94);
 }

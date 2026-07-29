@@ -1,7 +1,10 @@
 import { CalendarDays, CircleAlert, LoaderCircle, LockKeyhole, Search, Sparkles, Tag } from 'lucide-react'
-import { useState, type FormEvent } from 'react'
-import { Link } from 'react-router-dom'
+import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import type { EventQueryOperation, EventQueryResult } from '../../models/EventQuery'
+import { addSearchHistory, loadSearchHistory, saveSearchHistory } from '../../utils/searchHistory'
+import { restoreListPosition, saveListPosition } from '../../utils/listPosition'
+import { eventRepository } from '../../repositories'
 
 const operationLabels: Record<EventQueryOperation, string> = {
   list: '列出事件',
@@ -25,15 +28,32 @@ const answerFor = (result: EventQueryResult): string => {
 }
 
 export default function AIPage() {
-  const [input, setInput] = useState('')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const queryFromUrl = searchParams.get('q')?.trim() ?? ''
+  const [input, setInput] = useState(queryFromUrl)
   const [result, setResult] = useState<EventQueryResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [unrecognized, setUnrecognized] = useState(false)
+  const [searchHistory, setSearchHistory] = useState(loadSearchHistory)
+  const [searchPhotos, setSearchPhotos] = useState(() => /照片/.test(queryFromUrl))
+  const [searchFiles, setSearchFiles] = useState(() => /(附件|附檔)/.test(queryFromUrl))
+  const [selectedTag, setSelectedTag] = useState(() => queryFromUrl.match(/#([^\s#，。？！]+)/)?.[1] ?? '')
+  const [tagOptions, setTagOptions] = useState<string[]>([])
 
-  const submit = async () => {
-    const query = input.trim()
-    if (!query || loading) return
+  useEffect(() => {
+    eventRepository.getAll()
+      .then((events) => setTagOptions([...new Set(events.flatMap((event) => event.tags).map((tag) => tag.trim()).filter(Boolean))]
+        .sort((left, right) => left.localeCompare(right, 'zh-TW'))))
+      .catch(() => setTagOptions([]))
+  }, [])
+
+  const executeQuery = useCallback(async (query: string) => {
+    setSearchHistory((current) => {
+      const next = addSearchHistory(current, query)
+      saveSearchHistory(next)
+      return next
+    })
     setLoading(true)
     setError(null)
     setUnrecognized(false)
@@ -48,12 +68,66 @@ export default function AIPage() {
     } finally {
       setLoading(false)
     }
+  }, [])
+
+  useEffect(() => {
+    if (!queryFromUrl) return
+    setInput(queryFromUrl)
+    setSearchPhotos(/照片/.test(queryFromUrl))
+    setSearchFiles(/(附件|附檔)/.test(queryFromUrl))
+    setSelectedTag(queryFromUrl.match(/#([^\s#，。？！]+)/)?.[1] ?? '')
+    void executeQuery(queryFromUrl)
+  }, [executeQuery, queryFromUrl])
+
+  const guidedQueryFor = (photos: boolean, files: boolean, tag: string) => {
+    const attachmentQuery = photos && files ? '搜尋照片與附檔事件' : photos ? '搜尋照片事件' : files ? '搜尋附檔事件' : ''
+    return [tag ? `#${tag}` : '', attachmentQuery].filter(Boolean).join(' ')
+  }
+
+  const updateGuidedSearch = (photos: boolean, files: boolean, tag: string) => {
+    setSearchPhotos(photos)
+    setSearchFiles(files)
+    setSelectedTag(tag)
+    setInput(guidedQueryFor(photos, files, tag))
+  }
+
+  const selectTagAndSearch = (tag: string) => {
+    const query = guidedQueryFor(searchPhotos, searchFiles, tag)
+    setSelectedTag(tag)
+    setInput(query)
+    if (!tag) return
+    if (query === queryFromUrl) {
+      void executeQuery(query)
+      return
+    }
+    setSearchParams({ q: query })
   }
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault()
-    void submit()
+    const query = input.trim()
+    if (!query || loading) return
+    if (query === queryFromUrl) {
+      void executeQuery(query)
+      return
+    }
+    setSearchParams({ q: query })
   }
+
+  const repeatSearch = (query: string) => {
+    setInput(query)
+    if (query === queryFromUrl) {
+      void executeQuery(query)
+      return
+    }
+    setSearchParams({ q: query })
+  }
+
+  const searchRouteKey = `/ai?${searchParams.toString()}`
+
+  useEffect(() => {
+    if (result && !loading) restoreListPosition(searchRouteKey)
+  }, [loading, result, searchRouteKey])
 
   return (
     <main className="page-enter pb-6">
@@ -71,11 +145,11 @@ export default function AIPage() {
         <textarea
           id="ai-query"
           className="ai-textarea"
-          rows={4}
+          rows={2}
           value={input}
           onChange={(event) => setInput(event.target.value)}
           enterKeyHint="enter"
-          placeholder={'輸入關鍵字（Enter 換行）\n\n例如：\n所得稅\n家庭旅遊'}
+          placeholder={'輸入關鍵字或 #Tag（Enter 換行）\n例如：所得稅、#日本、有照片的事件'}
         />
         <div className="flex items-center justify-between gap-3 border-t border-stone-100 px-3 pt-3 dark:border-white/10">
           <span className="text-sm font-medium text-stone-500 dark:text-stone-400">搜尋結果如下</span>
@@ -85,6 +159,44 @@ export default function AIPage() {
           </button>
         </div>
       </form>
+
+      <fieldset className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-3 px-1">
+        <legend className="sr-only">附件類型搜尋</legend>
+        <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium text-stone-700 dark:text-stone-300">
+          <input type="checkbox" className="h-5 w-5 rounded border-stone-300 accent-indigo-600" checked={searchPhotos} onChange={(event) => updateGuidedSearch(event.target.checked, searchFiles, selectedTag)} />
+          搜尋照片事件
+        </label>
+        <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium text-stone-700 dark:text-stone-300">
+          <input type="checkbox" className="h-5 w-5 rounded border-stone-300 accent-indigo-600" checked={searchFiles} onChange={(event) => updateGuidedSearch(searchPhotos, event.target.checked, selectedTag)} />
+          搜尋附檔事件
+        </label>
+        <label className="inline-flex min-w-44 flex-1 items-center gap-2 text-sm font-medium text-stone-700 dark:text-stone-300">
+          <Tag size={17} aria-hidden="true" />
+          <span className="shrink-0">搜尋 Tag</span>
+          <select className="min-w-0 flex-1 rounded-xl border border-stone-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:border-white/15 dark:bg-stone-900 dark:focus:ring-indigo-500/20" value={selectedTag} onChange={(event) => selectTagAndSearch(event.target.value)}>
+            <option value="">全部 Tags</option>
+            {tagOptions.map((tag) => <option value={tag} key={tag}>{tag}</option>)}
+          </select>
+        </label>
+      </fieldset>
+
+      {searchHistory.length > 0 && (
+        <section className="mt-4 px-1" aria-label="最近搜尋">
+          <p className="mb-2 text-xs font-semibold text-stone-500 dark:text-stone-400">最近搜尋</p>
+          <div className="flex flex-wrap gap-2">
+            {searchHistory.map((query) => (
+              <button
+                key={query}
+                type="button"
+                className="rounded-full border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-700 transition hover:border-indigo-300 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-white/10 dark:bg-stone-900 dark:text-stone-300"
+                onClick={() => repeatSearch(query)}
+              >
+                {query}
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
 
       {loading && (
         <div className="mt-5 flex items-center justify-center gap-2 text-sm text-stone-500" role="status">
@@ -121,6 +233,7 @@ export default function AIPage() {
               {result.query.criteria.category && <span className="rounded-full bg-stone-100 px-3 py-1.5 text-stone-700 dark:bg-white/10 dark:text-stone-300">Category：{result.query.criteria.category}</span>}
               {result.query.criteria.tag && <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-3 py-1.5 text-stone-700 dark:bg-white/10 dark:text-stone-300"><Tag size={13} />{result.query.criteria.tag}</span>}
               {result.query.criteria.keyword && <span className="rounded-full bg-stone-100 px-3 py-1.5 text-stone-700 dark:bg-white/10 dark:text-stone-300">關鍵字：{result.query.criteria.keyword}</span>}
+              {result.query.criteria.attachmentKind && <span className="rounded-full bg-stone-100 px-3 py-1.5 text-stone-700 dark:bg-white/10 dark:text-stone-300">{result.query.criteria.attachmentKind === 'photo' ? '含照片' : result.query.criteria.attachmentKind === 'file' ? '含附件' : '含照片或附件'}</span>}
             </div>
           </div>
 
@@ -132,7 +245,14 @@ export default function AIPage() {
               </div>
               <div className="space-y-3">
                 {result.events.map((event) => (
-                  <Link key={event.id} to={`/daily/${event.id}`} className="block rounded-2xl border border-stone-200 bg-white p-4 shadow-sm transition hover:border-indigo-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-white/10 dark:bg-stone-900 dark:hover:border-indigo-700">
+                  <Link
+                    key={event.id}
+                    to={`/daily/${event.id}`}
+                    state={{ returnTo: `/ai?${searchParams.toString()}`, returnLabel: 'Search' }}
+                    data-event-id={event.id}
+                    onClick={() => saveListPosition(searchRouteKey, event.id)}
+                    className="block rounded-2xl border border-stone-200 bg-white p-4 shadow-sm transition hover:border-indigo-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-white/10 dark:bg-stone-900 dark:hover:border-indigo-700"
+                  >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="text-xs text-stone-500 dark:text-stone-400">{event.date}</p>
