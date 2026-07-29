@@ -56,22 +56,26 @@ export default function DailyPage() {
     const normalizedTitle = eventTitle.trim()
     const normalizedDetail = eventDetail.trim()
     const normalizedCategory = eventCategory.trim()
-    if (!normalizedTitle || !normalizedDetail || !normalizedCategory || !eventDate || isSaving || isProcessingFiles) return
+    if ((!normalizedTitle && !normalizedDetail) || !eventDate || isSaving || isProcessingFiles) return
+
+    const resolvedTitle = normalizedTitle || normalizedDetail.split(/\r?\n/)[0]
+    const resolvedDetail = normalizedDetail || normalizedTitle
+    const resolvedCategory = normalizedCategory || '未分類'
 
     setIsSaving(true)
     setErrorMessage(null)
 
     try {
-      const parsedEvent = await aiParserService.parseEvent(normalizedDetail)
+      const parsedEvent = await aiParserService.parseEvent(resolvedDetail)
       const timestamp = new Date().toISOString()
       const eventId = crypto.randomUUID()
       const attachments = filesToAttachments(pendingFiles, eventId)
       const newEvent: Event = {
         id: eventId,
         date: eventDate,
-        title: normalizedTitle,
-        detail: normalizedDetail,
-        category: normalizedCategory,
+        title: resolvedTitle,
+        detail: resolvedDetail,
+        category: resolvedCategory,
         ...(parsedEvent.amount !== undefined ? { amount: parsedEvent.amount } : {}),
         tags: normalizeTags([...tags, tagInput]),
         attachmentIds: attachments.map(({ id }) => id),
@@ -156,7 +160,7 @@ export default function DailyPage() {
         </div>
         <div className="form-section-heading mt-4">
           <label className="detail-field-label" htmlFor="daily-event-title">Title</label>
-          <button type="submit" className="inline-save-button" disabled={!eventTitle.trim() || !eventDetail.trim() || !eventCategory.trim() || !eventDate || isSaving || isProcessingFiles}>
+          <button type="submit" className="inline-save-button" disabled={(!eventTitle.trim() && !eventDetail.trim()) || !eventDate || isSaving || isProcessingFiles}>
             {isSaving ? <LoaderCircle size={15} className="animate-spin" /> : <Check size={15} />}
             儲存
           </button>
@@ -168,7 +172,6 @@ export default function DailyPage() {
             value={eventTitle}
             onChange={(event) => setEventTitle(event.target.value)}
             placeholder="輸入事件標題"
-            required
           />
           <button type="button" className="clear-field-button" onClick={() => setEventTitle('')} aria-label="清除事件標題" disabled={!eventTitle}><X size={17} /></button>
         </div>
@@ -181,7 +184,6 @@ export default function DailyPage() {
             value={eventDetail}
             onChange={(event) => setEventDetail(event.target.value)}
             placeholder={'寫下想記錄的事\n\n例如：\nEden 計畫環遊世界'}
-            required
           />
           <button type="button" className="clear-field-button !top-3 !translate-y-0" onClick={() => setEventDetail('')} aria-label="清除事件內容" disabled={!eventDetail}><X size={17} /></button>
           <div className="editor-toolbar">
@@ -216,7 +218,6 @@ export default function DailyPage() {
               onChange={(event) => setEventCategory(event.target.value)}
               placeholder="輸入新增分類或點選現有分類如下"
               autoComplete="off"
-              required
             />
           </label>
           {categoryOptions.length > 0 && (
@@ -284,7 +285,7 @@ export default function DailyPage() {
 
         {errorMessage && <p className="error-notice" role="alert">{errorMessage}</p>}
 
-        <button type="submit" className="primary-button" disabled={!eventTitle.trim() || !eventDetail.trim() || !eventCategory.trim() || !eventDate || isSaving || isProcessingFiles}>
+        <button type="submit" className="primary-button" disabled={(!eventTitle.trim() && !eventDetail.trim()) || !eventDate || isSaving || isProcessingFiles}>
           {isSaving ? <LoaderCircle size={19} className="animate-spin" /> : <Check size={19} />}
           {isSaving ? '儲存中' : '儲存'}
         </button>

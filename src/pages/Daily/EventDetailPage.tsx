@@ -93,7 +93,13 @@ export default function EventDetailPage() {
 
   const handleSave = async (submitEvent: FormEvent<HTMLFormElement>) => {
     submitEvent.preventDefault()
-    if (!event || !eventDate || !title.trim() || !detail.trim() || !category.trim() || isSaving || isProcessingFiles) return
+    const normalizedTitle = title.trim()
+    const normalizedDetail = detail.trim()
+    if (!event || !eventDate || (!normalizedTitle && !normalizedDetail) || isSaving || isProcessingFiles) return
+
+    const resolvedTitle = normalizedTitle || normalizedDetail.split(/\r?\n/)[0]
+    const resolvedDetail = normalizedDetail || normalizedTitle
+    const resolvedCategory = category.trim() || '未分類'
 
     setIsSaving(true)
     setErrorMessage(null)
@@ -105,9 +111,9 @@ export default function EventDetailPage() {
         await eventRepository.update(event.id, {
           ...event,
           date: eventDate,
-          title: title.trim(),
-          detail: detail.trim(),
-          category: category.trim(),
+          title: resolvedTitle,
+          detail: resolvedDetail,
+          category: resolvedCategory,
           tags: normalizeTags([...tags, tagInput]),
           attachmentIds: [
             ...attachments.filter(({ id }) => !removedAttachmentIds.includes(id)).map(({ id }) => id),
@@ -222,7 +228,7 @@ export default function EventDetailPage() {
         <form onSubmit={handleSave} className="detail-card p-5 sm:p-6">
           <div className="form-section-heading">
             <label className="detail-field-label" htmlFor="event-date">事件日期</label>
-            <button type="submit" className="inline-save-button" disabled={!eventDate || !title.trim() || !detail.trim() || !category.trim() || isSaving || isProcessingFiles}>
+            <button type="submit" className="inline-save-button" disabled={!eventDate || (!title.trim() && !detail.trim()) || isSaving || isProcessingFiles}>
               {isSaving ? <LoaderCircle size={15} className="animate-spin" /> : <Check size={15} />}
               儲存
             </button>
@@ -330,7 +336,7 @@ export default function EventDetailPage() {
 
           <div className="mt-6 grid grid-cols-2 gap-3">
             <button type="button" className="detail-secondary-button" onClick={() => setIsEditing(false)} disabled={isSaving}><X size={17} />取消</button>
-            <button type="submit" className="detail-save-button" disabled={!eventDate || !title.trim() || !detail.trim() || !category.trim() || isSaving || isProcessingFiles}>
+            <button type="submit" className="detail-save-button" disabled={!eventDate || (!title.trim() && !detail.trim()) || isSaving || isProcessingFiles}>
               {isSaving ? <LoaderCircle size={17} className="animate-spin" /> : <Check size={17} />}
               儲存
             </button>
