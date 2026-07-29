@@ -131,12 +131,14 @@ export default function AIPage() {
 
   return (
     <main className="page-enter pb-6">
-      <section className="mb-6 text-center">
-        <span className="ai-mark"><Sparkles size={27} /></span>
-        <h2 className="mt-5 text-2xl font-bold tracking-tight text-stone-950 dark:text-white">關鍵字查詢</h2>
-        <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">搜尋目前裝置中的 Daily 事件</p>
-        <div className="mx-auto mt-3 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
-          <LockKeyhole size={13} />完全離線執行，不會上傳資料
+      <section className="ai-compact-heading">
+        <span className="ai-mark"><Sparkles size={22} /></span>
+        <div className="min-w-0">
+          <h2>關鍵字查詢</h2>
+          <p>搜尋目前裝置中的 Daily 事件</p>
+          <div className="ai-privacy-note">
+            <LockKeyhole size={12} />完全離線執行，不會上傳資料
+          </div>
         </div>
       </section>
 
@@ -182,7 +184,7 @@ export default function AIPage() {
 
       {searchHistory.length > 0 && (
         <section className="mt-4 px-1" aria-label="最近搜尋">
-          <p className="mb-2 text-xs font-semibold text-stone-500 dark:text-stone-400">最近搜尋</p>
+          <p className="section-label">最近搜尋</p>
           <div className="flex flex-wrap gap-2">
             {searchHistory.map((query) => (
               <button
@@ -225,7 +227,7 @@ export default function AIPage() {
       {result && !loading && (
         <section className="mt-6 space-y-4" aria-live="polite">
           <div className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-stone-900">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-indigo-500">查詢結果</p>
+            <p className="section-label !mb-0 !px-0 text-indigo-600 dark:text-indigo-300">查詢結果</p>
             <p className="mt-2 text-lg font-semibold leading-7 text-stone-950 dark:text-white">{answerFor(result)}</p>
             <div className="mt-4 flex flex-wrap gap-2 text-xs">
               <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-3 py-1.5 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300"><Search size={13} />{operationLabels[result.query.operation]}</span>

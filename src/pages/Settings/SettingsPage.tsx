@@ -1,5 +1,5 @@
 import { useRef, useState, type ChangeEvent } from 'react'
-import { ArchiveRestore, Check, Database, Download, GitMerge, Images, Info, LoaderCircle, Palette, ServerCog, Share, Smartphone, Trash2, Type, Wifi, WifiOff, X } from 'lucide-react'
+import { ArchiveRestore, Check, Database, Download, GitMerge, Images, Info, LoaderCircle, Palette, RefreshCw, ServerCog, Share, Smartphone, Trash2, Type, Wifi, WifiOff, X } from 'lucide-react'
 import { usePWA } from '../../contexts/PWAContext'
 import { useAppearance } from '../../contexts/AppearanceContext'
 import type { BackgroundTheme, TextTheme } from '../../utils/appearance'
@@ -7,6 +7,7 @@ import { loadPhotoStorageMode, savePhotoStorageMode, type PhotoStorageMode } fro
 
 type BackupStatus = 'idle' | 'working' | 'success' | 'error'
 type BackupAction = 'export' | 'merge' | 'replace'
+type UpdateCheckStatus = 'idle' | 'checking' | 'current' | 'available' | 'offline' | 'unsupported' | 'error'
 
 export default function SettingsPage() {
   const fullBackupInputRef = useRef<HTMLInputElement>(null)
@@ -15,7 +16,8 @@ export default function SettingsPage() {
   const [selectedBackupAction, setSelectedBackupAction] = useState<BackupAction>('export')
   const [message, setMessage] = useState<string | null>(null)
   const [photoStorageMode, setPhotoStorageMode] = useState<PhotoStorageMode>(loadPhotoStorageMode)
-  const { isOnline, isInstalled, isStandalone, installPlatform, canPromptInstall, showInstallExperience, serviceWorkerStatus, install } = usePWA()
+  const [updateCheckStatus, setUpdateCheckStatus] = useState<UpdateCheckStatus>('idle')
+  const { isOnline, isInstalled, isStandalone, installPlatform, canPromptInstall, showInstallExperience, serviceWorkerStatus, updateAvailable, install, applyUpdate, checkForUpdate } = usePWA()
   const { background, text, setBackground, setText } = useAppearance()
 
   const backgroundOptions: Array<{ value: BackgroundTheme; label: string; swatch: string }> = [
@@ -33,6 +35,25 @@ export default function SettingsPage() {
     setPhotoStorageMode(mode)
     savePhotoStorageMode(mode)
   }
+
+  const handleUpdateCheck = async () => {
+    if (updateAvailable || updateCheckStatus === 'available') {
+      await applyUpdate()
+      return
+    }
+    setUpdateCheckStatus('checking')
+    setUpdateCheckStatus(await checkForUpdate())
+  }
+
+  const updateCheckLabel = updateAvailable || updateCheckStatus === 'available'
+    ? '立即升級'
+    : updateCheckStatus === 'checking' ? '檢查中' : '檢查更新'
+  const updateCheckDetail = updateAvailable || updateCheckStatus === 'available'
+    ? '發現新版本'
+    : updateCheckStatus === 'current' ? '目前已是最新版'
+      : updateCheckStatus === 'offline' ? '離線時無法檢查'
+        : updateCheckStatus === 'unsupported' ? '此瀏覽器不支援更新檢查'
+          : updateCheckStatus === 'error' ? '更新檢查失敗' : null
 
   const handleFullExport = async () => {
     setStatus('working')
@@ -155,7 +176,10 @@ export default function SettingsPage() {
       <section className="settings-card divide-y divide-stone-100 dark:divide-white/10">
         <div className="settings-row">
           <span className="settings-icon"><Info size={20} /></span>
-          <div className="flex-1"><h2 className="settings-title">App Version</h2><p className="settings-detail">v0.1 Alpha</p></div>
+          <div className="min-w-0 flex-1"><h2 className="settings-title">App Version</h2><p className="settings-detail">v0.1 Alpha</p>{updateCheckDetail && <p className={`mt-1 text-[10px] font-semibold ${updateAvailable || updateCheckStatus === 'available' ? 'text-indigo-600 dark:text-indigo-300' : 'text-stone-400'}`}>{updateCheckDetail}</p>}</div>
+          <button type="button" className={`update-check-button ${updateAvailable || updateCheckStatus === 'available' ? 'update-check-button-ready' : ''}`} onClick={() => void handleUpdateCheck()} disabled={updateCheckStatus === 'checking'}>
+            <RefreshCw size={14} className={updateCheckStatus === 'checking' ? 'animate-spin' : ''} />{updateCheckLabel}
+          </button>
         </div>
         <div className="settings-row">
           <span className="settings-icon"><Smartphone size={20} /></span>

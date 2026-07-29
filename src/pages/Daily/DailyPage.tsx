@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from 'react'
-import { Camera, Check, ChevronRight, FilePlus2, Inbox, LoaderCircle, Plus, X } from 'lucide-react'
+import { Camera, Check, ChevronRight, FilePlus2, Inbox, Layers3, LoaderCircle, NotebookPen, Plus, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import type { Event } from '../../models/Event'
 import { attachmentRepository, eventRepository } from '../../repositories'
@@ -139,7 +139,13 @@ export default function DailyPage() {
   return (
     <main className="page-enter">
       <form onSubmit={handleSubmit}>
-        <label className="section-label block !text-sm !font-bold !text-stone-700 dark:!text-stone-200" htmlFor="daily-event">新增事件</label>
+        <div className="create-event-heading">
+          <span className="create-event-heading-icon" aria-hidden="true"><NotebookPen size={20} strokeWidth={2.3} /></span>
+          <div>
+            <h2>新增事件</h2>
+            <p>建立一筆新的 Daily Record</p>
+          </div>
+        </div>
         <label className="filter-field mb-3" htmlFor="daily-event-date">
           <span>事件日期</span>
           <input
@@ -191,27 +197,32 @@ export default function DailyPage() {
           </div>
         )}
 
-        <label className="filter-field mt-3" htmlFor="daily-event-category">
-          <span className="!text-sm !font-bold !text-stone-700 dark:!text-stone-200">分類</span>
-          <input
-            id="daily-event-category"
-            type="text"
-            value={eventCategory}
-            onChange={(event) => setEventCategory(event.target.value)}
-            placeholder="輸入新分類或從下方選擇"
-            autoComplete="off"
-            required
-          />
-        </label>
-        {categoryOptions.length > 0 && (
-          <div className="mt-3 rounded-2xl border border-stone-200 bg-stone-50 p-3 dark:border-white/10 dark:bg-white/5" aria-label="資料分類">
-            <p className="mb-2 text-xs font-semibold text-stone-500 dark:text-stone-400">資料分類</p>
-            <div className="flex flex-wrap gap-2">
+        <div className="category-composer mt-4">
+          <label className="category-input-field" htmlFor="daily-event-category">
+            <span className="category-input-icon" aria-hidden="true"><Layers3 size={20} /></span>
+            <span className="category-input-copy"><strong>分類</strong></span>
+            <input
+              id="daily-event-category"
+              type="text"
+              value={eventCategory}
+              onChange={(event) => setEventCategory(event.target.value)}
+              placeholder="輸入新增分類或點選現有分類如下"
+              autoComplete="off"
+              required
+            />
+          </label>
+          {categoryOptions.length > 0 && (
+          <div className="category-options-panel" aria-label="資料分類">
+            <div className="category-options-heading">
+              <span>資料分類</span>
+              <small>{categoryOptions.length} 個分類</small>
+            </div>
+            <div className="category-options-list">
               {categoryOptions.map((option) => (
                 <button
                   type="button"
                   key={option}
-                  className={`rounded-full border px-3 py-1.5 text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${eventCategory === option ? 'border-indigo-500 bg-indigo-50 font-semibold text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-200' : 'border-stone-200 bg-white text-stone-700 hover:border-indigo-300 dark:border-white/10 dark:bg-stone-900 dark:text-stone-300'}`}
+                  className={`category-option ${eventCategory === option ? 'category-option-active' : ''}`}
                   onClick={() => setEventCategory(option)}
                 >
                   {option}
@@ -219,7 +230,8 @@ export default function DailyPage() {
               ))}
             </div>
           </div>
-        )}
+          )}
+        </div>
 
         <label className="detail-field-label mt-5" htmlFor="daily-event-tags">Tags</label>
         <div className="tag-editor">

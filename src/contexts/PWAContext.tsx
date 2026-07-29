@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { registerSW } from 'virtual:pwa-register'
 import { getInstallPlatform, isStandaloneDisplay, shouldShowInstallExperience, type InstallPlatform } from '../utils/pwa'
 
@@ -8,6 +8,7 @@ interface BeforeInstallPromptEvent extends Event {
 }
 
 type ServiceWorkerStatus = 'unsupported' | 'registering' | 'ready' | 'error'
+export type UpdateCheckResult = 'available' | 'current' | 'offline' | 'unsupported' | 'error'
 
 interface PWAState {
   isOnline: boolean
@@ -20,6 +21,7 @@ interface PWAState {
   updateAvailable: boolean
   install(): Promise<boolean>
   applyUpdate(): Promise<void>
+  checkForUpdate(): Promise<UpdateCheckResult>
   dismissUpdate(): void
 }
 
@@ -39,6 +41,8 @@ export function PWAProvider({ children }: { children: ReactNode }) {
   const [serviceWorkerStatus, setServiceWorkerStatus] = useState<ServiceWorkerStatus>('registering')
   const [updateAvailable, setUpdateAvailable] = useState(false)
   const [updateServiceWorker, setUpdateServiceWorker] = useState<((reloadPage?: boolean) => Promise<void>) | null>(null)
+  const registrationRef = useRef<ServiceWorkerRegistration | null>(null)
+  const updateAvailableRef = useRef(false)
   const displayEnvironment = getDisplayEnvironment(Boolean(installPrompt))
   const isStandalone = isStandaloneDisplay(displayEnvironment)
   const installPlatform = getInstallPlatform(displayEnvironment)
@@ -70,9 +74,15 @@ export function PWAProvider({ children }: { children: ReactNode }) {
     }
     const update = registerSW({
       immediate: true,
-      onRegistered: () => setServiceWorkerStatus('ready'),
+      onRegistered: (registration) => {
+        registrationRef.current = registration ?? null
+        setServiceWorkerStatus('ready')
+      },
       onRegisterError: () => setServiceWorkerStatus('error'),
-      onNeedRefresh: () => setUpdateAvailable(true),
+      onNeedRefresh: () => {
+        updateAvailableRef.current = true
+        setUpdateAvailable(true)
+      },
     })
     setUpdateServiceWorker(() => update)
   }, [])
@@ -96,7 +106,24 @@ export function PWAProvider({ children }: { children: ReactNode }) {
     applyUpdate: async () => {
       if (updateServiceWorker) await updateServiceWorker(true)
     },
-    dismissUpdate: () => setUpdateAvailable(false),
+    checkForUpdate: async () => {
+      if (!('serviceWorker' in navigator)) return 'unsupported'
+      if (!navigator.onLine) return 'offline'
+      try {
+        const registration = registrationRef.current ?? await navigator.serviceWorker.getRegistration()
+        if (!registration) return 'unsupported'
+        updateAvailableRef.current = false
+        await registration.update()
+        await new Promise((resolve) => setTimeout(resolve, 250))
+        return updateAvailableRef.current || Boolean(registration.waiting) ? 'available' : 'current'
+      } catch {
+        return 'error'
+      }
+    },
+    dismissUpdate: () => {
+      updateAvailableRef.current = false
+      setUpdateAvailable(false)
+    },
   }), [installPlatform, installPrompt, isInstalled, isOnline, isStandalone, serviceWorkerStatus, updateAvailable, updateServiceWorker])
 
   return <PWAContext.Provider value={value}>{children}</PWAContext.Provider>

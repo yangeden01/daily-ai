@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from 'react'
-import { ArrowLeft, Camera, Check, Download, FilePlus2, FileText, LoaderCircle, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { ArrowLeft, Camera, Check, Download, FilePlus2, FileText, Layers3, LoaderCircle, Pencil, Plus, Tag, Trash2, X } from 'lucide-react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import type { Attachment } from '../../models/Attachment'
 import type { Event } from '../../models/Event'
@@ -45,6 +45,7 @@ export default function EventDetailPage() {
   const [category, setCategory] = useState('')
   const [categoryOptions, setCategoryOptions] = useState<string[]>([])
   const [tags, setTags] = useState<string[]>([])
+  const [tagOptions, setTagOptions] = useState<string[]>([])
   const [tagInput, setTagInput] = useState('')
   const [newFiles, setNewFiles] = useState<File[]>([])
   const [removedAttachmentIds, setRemovedAttachmentIds] = useState<string[]>([])
@@ -59,6 +60,8 @@ export default function EventDetailPage() {
         setEvent(item ?? null)
         setAttachments(files)
         setCategoryOptions([...new Set(allEvents.map(({ category }) => category.trim()).filter(Boolean))]
+          .sort((left, right) => left.localeCompare(right, 'zh-TW')))
+        setTagOptions([...new Set(allEvents.flatMap(({ tags }) => tags).map((tag) => tag.trim()).filter(Boolean))]
           .sort((left, right) => left.localeCompare(right, 'zh-TW')))
       })
       .catch(() => setErrorMessage('事件或附件載入失敗'))
@@ -225,18 +228,24 @@ export default function EventDetailPage() {
           <label className="detail-field-label mt-5" htmlFor="event-detail">Detail</label>
           <textarea id="event-detail" className="detail-input min-h-40 resize-y" value={detail} onChange={(inputEvent) => setDetail(inputEvent.target.value)} />
 
-          <label className="detail-field-label mt-5" htmlFor="event-category">Category</label>
-          <input id="event-category" className="detail-input" value={category} onChange={(inputEvent) => setCategory(inputEvent.target.value)} autoComplete="off" />
-          <p className="mt-2 text-xs leading-5 text-stone-400">可直接輸入新分類，或從下方現有分類選擇。</p>
-          {categoryOptions.length > 0 && (
-            <div className="mt-3 rounded-2xl border border-stone-200 bg-stone-50 p-3 dark:border-white/10 dark:bg-white/5" aria-label="資料分類">
-              <p className="mb-2 text-xs font-semibold text-stone-500 dark:text-stone-400">資料分類</p>
-              <div className="flex flex-wrap gap-2">
+          <div className="category-composer mt-5">
+            <label className="category-input-field" htmlFor="event-category">
+              <span className="category-input-icon" aria-hidden="true"><Layers3 size={20} /></span>
+              <span className="category-input-copy"><strong>分類</strong></span>
+              <input id="event-category" value={category} onChange={(inputEvent) => setCategory(inputEvent.target.value)} placeholder="輸入新增分類或點選現有分類如下" autoComplete="off" />
+            </label>
+            {categoryOptions.length > 0 && (
+            <div className="category-options-panel" aria-label="資料分類">
+              <div className="category-options-heading">
+                <span>資料分類</span>
+                <small>{categoryOptions.length} 個分類</small>
+              </div>
+              <div className="category-options-list">
                 {categoryOptions.map((option) => (
                   <button
                     type="button"
                     key={option}
-                    className={`rounded-full border px-3 py-1.5 text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${category === option ? 'border-indigo-500 bg-indigo-50 font-semibold text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-200' : 'border-stone-200 bg-white text-stone-700 hover:border-indigo-300 dark:border-white/10 dark:bg-stone-900 dark:text-stone-300'}`}
+                    className={`category-option ${category === option ? 'category-option-active' : ''}`}
                     onClick={() => setCategory(option)}
                   >
                     {option}
@@ -244,7 +253,8 @@ export default function EventDetailPage() {
                 ))}
               </div>
             </div>
-          )}
+            )}
+          </div>
 
           <label className="detail-field-label mt-5" htmlFor="event-tags">Tags</label>
           <div className="tag-editor">
@@ -267,6 +277,23 @@ export default function EventDetailPage() {
                 placeholder="輸入 Tag，按 Enter 或逗號新增"
               />
             </div>
+            {tagOptions.length > 0 && (
+              <label className="existing-tag-select">
+                <Tag size={16} aria-hidden="true" />
+                <span>選擇既有 Tag</span>
+                <select
+                  defaultValue=""
+                  onChange={(selectEvent) => {
+                    if (!selectEvent.target.value) return
+                    addTags([selectEvent.target.value])
+                    selectEvent.target.value = ''
+                  }}
+                >
+                  <option value="">請選擇</option>
+                  {tagOptions.map((tag) => <option value={tag} key={tag} disabled={tags.includes(tag)}>{tag}</option>)}
+                </select>
+              </label>
+            )}
           </div>
           <p className="mt-2 text-xs leading-5 text-stone-400">空白與重複的 Tags 會自動移除。</p>
 
