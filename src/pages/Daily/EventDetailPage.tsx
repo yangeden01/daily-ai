@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from 'react'
-import { ArrowLeft, Camera, Check, Download, FilePlus2, FileText, Layers3, LoaderCircle, Pencil, Plus, Tag, Trash2, X } from 'lucide-react'
+import { ArrowLeft, Camera, Check, Download, FilePlus2, FileText, LoaderCircle, Pencil, Plus, Tag, Trash2, X } from 'lucide-react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import type { Attachment } from '../../models/Attachment'
 import type { Event } from '../../models/Event'
@@ -247,10 +247,9 @@ export default function EventDetailPage() {
             <button type="button" className="clear-field-button !top-3 !translate-y-0" onClick={() => setDetail('')} aria-label="清除事件內容" disabled={!detail}><X size={17} /></button>
           </div>
 
-          <div className="category-composer mt-5">
+          <label className="detail-field-label mt-5" htmlFor="event-category">分類</label>
+          <div className="category-composer mt-2">
             <label className="category-input-field" htmlFor="event-category">
-              <span className="category-input-icon" aria-hidden="true"><Layers3 size={20} /></span>
-              <span className="category-input-copy"><strong>分類</strong></span>
               <input id="event-category" value={category} onChange={(inputEvent) => setCategory(inputEvent.target.value)} placeholder="輸入新增分類或點選現有分類如下" autoComplete="off" />
             </label>
             {categoryOptions.length > 0 && (

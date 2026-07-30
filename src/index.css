@@ -8,6 +8,8 @@
     color: #1c1917;
     background: #f4f4f5;
     font-synthesis: none;
+    --input-surface: #edf1f5;
+    --selection-surface: #fffdf8;
   }
 
   html { color-scheme: light; }
@@ -29,7 +31,11 @@
     outline-offset: 3px;
   }
 
-  html.dark { color-scheme: dark; }
+  html.dark {
+    color-scheme: dark;
+    --input-surface: #2b3038;
+    --selection-surface: #202126;
+  }
   html.dark body { color: #f5f5f4; background: #101114; }
 
   html[data-text="serif"] body {
@@ -43,6 +49,11 @@
       radial-gradient(circle at 20% 10%, rgb(120 88 45 / 0.04) 0 1px, transparent 1.5px),
       radial-gradient(circle at 70% 60%, rgb(120 88 45 / 0.03) 0 1px, transparent 1.5px);
     background-size: 18px 18px, 23px 23px;
+  }
+
+  html[data-background="paper"] {
+    --input-surface: #e7edf3;
+    --selection-surface: #fff8e9;
   }
 }
 
@@ -146,7 +157,8 @@
   }
 
   .date-picker-step {
-    @apply relative flex min-h-16 cursor-pointer items-center gap-3 rounded-2xl border border-stone-200 bg-white px-4 text-left tabular-nums text-stone-800 shadow-sm transition hover:border-indigo-300 focus-within:border-indigo-300 focus-within:ring-4 focus-within:ring-indigo-100 dark:border-white/10 dark:bg-white/[0.05] dark:text-stone-100 dark:focus-within:ring-indigo-500/10;
+    @apply relative flex min-h-16 cursor-pointer items-center gap-3 rounded-2xl border border-stone-200 px-4 text-left tabular-nums text-stone-800 shadow-sm transition hover:border-indigo-300 focus-within:border-indigo-300 focus-within:ring-4 focus-within:ring-indigo-100 dark:border-white/10 dark:text-stone-100 dark:focus-within:ring-indigo-500/10;
+    background-color: var(--selection-surface);
   }
 
   .date-picker-step svg {
@@ -174,15 +186,18 @@
   }
 
   .detail-input {
-    @apply mt-2 w-full rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-[16px] leading-6 text-stone-900 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 dark:border-white/10 dark:bg-white/[0.05] dark:text-white dark:focus:border-indigo-400 dark:focus:ring-indigo-500/10;
+    @apply mt-2 w-full rounded-2xl border border-stone-200 px-4 py-3 text-[16px] leading-6 text-stone-900 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 dark:border-white/10 dark:text-white dark:focus:border-indigo-400 dark:focus:ring-indigo-500/10;
+    background-color: var(--input-surface);
   }
 
   .tag-editor {
-    @apply mt-2 rounded-2xl border border-stone-200 bg-stone-50 p-3 transition focus-within:border-indigo-400 focus-within:ring-4 focus-within:ring-indigo-100 dark:border-white/10 dark:bg-white/[0.05] dark:focus-within:border-indigo-400 dark:focus-within:ring-indigo-500/10;
+    @apply mt-2 rounded-2xl border border-stone-200 p-3 transition focus-within:border-indigo-400 focus-within:ring-4 focus-within:ring-indigo-100 dark:border-white/10 dark:focus-within:border-indigo-400 dark:focus-within:ring-indigo-500/10;
+    background-color: var(--input-surface);
   }
 
   .existing-tag-select {
-    @apply mt-3 grid grid-cols-[auto_auto_1fr] items-center gap-2 border-t border-stone-200 pt-3 text-sm font-semibold text-stone-600 dark:border-white/10 dark:text-stone-300;
+    @apply -mx-3 -mb-3 mt-3 grid grid-cols-[auto_auto_1fr] items-center gap-2 rounded-b-2xl border-t border-stone-200 px-3 pb-3 pt-3 text-sm font-semibold text-stone-600 dark:border-white/10 dark:text-stone-300;
+    background-color: var(--selection-surface);
   }
 
   .existing-tag-select svg {
@@ -320,11 +335,11 @@
   }
 
   .create-event-heading {
-    @apply mb-5 flex items-center gap-3 rounded-2xl border border-indigo-100 bg-gradient-to-r from-indigo-50 to-violet-50/60 px-4 py-3.5 dark:border-indigo-400/15 dark:from-indigo-500/15 dark:to-violet-500/5;
+    @apply mb-5 flex items-center gap-4 px-1 py-2;
   }
 
   .create-event-heading-icon {
-    @apply grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-indigo-100 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300;
+    @apply grid h-14 w-14 shrink-0 place-items-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-lg shadow-indigo-500/25;
   }
 
   .create-event-heading h2 {
@@ -336,31 +351,21 @@
   }
 
   .category-composer {
-    @apply overflow-hidden rounded-2xl border-2 border-stone-200 bg-white shadow-sm transition focus-within:border-indigo-500 focus-within:ring-4 focus-within:ring-indigo-100 dark:border-white/15 dark:bg-white/[0.05] dark:focus-within:border-indigo-400 dark:focus-within:ring-indigo-500/10;
+    @apply overflow-hidden rounded-2xl border-2 border-stone-200 shadow-sm transition focus-within:border-indigo-500 focus-within:ring-4 focus-within:ring-indigo-100 dark:border-white/15 dark:focus-within:border-indigo-400 dark:focus-within:ring-indigo-500/10;
+    background-color: var(--input-surface);
   }
 
   .category-input-field {
-    @apply grid grid-cols-[auto_1fr] items-center gap-x-3 px-4 py-3.5;
-  }
-
-  .category-input-icon {
-    @apply row-span-2 grid h-10 w-10 place-items-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300;
-  }
-
-  .category-input-copy {
-    @apply flex min-w-0 items-baseline gap-3;
-  }
-
-  .category-input-copy strong {
-    @apply text-sm font-extrabold text-stone-800 dark:text-stone-100;
+    @apply block px-4 py-3.5;
   }
 
   .category-input-field input {
-    @apply min-w-0 bg-transparent pt-1 text-base font-semibold text-stone-900 outline-none placeholder:font-normal placeholder:text-stone-400 dark:text-white dark:placeholder:text-stone-500;
+    @apply w-full min-w-0 bg-transparent text-base font-semibold text-stone-900 outline-none placeholder:font-normal placeholder:text-stone-400 dark:text-white dark:placeholder:text-stone-500;
   }
 
   .category-options-panel {
-    @apply border-t border-stone-200 bg-stone-50/70 p-4 dark:border-white/10 dark:bg-white/[0.025];
+    @apply border-t border-stone-200 p-4 dark:border-white/10;
+    background-color: var(--selection-surface);
   }
 
   .category-options-heading {
@@ -509,12 +514,17 @@
     @apply min-h-[19rem] w-full resize-none bg-transparent p-5 text-[16px] leading-7 text-stone-900 outline-none placeholder:text-stone-400 dark:text-stone-100 dark:placeholder:text-stone-500 sm:p-6;
   }
 
+  .editor-card {
+    background-color: var(--input-surface);
+  }
+
   .create-event-textarea {
     @apply min-h-[12rem] w-full resize-y bg-transparent p-5 text-[16px] leading-7 text-stone-900 outline-none placeholder:text-stone-400 dark:text-stone-100 dark:placeholder:text-stone-500 sm:p-6;
   }
 
   .editor-toolbar {
     @apply grid grid-cols-3 border-t border-stone-100 p-2 dark:border-white/10;
+    background-color: var(--selection-surface);
   }
 
   .pending-file-list {
@@ -603,11 +613,11 @@
   }
 
   .ai-mark {
-    @apply grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-md shadow-indigo-500/20;
+    @apply grid h-16 w-16 shrink-0 place-items-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-lg shadow-indigo-500/30;
   }
 
   .ai-compact-heading {
-    @apply mb-4 flex items-center gap-3 rounded-2xl border border-indigo-100 bg-gradient-to-r from-indigo-50 to-violet-50/60 px-4 py-3.5 dark:border-indigo-400/15 dark:from-indigo-500/15 dark:to-violet-500/5;
+    @apply mb-5 flex items-center gap-4 px-1 py-2;
   }
 
   .ai-compact-heading h2 {
@@ -627,7 +637,23 @@
   }
 
   .ai-textarea {
-    @apply h-[5rem] w-full resize-none overflow-y-auto bg-transparent px-3 py-3 text-[16px] leading-7 text-stone-900 outline-none placeholder:text-stone-400 dark:text-stone-100 dark:placeholder:text-stone-500;
+    @apply h-[5rem] w-full resize-none overflow-y-auto rounded-xl px-3 py-3 text-[16px] leading-7 text-stone-900 outline-none placeholder:text-stone-400 dark:text-stone-100 dark:placeholder:text-stone-500;
+    background-color: var(--input-surface);
+  }
+
+  .ai-composer-actions {
+    @apply -mx-3 -mb-3 mt-3 flex items-center justify-between gap-3 rounded-b-[1.5rem] border-t border-stone-200 px-6 py-3 dark:border-white/10;
+    background-color: var(--selection-surface);
+  }
+
+  .search-filter-panel {
+    @apply mt-4 flex flex-wrap items-center gap-x-5 gap-y-3 rounded-2xl border border-stone-200 p-3 dark:border-white/10;
+    background-color: var(--selection-surface);
+  }
+
+  .search-tag-select {
+    @apply min-w-0 flex-1 rounded-xl border border-stone-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:border-white/15 dark:text-stone-100 dark:focus:ring-indigo-500/20;
+    background-color: var(--selection-surface);
   }
 
   .send-button {
@@ -736,7 +762,6 @@ html[data-background="paper"] .bottom-nav {
   background-color: rgb(250 244 231 / 0.94);
 }
 
-html[data-background="paper"] .editor-card,
 html[data-background="paper"] .ai-composer,
 html[data-background="paper"] .settings-card,
 html[data-background="paper"] .event-list,

@@ -43,6 +43,13 @@ describe('LocalQueryEngine', () => {
     expect(result?.events).toMatchObject([{ id: 'work-current-2' }])
   })
 
+  it('uses comma for OR and plus for AND keyword searches', async () => {
+    const { engine } = await createEngine()
+    await expect(engine.query('所得稅, 日本', now)).resolves.toMatchObject({ count: 3 })
+    await expect(engine.query('所得稅 + 日本', now)).resolves.toMatchObject({ count: 0 })
+    await expect(engine.query('日本 + 旅行', now)).resolves.toMatchObject({ events: [{ id: 'japan-last-year' }], count: 1 })
+  })
+
   it('combines category, tag, and date filters', async () => {
     const { engine } = await createEngine()
     const result = await engine.query('2024/01/01 到 2024/12/31 找出標籤是日本的機密公事', now)

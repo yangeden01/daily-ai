@@ -73,15 +73,16 @@ export default function SettingsPage() {
       const url = URL.createObjectURL(new Blob([data.slice().buffer], { type: 'application/zip' }))
       const now = new Date()
       const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+      const filename = `Daily-AI-Backup-${date}.zip`
       const link = document.createElement('a')
       link.href = url
-      link.download = `Daily-AI-Backup-${date}.zip`
+      link.download = filename
       document.body.appendChild(link)
       link.click()
       link.remove()
       setTimeout(() => URL.revokeObjectURL(url), 0)
       setStatus('success')
-      setMessage('完整 ZIP 備份已匯出，包含事件、照片與附件。')
+      setMessage(`已匯出 ${filename}。請到瀏覽器的「下載內容」尋找；iPhone 可開啟「檔案」App 的「下載項目」，Android／Windows 可到 Downloads（下載）資料夾。`)
     } catch (error) {
       setStatus('error')
       setMessage(error instanceof Error ? error.message : '完整備份匯出失敗')

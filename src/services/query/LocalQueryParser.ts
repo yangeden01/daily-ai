@@ -68,7 +68,7 @@ const parseTime = (text: string, now: Date): { criteria: Pick<EventSearchCriteri
   return { criteria: {}, consumed: [] }
 }
 
-const keywordFor = (text: string, consumed: RegExp[], category?: string, tag?: string): string | undefined => {
+const keywordFor = (text: string, consumed: RegExp[], category?: string, tag?: string): Pick<EventSearchCriteria, 'keyword' | 'keywordMode'> => {
   let remainder = text
   consumed.forEach((pattern) => { remainder = remainder.replace(pattern, ' ') })
   if (category) remainder = remainder.replace(new RegExp(category, 'g'), ' ')
@@ -78,10 +78,22 @@ const keywordFor = (text: string, consumed: RegExp[], category?: string, tag?: s
   if (tag) remainder = remainder.replace(new RegExp(tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), ' ')
   remainder = remainder
     .replace(/(總共多少|金額合計|合計金額|總金額|總額|多少錢|花了多少|繳了多少|有幾筆|有幾次|幾筆|幾次|事件數|紀錄數|記錄數|多少筆|多少次|找出|搜尋|查詢|相關|哪些|列出|事件|紀錄|記錄|去了|有|的|請問)/gi, ' ')
-    .replace(/[？?！!，,。:：]/g, ' ')
+    .replace(/[？?！!。:：]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
-  return remainder || undefined
+  if (!remainder) return {}
+
+  const hasAllSeparator = remainder.includes('+')
+  const hasAnySeparator = /[，,]/.test(remainder)
+  const separator = hasAllSeparator ? /\s*\+\s*/ : hasAnySeparator ? /\s*[，,]\s*/ : null
+  const terms = separator
+    ? remainder.split(separator).map((term) => term.trim()).filter(Boolean)
+    : [remainder]
+
+  return {
+    keyword: terms.join(hasAllSeparator ? ' + ' : hasAnySeparator ? ', ' : ' '),
+    ...(terms.length > 1 ? { keywordMode: hasAllSeparator ? 'all' : 'any' } : {}),
+  }
 }
 
 export class LocalQueryParser implements QueryParser {
@@ -94,7 +106,8 @@ export class LocalQueryParser implements QueryParser {
     const tag = parseTag(text)
     const attachmentKind = parseAttachmentKind(text)
     const operation = operationFor(text)
-    const keyword = keywordFor(text, time.consumed, category, tag)
+    const keywordCriteria = keywordFor(text, time.consumed, category, tag)
+    const keyword = keywordCriteria.keyword
     if (!operation && !category && !tag && !attachmentKind && !time.label && /^(你好|哈囉|嗨|謝謝|你是誰|今天天氣)$/.test(keyword ?? '')) return null
     if (!operation && !category && !tag && !attachmentKind && !keyword && !time.label) return null
     if (!operation && keyword && !category && !tag && !time.label && keyword.length < 2) return null
@@ -102,7 +115,7 @@ export class LocalQueryParser implements QueryParser {
     return {
       rawText: text,
       operation: operation ?? 'related',
-      criteria: { ...time.criteria, ...(category ? { category } : {}), ...(tag ? { tag } : {}), ...(keyword ? { keyword } : {}), ...(attachmentKind ? { attachmentKind } : {}) },
+      criteria: { ...time.criteria, ...(category ? { category } : {}), ...(tag ? { tag } : {}), ...keywordCriteria, ...(attachmentKind ? { attachmentKind } : {}) },
       ...(time.label ? { dateLabel: time.label } : {}),
     }
   }

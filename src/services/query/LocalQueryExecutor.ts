@@ -5,11 +5,24 @@ import type { AttachmentRepository } from '../../repositories/AttachmentReposito
 
 const normalized = (value: string): string => value.trim().toLocaleLowerCase()
 
+const matchesKeyword = (searchable: string, keyword?: string, mode?: 'all' | 'any'): boolean => {
+  if (!keyword) return true
+  const terms = mode === 'all'
+    ? keyword.split('+')
+    : mode === 'any'
+      ? keyword.split(',')
+      : [keyword]
+  const normalizedTerms = terms.map(normalized).filter(Boolean)
+  return mode === 'any'
+    ? normalizedTerms.some((term) => searchable.includes(term))
+    : normalizedTerms.every((term) => searchable.includes(term))
+}
+
 const matches = (event: Event, query: ParsedEventQuery): boolean => {
-  const { keyword, category, tag, dateFrom, dateTo } = query.criteria
+  const { keyword, keywordMode, category, tag, dateFrom, dateTo } = query.criteria
   const searchable = [event.title, event.detail, event.category, ...event.tags].join(' ').toLocaleLowerCase()
   return (
-    (!keyword || searchable.includes(normalized(keyword))) &&
+    matchesKeyword(searchable, keyword, keywordMode) &&
     (!category || normalized(event.category) === normalized(category)) &&
     (!tag || event.tags.some((item) => normalized(item) === normalized(tag))) &&
     (!dateFrom || event.date >= dateFrom) &&

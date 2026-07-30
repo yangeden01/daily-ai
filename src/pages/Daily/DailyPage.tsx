@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from 'react'
-import { Camera, Check, ChevronRight, FilePlus2, Inbox, Layers3, LoaderCircle, NotebookPen, Plus, Tag, X } from 'lucide-react'
+import { Camera, Check, ChevronRight, FilePlus2, Inbox, LoaderCircle, NotebookPen, Plus, Tag, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import type { Event } from '../../models/Event'
 import { attachmentRepository, eventRepository } from '../../repositories'
@@ -148,7 +148,7 @@ export default function DailyPage() {
     <main className="page-enter">
       <form onSubmit={handleSubmit}>
         <div className="create-event-heading">
-          <span className="create-event-heading-icon" aria-hidden="true"><NotebookPen size={20} strokeWidth={2.3} /></span>
+          <span className="create-event-heading-icon" aria-hidden="true"><NotebookPen size={27} strokeWidth={2.2} /></span>
           <div>
             <h2>新增事件</h2>
             <p>建立一筆新的 Daily Record</p>
@@ -207,10 +207,9 @@ export default function DailyPage() {
           </div>
         )}
 
-        <div className="category-composer mt-4">
+        <label className="detail-field-label mt-5" htmlFor="daily-event-category">分類</label>
+        <div className="category-composer mt-2">
           <label className="category-input-field" htmlFor="daily-event-category">
-            <span className="category-input-icon" aria-hidden="true"><Layers3 size={20} /></span>
-            <span className="category-input-copy"><strong>分類</strong></span>
             <input
               id="daily-event-category"
               type="text"

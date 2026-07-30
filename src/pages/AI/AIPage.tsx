@@ -132,7 +132,7 @@ export default function AIPage() {
   return (
     <main className="page-enter pb-6">
       <section className="ai-compact-heading">
-        <span className="ai-mark"><Sparkles size={22} /></span>
+        <span className="ai-mark"><Sparkles size={30} strokeWidth={2.1} /></span>
         <div className="min-w-0">
           <h2>關鍵字查詢</h2>
           <p>搜尋目前裝置中的 Daily 事件</p>
@@ -151,9 +151,13 @@ export default function AIPage() {
           value={input}
           onChange={(event) => setInput(event.target.value)}
           enterKeyHint="enter"
-          placeholder={'輸入關鍵字或 #Tag（Enter 換行）\n例如：所得稅、#日本、有照片的事件'}
+          placeholder={'輸入關鍵字搜尋（Enter 換行）\n例如：所得稅'}
         />
-        <div className="flex items-center justify-between gap-3 border-t border-stone-100 px-3 pt-3 dark:border-white/10">
+        <div className="px-2 pt-3 text-sm leading-6 text-stone-600 dark:text-stone-300" aria-label="多關鍵詞搜尋規則">
+          <p><strong>任一符合：</strong>以逗號分隔，例如「所得稅, 日本」</p>
+          <p><strong>全部符合：</strong>以加號分隔，例如「所得稅 + 日本」</p>
+        </div>
+        <div className="ai-composer-actions">
           <span className="text-sm font-medium text-stone-500 dark:text-stone-400">搜尋結果如下</span>
           <button type="submit" className="send-button" aria-label="送出本機查詢" disabled={!input.trim() || loading}>
             {loading && <LoaderCircle size={18} className="animate-spin" />}
@@ -162,7 +166,7 @@ export default function AIPage() {
         </div>
       </form>
 
-      <fieldset className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-3 px-1">
+      <fieldset className="search-filter-panel">
         <legend className="sr-only">附件類型搜尋</legend>
         <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium text-stone-700 dark:text-stone-300">
           <input type="checkbox" className="h-5 w-5 rounded border-stone-300 accent-indigo-600" checked={searchPhotos} onChange={(event) => updateGuidedSearch(event.target.checked, searchFiles, selectedTag)} />
@@ -175,7 +179,7 @@ export default function AIPage() {
         <label className="inline-flex min-w-44 flex-1 items-center gap-2 text-sm font-medium text-stone-700 dark:text-stone-300">
           <Tag size={17} aria-hidden="true" />
           <span className="shrink-0">搜尋 Tag</span>
-          <select className="min-w-0 flex-1 rounded-xl border border-stone-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:border-white/15 dark:bg-stone-900 dark:focus:ring-indigo-500/20" value={selectedTag} onChange={(event) => selectTagAndSearch(event.target.value)}>
+          <select className="search-tag-select" value={selectedTag} onChange={(event) => selectTagAndSearch(event.target.value)}>
             <option value="">全部 Tags</option>
             {tagOptions.map((tag) => <option value={tag} key={tag}>{tag}</option>)}
           </select>
@@ -234,7 +238,7 @@ export default function AIPage() {
               {(result.query.criteria.dateFrom || result.query.criteria.dateTo) && <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-3 py-1.5 text-stone-700 dark:bg-white/10 dark:text-stone-300"><CalendarDays size={13} />{result.query.dateLabel ?? `${result.query.criteria.dateFrom}～${result.query.criteria.dateTo}`}</span>}
               {result.query.criteria.category && <span className="rounded-full bg-stone-100 px-3 py-1.5 text-stone-700 dark:bg-white/10 dark:text-stone-300">Category：{result.query.criteria.category}</span>}
               {result.query.criteria.tag && <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-3 py-1.5 text-stone-700 dark:bg-white/10 dark:text-stone-300"><Tag size={13} />{result.query.criteria.tag}</span>}
-              {result.query.criteria.keyword && <span className="rounded-full bg-stone-100 px-3 py-1.5 text-stone-700 dark:bg-white/10 dark:text-stone-300">關鍵字：{result.query.criteria.keyword}</span>}
+              {result.query.criteria.keyword && <span className="rounded-full bg-stone-100 px-3 py-1.5 text-stone-700 dark:bg-white/10 dark:text-stone-300">關鍵字：{result.query.criteria.keyword}{result.query.criteria.keywordMode === 'any' ? '（任一）' : result.query.criteria.keywordMode === 'all' ? '（全部）' : ''}</span>}
               {result.query.criteria.attachmentKind && <span className="rounded-full bg-stone-100 px-3 py-1.5 text-stone-700 dark:bg-white/10 dark:text-stone-300">{result.query.criteria.attachmentKind === 'photo' ? '含照片' : result.query.criteria.attachmentKind === 'file' ? '含附件' : '含照片或附件'}</span>}
             </div>
           </div>

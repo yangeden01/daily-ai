@@ -46,6 +46,21 @@ describe('LocalQueryParser', () => {
     })
   })
 
+  it('defines comma as OR and plus as AND for multiple keywords', () => {
+    expect(parser.parse('所得稅, 日本', now)).toMatchObject({
+      criteria: { keyword: '所得稅, 日本', keywordMode: 'any' },
+    })
+    expect(parser.parse('所得稅 + 日本', now)).toMatchObject({
+      criteria: { keyword: '所得稅 + 日本', keywordMode: 'all' },
+    })
+    expect(parser.parse('所得稅,  日本', now)).toMatchObject({
+      criteria: { keyword: '所得稅, 日本', keywordMode: 'any' },
+    })
+    expect(parser.parse('所得稅  +  日本', now)).toMatchObject({
+      criteria: { keyword: '所得稅 + 日本', keywordMode: 'all' },
+    })
+  })
+
   it('parses photo and attachment filters', () => {
     expect(parser.parse('有照片的事件', now)).toMatchObject({ criteria: { attachmentKind: 'photo' } })
     expect(parser.parse('有附件的事件', now)).toMatchObject({ criteria: { attachmentKind: 'file' } })
