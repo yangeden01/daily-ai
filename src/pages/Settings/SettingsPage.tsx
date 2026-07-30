@@ -186,7 +186,7 @@ export default function SettingsPage() {
       <section className="settings-card divide-y divide-stone-100 dark:divide-white/10">
         <div className="settings-row">
           <span className="settings-icon"><Info size={20} /></span>
-          <div className="min-w-0 flex-1"><h2 className="settings-title">App Version</h2><p className="settings-detail">v0.1 Alpha</p>{updateCheckDetail && <p className={`mt-1 text-[10px] font-semibold ${updateAvailable || updateCheckStatus === 'available' ? 'text-indigo-600 dark:text-indigo-300' : 'text-stone-400'}`}>{updateCheckDetail}</p>}</div>
+          <div className="min-w-0 flex-1"><h2 className="settings-title">App Version</h2><p className="settings-detail">v1.0</p>{updateCheckDetail && <p className={`mt-1 text-[10px] font-semibold ${updateAvailable || updateCheckStatus === 'available' ? 'text-indigo-600 dark:text-indigo-300' : 'text-stone-400'}`}>{updateCheckDetail}</p>}</div>
           <button type="button" className={`update-check-button ${updateAvailable || updateCheckStatus === 'available' ? 'update-check-button-ready' : ''}`} onClick={() => void handleUpdateCheck()} disabled={updateCheckStatus === 'checking' || updateCheckStatus === 'applying'}>
             <RefreshCw size={14} className={updateCheckStatus === 'checking' || updateCheckStatus === 'applying' ? 'animate-spin' : ''} />{updateCheckLabel}
           </button>

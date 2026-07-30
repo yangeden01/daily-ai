@@ -8,7 +8,7 @@ import { MAX_ATTACHMENT_SIZE } from '../utils/attachments'
 import { BackupService } from './BackupService'
 
 const SCHEMA_VERSION = 1
-const APP_VERSION = '0.1 Alpha'
+const APP_VERSION = '1.0'
 const MAX_ATTACHMENTS = 1000
 const MAX_TOTAL_ATTACHMENT_SIZE = 500 * 1024 * 1024
 const MAX_WORKBOOK_SIZE = 50 * 1024 * 1024

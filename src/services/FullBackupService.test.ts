@@ -36,7 +36,7 @@ describe('FullBackupService', () => {
     expect(files['Daily.xlsx']).toBeDefined()
     expect(files['manifest.json']).toBeDefined()
     const manifest = JSON.parse(strFromU8(files['manifest.json']))
-    expect(manifest).toMatchObject({ schemaVersion: 1, appVersion: '0.1 Alpha', eventCount: 1, attachmentCount: 1 })
+    expect(manifest).toMatchObject({ schemaVersion: 1, appVersion: '1.0', eventCount: 1, attachmentCount: 1 })
     expect(manifest.attachments[0].path).toMatch(/^attachments\//)
 
     const target = repositories()

@@ -1,4 +1,4 @@
-# Daily AI v0.1 Alpha
+# Daily AI v1.0
 
 Daily AI 是一個 mobile-first、local-first 的個人事件日誌 PWA。它使用 React、TypeScript、Vite 與 IndexedDB，安裝後可在支援的 Android、iPhone 與 Windows 裝置上以獨立 App 形式啟動。
 

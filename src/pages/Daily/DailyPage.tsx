@@ -183,7 +183,7 @@ export default function DailyPage() {
             className="create-event-textarea !pr-14"
             value={eventDetail}
             onChange={(event) => setEventDetail(event.target.value)}
-            placeholder={'寫下想記錄的事\n\n例如：\nEden 計畫環遊世界'}
+            placeholder={'寫下想記錄的事\n例如 : Eden 中樂透彩'}
           />
           <button type="button" className="clear-field-button !top-3 !translate-y-0" onClick={() => setEventDetail('')} aria-label="清除事件內容" disabled={!eventDetail}><X size={17} /></button>
           <div className="editor-toolbar">
