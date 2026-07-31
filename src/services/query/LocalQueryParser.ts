@@ -15,7 +15,7 @@ const operationFor = (text: string): EventQueryOperation | null => {
   if (/(總共多少|金額合計|合計金額|總金額|總額|多少錢|花了多少|繳了多少)/i.test(text)) return 'sum'
   if (/(有幾筆|有幾次|幾筆|幾次|事件數|紀錄數|記錄數|多少筆|多少次)/i.test(text)) return 'count'
   if (/(找出|搜尋|查詢|相關)/i.test(text)) return 'related'
-  if (/(哪些|列出|事件|紀錄|記錄)/i.test(text)) return 'list'
+  if (/(哪些|列出|事件|記事|紀錄|記錄)/i.test(text)) return 'list'
   return null
 }
 
@@ -27,7 +27,7 @@ const parseTag = (text: string): string | undefined => {
 }
 
 const parseAttachmentKind = (text: string): EventSearchCriteria['attachmentKind'] => {
-  if (/(附件或照片|照片或附件|照片[與和]附檔|附檔[與和]照片)/.test(text)) return 'any'
+  if (/(附件或照片|照片或附件|照片[與和]附檔|附檔[與和]照片)/.test(text) || (/照片/.test(text) && /(附件|附檔)/.test(text))) return 'any'
   if (/照片/.test(text)) return 'photo'
   if (/(附件|附檔)/.test(text)) return 'file'
   return undefined
@@ -77,8 +77,8 @@ const keywordFor = (text: string, consumed: RegExp[], category?: string, tag?: s
   remainder = remainder.replace(/(?:有|含|包含|搜尋)?(?:附件或照片|照片或附件|照片[與和]附檔|附檔[與和]照片|附件|附檔|照片)(?:的)?/g, ' ')
   if (tag) remainder = remainder.replace(new RegExp(tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), ' ')
   remainder = remainder
-    .replace(/(總共多少|金額合計|合計金額|總金額|總額|多少錢|花了多少|繳了多少|有幾筆|有幾次|幾筆|幾次|事件數|紀錄數|記錄數|多少筆|多少次|找出|搜尋|查詢|相關|哪些|列出|事件|紀錄|記錄|去了|有|的|請問)/gi, ' ')
-    .replace(/[？?！!。:：]/g, ' ')
+    .replace(/(總共多少|金額合計|合計金額|總金額|總額|多少錢|花了多少|繳了多少|有幾筆|有幾次|幾筆|幾次|事件數|記事數|紀錄數|記錄數|多少筆|多少次|找出|搜尋|查詢|相關|哪些|列出|事件|記事|紀錄|記錄|去了|有|的|請問)/gi, ' ')
+    .replace(/[？?！!。:：；;]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
   if (!remainder) return {}

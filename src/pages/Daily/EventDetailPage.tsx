@@ -11,6 +11,8 @@ import { deleteEventWithAttachments } from '../../services/EventDeletionService'
 import DateWheelPicker from '../../components/DateWheelPicker/DateWheelPicker'
 import { clearEditEventDraft, getEditEventDraft, saveEditEventDraft } from '../../utils/eventDrafts'
 import { clearTabDestination, tabBaseForReturnTo } from '../../utils/tabNavigationMemory'
+import { appModeFromSearch, routeForMode } from '../../utils/appMode'
+import { isDailyEvent, isNoteEvent } from '../../utils/noteEvents'
 
 const formatDateTime = (value: string): string =>
   new Intl.DateTimeFormat('zh-TW', {
@@ -27,9 +29,10 @@ export default function EventDetailPage() {
   const location = useLocation()
   const routeState = location.state as { returnTo?: string; returnLabel?: string } | null
   const requestedReturnTo = routeState?.returnTo
-  const returnTo = requestedReturnTo?.startsWith('/ai?') || requestedReturnTo?.startsWith('/dashboard?')
+  const mode = appModeFromSearch(location.search)
+  const returnTo = requestedReturnTo?.startsWith('/ai?') || requestedReturnTo?.startsWith('/dashboard?') || requestedReturnTo?.startsWith('/daily?')
     ? requestedReturnTo
-    : '/daily'
+    : routeForMode('/daily', mode)
   const returnLabel = returnTo.startsWith('/ai?')
     ? (routeState?.returnLabel ?? 'Search')
     : returnTo.startsWith('/dashboard?') ? (routeState?.returnLabel ?? 'Dashboard') : 'Timeline'
@@ -55,6 +58,7 @@ export default function EventDetailPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const photoInputRef = useRef<HTMLInputElement>(null)
   const attachmentInputRef = useRef<HTMLInputElement>(null)
+  const isNote = event ? isNoteEvent(event) : mode === 'notes'
 
   useEffect(() => {
     if (!eventId) return
@@ -62,9 +66,10 @@ export default function EventDetailPage() {
       .then(([item, files, allEvents]) => {
         setEvent(item ?? null)
         setAttachments(files)
-        setCategoryOptions([...new Set(allEvents.map(({ category }) => category.trim()).filter(Boolean))]
+        const matchingEvents = allEvents.filter(item && isNoteEvent(item) ? isNoteEvent : isDailyEvent)
+        setCategoryOptions([...new Set(matchingEvents.map(({ category }) => category.trim()).filter(Boolean))]
           .sort((left, right) => left.localeCompare(right, 'zh-TW')))
-        setTagOptions([...new Set(allEvents.flatMap(({ tags }) => tags).map((tag) => tag.trim()).filter(Boolean))]
+        setTagOptions([...new Set(matchingEvents.flatMap(({ tags }) => tags).map((tag) => tag.trim()).filter(Boolean))]
           .sort((left, right) => left.localeCompare(right, 'zh-TW')))
         const draft = eventId ? getEditEventDraft(eventId) : null
         if (item && draft) {
@@ -128,7 +133,7 @@ export default function EventDetailPage() {
     submitEvent.preventDefault()
     const normalizedTitle = title.trim()
     const normalizedDetail = detail.trim()
-    if (!event || !eventDate || (!normalizedTitle && !normalizedDetail) || isSaving || isProcessingFiles) return
+    if (!event || (!isNote && !eventDate) || (!normalizedTitle && !normalizedDetail) || isSaving || isProcessingFiles) return
 
     const resolvedTitle = normalizedTitle || normalizedDetail.split(/\r?\n/)[0]
     const resolvedDetail = normalizedDetail || normalizedTitle
@@ -141,18 +146,25 @@ export default function EventDetailPage() {
       const addedAttachments = filesToAttachments(newFiles, event.id)
       await attachmentRepository.addMany(addedAttachments)
       try {
+        const timestamp = new Date().toISOString()
+        const nextTags = normalizeTags([...tags, tagInput])
+        const attachmentIds = [
+          ...attachments.filter(({ id }) => !removedAttachmentIds.includes(id)).map(({ id }) => id),
+          ...addedAttachments.map(({ id }) => id),
+        ]
+        const changed = event.date !== (isNote ? '' : eventDate) || event.title !== resolvedTitle || event.detail !== resolvedDetail ||
+          event.category !== resolvedCategory || JSON.stringify(event.tags) !== JSON.stringify(nextTags) ||
+          JSON.stringify(event.attachmentIds) !== JSON.stringify(attachmentIds)
         await eventRepository.update(event.id, {
           ...event,
-          date: eventDate,
+          date: isNote ? '' : eventDate,
           title: resolvedTitle,
           detail: resolvedDetail,
           category: resolvedCategory,
-          tags: normalizeTags([...tags, tagInput]),
-          attachmentIds: [
-            ...attachments.filter(({ id }) => !removedAttachmentIds.includes(id)).map(({ id }) => id),
-            ...addedAttachments.map(({ id }) => id),
-          ],
-          updatedAt: new Date().toISOString(),
+          tags: nextTags,
+          attachmentIds,
+          updatedAt: timestamp,
+          ...(isNote && changed ? { updateCount: (event.updateCount ?? 0) + 1, lastEditedAt: timestamp } : {}),
         })
       } catch (error) {
         await Promise.all(addedAttachments.map(({ id }) => attachmentRepository.delete(id)))
@@ -264,13 +276,17 @@ export default function EventDetailPage() {
       {isEditing ? (
         <form onSubmit={handleSave} className="detail-card p-5 sm:p-6">
           <div className="form-section-heading">
-            <label className="detail-field-label" htmlFor="event-date">事件日期</label>
-            <button type="submit" className="inline-save-button" disabled={!eventDate || (!title.trim() && !detail.trim()) || isSaving || isProcessingFiles}>
+            {isNote ? (
+              <p className="detail-field-label">編輯記事</p>
+            ) : (
+              <label className="detail-field-label" htmlFor="event-date">事件日期</label>
+            )}
+            <button type="submit" className="inline-save-button" disabled={(!isNote && !eventDate) || (!title.trim() && !detail.trim()) || isSaving || isProcessingFiles}>
               {isSaving ? <LoaderCircle size={15} className="animate-spin" /> : <Check size={15} />}
               儲存
             </button>
           </div>
-          <DateWheelPicker id="event-date" value={eventDate} onChange={setEventDate} required />
+          {!isNote && <DateWheelPicker id="event-date" value={eventDate} onChange={setEventDate} required />}
 
           <label className="detail-field-label mt-5" htmlFor="event-title">Title</label>
           <div className="clearable-field mt-2">
@@ -372,7 +388,7 @@ export default function EventDetailPage() {
 
           <div className="mt-6 grid grid-cols-2 gap-3">
             <button type="button" className="detail-secondary-button" onClick={() => { if (eventId) clearEditEventDraft(eventId); clearTabDestination(tabBaseForReturnTo(returnTo)); setIsEditing(false) }} disabled={isSaving}><X size={17} />取消</button>
-            <button type="submit" className="detail-save-button" disabled={!eventDate || (!title.trim() && !detail.trim()) || isSaving || isProcessingFiles}>
+            <button type="submit" className="detail-save-button" disabled={(!isNote && !eventDate) || (!title.trim() && !detail.trim()) || isSaving || isProcessingFiles}>
               {isSaving ? <LoaderCircle size={17} className="animate-spin" /> : <Check size={17} />}
               儲存
             </button>
@@ -382,7 +398,7 @@ export default function EventDetailPage() {
         <>
           <section className="detail-card">
             <div className="border-b border-stone-100 p-5 dark:border-white/10 sm:p-6">
-              <time className="event-date !col-span-1" dateTime={event.date}>{event.date}</time>
+              {isNote ? <p className="event-date !col-span-1">最近修改：{formatDateTime(event.lastEditedAt ?? event.updatedAt)}</p> : <time className="event-date !col-span-1" dateTime={event.date}>{event.date}</time>}
               <h2 className="mt-2 text-2xl font-bold tracking-tight text-stone-950 dark:text-white">{event.title}</h2>
               <span className="event-category mt-3 inline-block">{event.category}</span>
             </div>
@@ -439,7 +455,7 @@ export default function EventDetailPage() {
           {errorMessage && <p className="error-notice" role="alert">{errorMessage}</p>}
           <button type="button" className="delete-event-button" onClick={handleDelete} disabled={isDeleting}>
             {isDeleting ? <LoaderCircle size={18} className="animate-spin" /> : <Trash2 size={18} />}
-            {isDeleting ? '刪除中' : '刪除事件'}
+            {isDeleting ? '刪除中' : isNote ? '刪除記事' : '刪除事件'}
           </button>
           {activePhoto && attachmentUrls[activePhoto.id] && (
             <div className="photo-lightbox" role="dialog" aria-modal="true" aria-label={activePhoto.filename} onClick={() => setActivePhoto(null)}>

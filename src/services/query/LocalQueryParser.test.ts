@@ -68,6 +68,19 @@ describe('LocalQueryParser', () => {
       criteria: { attachmentKind: 'any', category: '私事', dateFrom: '2026-01-01', dateTo: '2026-12-31' },
     })
     expect(parser.parse('搜尋照片與附檔事件', now)).toMatchObject({ criteria: { attachmentKind: 'any' } })
+    expect(parser.parse('搜尋照片記事', now)).toMatchObject({ operation: 'related', criteria: { attachmentKind: 'photo' } })
+    expect(parser.parse('搜尋附檔記事', now)).toMatchObject({ operation: 'related', criteria: { attachmentKind: 'file' } })
+    expect(parser.parse('搜尋照片與附檔記事', now)).toMatchObject({ operation: 'related', criteria: { attachmentKind: 'any' } })
+    expect(parser.parse('搜尋照片記事\n搜尋附檔記事', now)).toMatchObject({
+      operation: 'related',
+      criteria: { attachmentKind: 'any' },
+    })
+    const semicolonQuery = parser.parse('搜尋照片記事；搜尋附檔記事', now)
+    expect(semicolonQuery).toMatchObject({
+      operation: 'related',
+      criteria: { attachmentKind: 'any' },
+    })
+    expect(semicolonQuery?.criteria.keyword).toBeUndefined()
   })
 
   it('uses local calendar boundaries instead of UTC truncation', () => {

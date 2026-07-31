@@ -19,6 +19,9 @@ const worksheetColumns: Record<string, Partial<ExcelJS.Column>[]> = {
     { header: 'attachmentIds', key: 'attachmentIds', width: 28 },
     { header: 'createdAt', key: 'createdAt', width: 28 },
     { header: 'updatedAt', key: 'updatedAt', width: 28 },
+    { header: 'recordType', key: 'recordType', width: 14 },
+    { header: 'updateCount', key: 'updateCount', width: 14 },
+    { header: 'lastEditedAt', key: 'lastEditedAt', width: 28 },
   ],
   [worksheetNames.tags]: [
     { header: 'id', key: 'id', width: 24 },

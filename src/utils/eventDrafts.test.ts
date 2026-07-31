@@ -10,6 +10,7 @@ import {
 
 beforeEach(() => {
   clearCreateEventDraft()
+  clearCreateEventDraft('notes')
   clearEditEventDraft('event-1')
 })
 
@@ -31,5 +32,19 @@ describe('event drafts', () => {
     })
     expect(getEditEventDraft('event-1')).toMatchObject({ title: '修改中', removedAttachmentIds: ['attachment-1'] })
     expect(getEditEventDraft('event-2')).toBeNull()
+  })
+
+  it('keeps Daily and Notes create drafts separate', () => {
+    saveCreateEventDraft({
+      eventDate: '2026-07-31', title: 'Daily 草稿', detail: '', category: '',
+      tags: [], tagInput: '', pendingFiles: [],
+    })
+    saveCreateEventDraft({
+      eventDate: '', title: 'Notes 草稿', detail: '不含日期', category: '',
+      tags: [], tagInput: '', pendingFiles: [],
+    }, 'notes')
+
+    expect(getCreateEventDraft()).toMatchObject({ title: 'Daily 草稿' })
+    expect(getCreateEventDraft('notes')).toMatchObject({ title: 'Notes 草稿', eventDate: '' })
   })
 })

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from 'react'
 import { Camera, Check, ChevronRight, FilePlus2, Inbox, LoaderCircle, NotebookPen, Plus, Tag, X } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import type { Event } from '../../models/Event'
 import { attachmentRepository, eventRepository } from '../../repositories'
 import { aiParserService } from '../../services/ai'
@@ -12,9 +12,14 @@ import { sortEventsNewestFirst } from '../../utils/sortEvents'
 import { restoreListPosition, saveListPosition } from '../../utils/listPosition'
 import DateWheelPicker from '../../components/DateWheelPicker/DateWheelPicker'
 import { clearCreateEventDraft, getCreateEventDraft, saveCreateEventDraft } from '../../utils/eventDrafts'
+import { appModeFromSearch, routeForMode } from '../../utils/appMode'
+import { isDailyEvent, isNoteEvent, noteUpdatedAt, sortNotes, type NoteSort } from '../../utils/noteEvents'
 
 export default function DailyPage() {
-  const initialDraft = useRef(getCreateEventDraft())
+  const location = useLocation()
+  const mode = appModeFromSearch(location.search)
+  const isNotesMode = mode === 'notes'
+  const initialDraft = useRef(getCreateEventDraft(mode))
   const [eventTitle, setEventTitle] = useState(() => initialDraft.current?.title ?? '')
   const [eventDetail, setEventDetail] = useState(() => initialDraft.current?.detail ?? '')
   const [eventDate, setEventDate] = useState(() => initialDraft.current?.eventDate ?? toLocalDateInputValue())
@@ -25,22 +30,25 @@ export default function DailyPage() {
   const [tagInput, setTagInput] = useState(() => initialDraft.current?.tagInput ?? '')
   const [categoryOptions, setCategoryOptions] = useState<string[]>([])
   const [tagOptions, setTagOptions] = useState<string[]>([])
+  const [noteSort, setNoteSort] = useState<NoteSort>('recent')
   const [isSaving, setIsSaving] = useState(false)
   const [isProcessingFiles, setIsProcessingFiles] = useState(false)
   const [isLoadingEvents, setIsLoadingEvents] = useState(true)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const photoInputRef = useRef<HTMLInputElement>(null)
   const attachmentInputRef = useRef<HTMLInputElement>(null)
+  const draftModeRef = useRef(mode)
 
   const loadEvents = useCallback(async () => {
     const items = await eventRepository.getAll()
-    setEvents(sortEventsNewestFirst(items))
-    setCategoryOptions([...new Set(items.map(({ category }) => category.trim()).filter(Boolean))]
+    const visibleItems = items.filter(isNotesMode ? isNoteEvent : isDailyEvent)
+    setEvents(isNotesMode ? sortNotes(visibleItems, noteSort) : sortEventsNewestFirst(visibleItems))
+    setCategoryOptions([...new Set(visibleItems.map(({ category }) => category.trim()).filter(Boolean))]
       .sort((left, right) => left.localeCompare(right, 'zh-TW')))
-    setTagOptions([...new Set(items.flatMap(({ tags }) => tags).map((tag) => tag.trim()).filter(Boolean))]
+    setTagOptions([...new Set(visibleItems.flatMap(({ tags }) => tags).map((tag) => tag.trim()).filter(Boolean))]
       .sort((left, right) => left.localeCompare(right, 'zh-TW')))
     setIsLoadingEvents(false)
-  }, [])
+  }, [isNotesMode, noteSort])
 
   useEffect(() => {
     void loadEvents().catch((error) => {
@@ -50,19 +58,34 @@ export default function DailyPage() {
   }, [loadEvents])
 
   useEffect(() => {
-    if (!isLoadingEvents) restoreListPosition('/daily')
-  }, [isLoadingEvents])
+    const draft = getCreateEventDraft(mode)
+    setEventTitle(draft?.title ?? '')
+    setEventDetail(draft?.detail ?? '')
+    setEventDate(draft?.eventDate ?? toLocalDateInputValue())
+    setEventCategory(draft?.category ?? '')
+    setTags(draft?.tags ?? [])
+    setTagInput(draft?.tagInput ?? '')
+    setPendingFiles(draft?.pendingFiles ?? [])
+  }, [mode])
 
   useEffect(() => {
-    saveCreateEventDraft({ eventDate, title: eventTitle, detail: eventDetail, category: eventCategory, tags, tagInput, pendingFiles })
-  }, [eventDate, eventTitle, eventDetail, eventCategory, tags, tagInput, pendingFiles])
+    if (!isLoadingEvents) restoreListPosition(routeForMode('/daily', mode))
+  }, [isLoadingEvents, mode])
+
+  useEffect(() => {
+    if (draftModeRef.current !== mode) {
+      draftModeRef.current = mode
+      return
+    }
+    saveCreateEventDraft({ eventDate, title: eventTitle, detail: eventDetail, category: eventCategory, tags, tagInput, pendingFiles }, mode)
+  }, [eventDate, eventTitle, eventDetail, eventCategory, tags, tagInput, pendingFiles, mode])
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const normalizedTitle = eventTitle.trim()
     const normalizedDetail = eventDetail.trim()
     const normalizedCategory = eventCategory.trim()
-    if ((!normalizedTitle && !normalizedDetail) || !eventDate || isSaving || isProcessingFiles) return
+    if ((!normalizedTitle && !normalizedDetail) || (!isNotesMode && !eventDate) || isSaving || isProcessingFiles) return
 
     const resolvedTitle = normalizedTitle || normalizedDetail.split(/\r?\n/)[0]
     const resolvedDetail = normalizedDetail || normalizedTitle
@@ -78,7 +101,7 @@ export default function DailyPage() {
       const attachments = filesToAttachments(pendingFiles, eventId)
       const newEvent: Event = {
         id: eventId,
-        date: eventDate,
+        date: isNotesMode ? '' : eventDate,
         title: resolvedTitle,
         detail: resolvedDetail,
         category: resolvedCategory,
@@ -87,6 +110,8 @@ export default function DailyPage() {
         attachmentIds: attachments.map(({ id }) => id),
         createdAt: timestamp,
         updatedAt: timestamp,
+        recordType: isNotesMode ? 'note' : 'daily',
+        ...(isNotesMode ? { updateCount: 0, lastEditedAt: timestamp } : {}),
       }
 
       await attachmentRepository.addMany(attachments)
@@ -104,7 +129,7 @@ export default function DailyPage() {
       setTags([])
       setTagInput('')
       setPendingFiles([])
-      clearCreateEventDraft()
+      clearCreateEventDraft(mode)
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : '事件儲存失敗')
     } finally {
@@ -157,17 +182,17 @@ export default function DailyPage() {
         <div className="create-event-heading">
           <span className="create-event-heading-icon" aria-hidden="true"><NotebookPen size={27} strokeWidth={2.2} /></span>
           <div>
-            <h2>新增事件</h2>
-            <p>建立一筆新的 Daily Record</p>
+            <h2>{isNotesMode ? '新增記事' : '新增日常事件'}</h2>
+            <p>{isNotesMode ? '建立一筆可重複使用的 Notes' : '建立一筆新的 Daily Record'}</p>
           </div>
         </div>
-        <div className="mb-3">
+        {!isNotesMode && <div className="mb-3">
           <label className="detail-field-label mb-2" htmlFor="daily-event-date">事件日期</label>
           <DateWheelPicker id="daily-event-date" value={eventDate} onChange={setEventDate} required />
-        </div>
+        </div>}
         <div className="form-section-heading mt-4">
           <label className="detail-field-label" htmlFor="daily-event-title">Title</label>
-          <button type="submit" className="inline-save-button" disabled={(!eventTitle.trim() && !eventDetail.trim()) || !eventDate || isSaving || isProcessingFiles}>
+          <button type="submit" className="inline-save-button" disabled={(!eventTitle.trim() && !eventDetail.trim()) || (!isNotesMode && !eventDate) || isSaving || isProcessingFiles}>
             {isSaving ? <LoaderCircle size={15} className="animate-spin" /> : <Check size={15} />}
             儲存
           </button>
@@ -178,7 +203,7 @@ export default function DailyPage() {
             className="detail-input !mt-0 !pr-12"
             value={eventTitle}
             onChange={(event) => setEventTitle(event.target.value)}
-            placeholder="輸入事件標題"
+            placeholder={isNotesMode ? '輸入記事標題' : '輸入事件標題'}
           />
           <button type="button" className="clear-field-button" onClick={() => setEventTitle('')} aria-label="清除事件標題" disabled={!eventTitle}><X size={17} /></button>
         </div>
@@ -190,7 +215,9 @@ export default function DailyPage() {
             className="create-event-textarea !pr-14"
             value={eventDetail}
             onChange={(event) => setEventDetail(event.target.value)}
-            placeholder={'寫下想記錄的事\n例如 : Eden 中樂透彩'}
+            placeholder={isNotesMode
+              ? '寫下想記錄的事\n例如 : Eden 環遊世界清單列表'
+              : '寫下想記錄的事\n例如 : Eden 中樂透彩'}
           />
           <button type="button" className="clear-field-button !top-3 !translate-y-0" onClick={() => setEventDetail('')} aria-label="清除事件內容" disabled={!eventDetail}><X size={17} /></button>
           <div className="editor-toolbar">
@@ -291,7 +318,7 @@ export default function DailyPage() {
 
         {errorMessage && <p className="error-notice" role="alert">{errorMessage}</p>}
 
-        <button type="submit" className="primary-button" disabled={(!eventTitle.trim() && !eventDetail.trim()) || !eventDate || isSaving || isProcessingFiles}>
+        <button type="submit" className="primary-button" disabled={(!eventTitle.trim() && !eventDetail.trim()) || (!isNotesMode && !eventDate) || isSaving || isProcessingFiles}>
           {isSaving ? <LoaderCircle size={19} className="animate-spin" /> : <Check size={19} />}
           {isSaving ? '儲存中' : '儲存'}
         </button>
@@ -299,20 +326,24 @@ export default function DailyPage() {
 
       <section className="mt-9" aria-labelledby="timeline-title">
         <div className="mb-3 flex items-center justify-between px-1">
-          <h2 id="timeline-title" className="section-label !mb-0">Timeline</h2>
-          <span className="text-xs tabular-nums text-stone-400">{events.length} events</span>
+          <h2 id="timeline-title" className="section-label !mb-0">{isNotesMode ? '記事列表' : 'Timeline'}</h2>
+          <span className="text-xs tabular-nums text-stone-400">{events.length} {isNotesMode ? 'notes' : 'events'}</span>
         </div>
+        {isNotesMode && <div className="note-sort-switch" role="group" aria-label="記事排序">
+          <button type="button" className={noteSort === 'recent' ? 'active' : ''} onClick={() => setNoteSort('recent')}>最近修改</button>
+          <button type="button" className={noteSort === 'frequent' ? 'active' : ''} onClick={() => setNoteSort('frequent')}>頻繁更新</button>
+        </div>}
         <div className="event-list">
           {isLoadingEvents ? <div className="empty-timeline"><LoaderCircle className="animate-spin" size={22} /><p>載入 Timeline…</p></div> : events.length > 0 ? events.map((event) => (
-            <Link className="event-row event-row-link" to={`/daily/${event.id}`} key={event.id} data-event-id={event.id} onClick={() => saveListPosition('/daily', event.id)}>
-              <time className="event-date" dateTime={event.date}>{event.date}</time>
+            <Link className="event-row event-row-link" to={routeForMode(`/daily/${event.id}`, mode)} state={{ returnTo: routeForMode('/daily', mode), returnLabel: isNotesMode ? 'Notes' : 'Timeline' }} key={event.id} data-event-id={event.id} onClick={() => saveListPosition(routeForMode('/daily', mode), event.id)}>
+              <time className="event-date" dateTime={isNotesMode ? noteUpdatedAt(event) : event.date}>{isNotesMode ? `修改於 ${new Date(noteUpdatedAt(event)).toLocaleDateString('zh-TW')}` : event.date}</time>
               <h3 className="event-title">{event.title}</h3>
               <span className="flex items-center gap-2">
                 <span className="event-category">{event.category}</span>
                 <ChevronRight size={16} className="text-stone-300 dark:text-stone-600" />
               </span>
             </Link>
-          )) : <div className="empty-timeline"><Inbox size={22} /><p>目前還沒有事件</p></div>}
+          )) : <div className="empty-timeline"><Inbox size={22} /><p>{isNotesMode ? '目前還沒有記事' : '目前還沒有事件'}</p></div>}
         </div>
       </section>
     </main>

@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { ChartNoAxesColumnIncreasing, NotebookPen, Search, Settings } from 'lucide-react'
 import { clearTabDestination, getTabDestination, rememberTabDestination, tabBaseForReturnTo } from '../../utils/tabNavigationMemory'
+import { appModeFromSearch, routeForMode } from '../../utils/appMode'
 
 const navigationItems = [
   { to: '/daily', icon: NotebookPen, label: 'Daily' },
@@ -12,6 +13,7 @@ const navigationItems = [
 
 export default function BottomNavigation() {
   const location = useLocation()
+  const mode = appModeFromSearch(location.search)
   const routeState = location.state as { returnTo?: string } | null
   const detailReturnTo = location.pathname.startsWith('/daily/') ? routeState?.returnTo : undefined
   const detailSourceTab = location.pathname.startsWith('/daily/') ? tabBaseForReturnTo(detailReturnTo) : null
@@ -40,7 +42,7 @@ export default function BottomNavigation() {
         {navigationItems.map(({ to, icon: Icon, label }) => {
           const isActive = activePath === to || activePath.startsWith(`${to}/`)
           const remembered = getTabDestination(to)
-          const destination = remembered ? { pathname: remembered.pathname, search: remembered.search } : to
+          const destination = remembered ? { pathname: remembered.pathname, search: remembered.search } : routeForMode(to, mode)
           return (
           <NavLink
             key={to}

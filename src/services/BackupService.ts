@@ -23,6 +23,7 @@ const eventFingerprint = (event: Event): string => JSON.stringify([
   event.category.trim(),
   event.amount ?? null,
   [...event.tags].map((tag) => tag.trim()).filter(Boolean).sort(),
+  event.recordType ?? 'daily',
 ])
 
 export class BackupService {
@@ -56,6 +57,9 @@ export class BackupService {
         attachmentIds: JSON.stringify(event.attachmentIds),
         createdAt: event.createdAt,
         updatedAt: event.updatedAt,
+        recordType: event.recordType ?? 'daily',
+        updateCount: event.updateCount ?? 0,
+        lastEditedAt: event.lastEditedAt ?? event.updatedAt,
       })
 
       event.tags.forEach((name, index) => {
@@ -156,8 +160,9 @@ export class BackupService {
       const category = this.cellText(row, 5)
       const createdAt = this.cellText(row, 9)
       const updatedAt = this.cellText(row, 10)
+      const recordType = this.cellText(row, 11) === 'note' ? 'note' : 'daily'
 
-      if (!id || !date || !title || !detail || !category || !createdAt || !updatedAt) {
+      if (!id || (recordType !== 'note' && !date) || !title || !detail || !category || !createdAt || !updatedAt) {
         throw new Error(`Events 工作表第 ${rowNumber} 列缺少必要欄位`)
       }
       if (ids.has(id)) throw new Error(`Events 工作表包含重複 ID：${id}`)
@@ -180,11 +185,16 @@ export class BackupService {
         title,
         detail,
         category,
-        ...(parsedAmount !== undefined ? { amount: parsedAmount } : {}),
+        amount: parsedAmount,
         tags: tagsByEvent.get(id) ?? this.parseStringArray(this.cellText(row, 7)),
         attachmentIds: this.parseStringArray(this.cellText(row, 8)),
         createdAt,
         updatedAt,
+        ...(recordType === 'note' ? { recordType } : {}),
+        ...(recordType === 'note' ? {
+          updateCount: Number(this.cellText(row, 12)) || 0,
+          lastEditedAt: this.cellText(row, 13) || updatedAt,
+        } : {}),
       })
     })
 

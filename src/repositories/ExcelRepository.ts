@@ -18,6 +18,9 @@ type EventRow = {
   attachmentIds: string
   createdAt: string
   updatedAt: string
+  recordType: 'daily' | 'note'
+  updateCount: number
+  lastEditedAt: string
 }
 
 export class ExcelRepository implements EventRepository {
@@ -189,6 +192,9 @@ export class ExcelRepository implements EventRepository {
       attachmentIds: JSON.stringify(event.attachmentIds),
       createdAt: event.createdAt,
       updatedAt: event.updatedAt,
+      recordType: event.recordType ?? 'daily',
+      updateCount: event.updateCount ?? 0,
+      lastEditedAt: event.lastEditedAt ?? event.updatedAt,
     }
   }
 
@@ -205,11 +211,16 @@ export class ExcelRepository implements EventRepository {
       attachmentIds: this.parseStringArray(this.cellText(row, 8)),
       createdAt: this.cellText(row, 9),
       updatedAt: this.cellText(row, 10),
+      ...(this.cellText(row, 11) === 'note' ? { recordType: 'note' as const } : {}),
+      ...(this.cellText(row, 11) === 'note' ? {
+        updateCount: Number(this.cellText(row, 12)) || 0,
+        lastEditedAt: this.cellText(row, 13) || this.cellText(row, 10),
+      } : {}),
     }
   }
 
   private rowValues(row: EventRow): ExcelJS.CellValue[] {
-    return [null, row.id, row.date, row.title, row.detail, row.category, row.amount, row.tags, row.attachmentIds, row.createdAt, row.updatedAt]
+    return [null, row.id, row.date, row.title, row.detail, row.category, row.amount, row.tags, row.attachmentIds, row.createdAt, row.updatedAt, row.recordType, row.updateCount, row.lastEditedAt]
   }
 
   private cellText(row: ExcelJS.Row, column: number): string {
