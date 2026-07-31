@@ -5,7 +5,7 @@ import { clearTabDestination, getTabDestination, rememberTabDestination, tabBase
 import { appModeFromSearch, routeForMode } from '../../utils/appMode'
 
 const navigationItems = [
-  { to: '/daily', icon: NotebookPen, label: 'Daily' },
+  { to: '/daily', icon: NotebookPen, label: 'Input' },
   { to: '/ai', icon: Search, label: 'Search' },
   { to: '/dashboard', icon: ChartNoAxesColumnIncreasing, label: 'Dashboard' },
   { to: '/settings', icon: Settings, label: 'Settings' },

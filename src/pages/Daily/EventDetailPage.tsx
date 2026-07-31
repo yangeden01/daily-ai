@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from 'react'
-import { ArrowLeft, Camera, Check, Download, FilePlus2, FileText, LoaderCircle, Pencil, Plus, Tag, Trash2, X } from 'lucide-react'
+import { ArrowLeft, Camera, Check, Copy, Download, FilePlus2, FileText, LoaderCircle, Pencil, Plus, Tag, Trash2, X } from 'lucide-react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import type { Attachment } from '../../models/Attachment'
 import type { Event } from '../../models/Event'
@@ -8,6 +8,7 @@ import { filesToAttachments, formatFileSize, validateAttachmentFile } from '../.
 import { normalizeTags } from '../../utils/normalizeTags'
 import { loadPhotoStorageMode, optimizeSelectedFiles } from '../../utils/photoStorage'
 import { deleteEventWithAttachments } from '../../services/EventDeletionService'
+import { copyEventWithAttachments } from '../../services/EventCopyService'
 import DateWheelPicker from '../../components/DateWheelPicker/DateWheelPicker'
 import { clearEditEventDraft, getEditEventDraft, saveEditEventDraft } from '../../utils/eventDrafts'
 import { clearTabDestination, tabBaseForReturnTo } from '../../utils/tabNavigationMemory'
@@ -45,6 +46,7 @@ export default function EventDetailPage() {
   const [isSaving, setIsSaving] = useState(false)
   const [isProcessingFiles, setIsProcessingFiles] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [isCopying, setIsCopying] = useState(false)
   const [eventDate, setEventDate] = useState('')
   const [title, setTitle] = useState('')
   const [detail, setDetail] = useState('')
@@ -258,6 +260,33 @@ export default function EventDetailPage() {
     }
   }
 
+  const handleCopy = async () => {
+    if (!event || isCopying) return
+    setIsCopying(true)
+    setErrorMessage(null)
+
+    try {
+      const copied = await copyEventWithAttachments(event, attachments)
+      saveEditEventDraft(copied.id, {
+        eventDate: copied.date,
+        title: copied.title,
+        detail: copied.detail,
+        category: copied.category,
+        tags: [...copied.tags],
+        tagInput: '',
+        newFiles: [],
+        removedAttachmentIds: [],
+      })
+      navigate(routeForMode(`/daily/${copied.id}`, isNote ? 'notes' : 'daily'), {
+        replace: true,
+        state: { returnTo, returnLabel },
+      })
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : isNote ? '記事複製失敗' : '事件複製失敗')
+      setIsCopying(false)
+    }
+  }
+
   if (isLoading) {
     return <main className="detail-state"><LoaderCircle className="animate-spin" size={24} /><span>載入事件</span></main>
   }
@@ -453,6 +482,10 @@ export default function EventDetailPage() {
           </section>
 
           {errorMessage && <p className="error-notice" role="alert">{errorMessage}</p>}
+          <button type="button" className="detail-secondary-button mt-4 w-full" onClick={handleCopy} disabled={isCopying || isDeleting}>
+            {isCopying ? <LoaderCircle size={18} className="animate-spin" /> : <Copy size={18} />}
+            {isCopying ? '複製中' : isNote ? '複製記事' : '複製事件'}
+          </button>
           <button type="button" className="delete-event-button" onClick={handleDelete} disabled={isDeleting}>
             {isDeleting ? <LoaderCircle size={18} className="animate-spin" /> : <Trash2 size={18} />}
             {isDeleting ? '刪除中' : isNote ? '刪除記事' : '刪除事件'}
