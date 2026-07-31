@@ -11,16 +11,18 @@ import { loadPhotoStorageMode, optimizeSelectedFiles } from '../../utils/photoSt
 import { sortEventsNewestFirst } from '../../utils/sortEvents'
 import { restoreListPosition, saveListPosition } from '../../utils/listPosition'
 import DateWheelPicker from '../../components/DateWheelPicker/DateWheelPicker'
+import { clearCreateEventDraft, getCreateEventDraft, saveCreateEventDraft } from '../../utils/eventDrafts'
 
 export default function DailyPage() {
-  const [eventTitle, setEventTitle] = useState('')
-  const [eventDetail, setEventDetail] = useState('')
-  const [eventDate, setEventDate] = useState(() => toLocalDateInputValue())
-  const [pendingFiles, setPendingFiles] = useState<File[]>([])
+  const initialDraft = useRef(getCreateEventDraft())
+  const [eventTitle, setEventTitle] = useState(() => initialDraft.current?.title ?? '')
+  const [eventDetail, setEventDetail] = useState(() => initialDraft.current?.detail ?? '')
+  const [eventDate, setEventDate] = useState(() => initialDraft.current?.eventDate ?? toLocalDateInputValue())
+  const [pendingFiles, setPendingFiles] = useState<File[]>(() => initialDraft.current?.pendingFiles ?? [])
   const [events, setEvents] = useState<Event[]>([])
-  const [eventCategory, setEventCategory] = useState('')
-  const [tags, setTags] = useState<string[]>([])
-  const [tagInput, setTagInput] = useState('')
+  const [eventCategory, setEventCategory] = useState(() => initialDraft.current?.category ?? '')
+  const [tags, setTags] = useState<string[]>(() => initialDraft.current?.tags ?? [])
+  const [tagInput, setTagInput] = useState(() => initialDraft.current?.tagInput ?? '')
   const [categoryOptions, setCategoryOptions] = useState<string[]>([])
   const [tagOptions, setTagOptions] = useState<string[]>([])
   const [isSaving, setIsSaving] = useState(false)
@@ -50,6 +52,10 @@ export default function DailyPage() {
   useEffect(() => {
     if (!isLoadingEvents) restoreListPosition('/daily')
   }, [isLoadingEvents])
+
+  useEffect(() => {
+    saveCreateEventDraft({ eventDate, title: eventTitle, detail: eventDetail, category: eventCategory, tags, tagInput, pendingFiles })
+  }, [eventDate, eventTitle, eventDetail, eventCategory, tags, tagInput, pendingFiles])
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -98,6 +104,7 @@ export default function DailyPage() {
       setTags([])
       setTagInput('')
       setPendingFiles([])
+      clearCreateEventDraft()
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : '事件儲存失敗')
     } finally {

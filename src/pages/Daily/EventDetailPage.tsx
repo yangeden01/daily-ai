@@ -9,6 +9,8 @@ import { normalizeTags } from '../../utils/normalizeTags'
 import { loadPhotoStorageMode, optimizeSelectedFiles } from '../../utils/photoStorage'
 import { deleteEventWithAttachments } from '../../services/EventDeletionService'
 import DateWheelPicker from '../../components/DateWheelPicker/DateWheelPicker'
+import { clearEditEventDraft, getEditEventDraft, saveEditEventDraft } from '../../utils/eventDrafts'
+import { clearTabDestination, tabBaseForReturnTo } from '../../utils/tabNavigationMemory'
 
 const formatDateTime = (value: string): string =>
   new Intl.DateTimeFormat('zh-TW', {
@@ -64,6 +66,18 @@ export default function EventDetailPage() {
           .sort((left, right) => left.localeCompare(right, 'zh-TW')))
         setTagOptions([...new Set(allEvents.flatMap(({ tags }) => tags).map((tag) => tag.trim()).filter(Boolean))]
           .sort((left, right) => left.localeCompare(right, 'zh-TW')))
+        const draft = eventId ? getEditEventDraft(eventId) : null
+        if (item && draft) {
+          setEventDate(draft.eventDate)
+          setTitle(draft.title)
+          setDetail(draft.detail)
+          setCategory(draft.category)
+          setTags([...draft.tags])
+          setTagInput(draft.tagInput)
+          setNewFiles([...draft.newFiles])
+          setRemovedAttachmentIds([...draft.removedAttachmentIds])
+          setIsEditing(true)
+        }
       })
       .catch(() => setErrorMessage('事件或附件載入失敗'))
       .finally(() => setIsLoading(false))
@@ -77,8 +91,27 @@ export default function EventDetailPage() {
     return () => Object.values(urls).forEach(URL.revokeObjectURL)
   }, [attachments])
 
+  useEffect(() => {
+    if (!eventId || !isEditing) return
+    saveEditEventDraft(eventId, { eventDate, title, detail, category, tags, tagInput, newFiles, removedAttachmentIds })
+  }, [eventId, isEditing, eventDate, title, detail, category, tags, tagInput, newFiles, removedAttachmentIds])
+
   const startEditing = () => {
     if (!event) return
+    const draft = eventId ? getEditEventDraft(eventId) : null
+    if (draft) {
+      setEventDate(draft.eventDate)
+      setTitle(draft.title)
+      setDetail(draft.detail)
+      setCategory(draft.category)
+      setTags([...draft.tags])
+      setTagInput(draft.tagInput)
+      setNewFiles([...draft.newFiles])
+      setRemovedAttachmentIds([...draft.removedAttachmentIds])
+      setErrorMessage(null)
+      setIsEditing(true)
+      return
+    }
     setEventDate(event.date)
     setTitle(event.title)
     setDetail(event.detail)
@@ -126,6 +159,8 @@ export default function EventDetailPage() {
         throw error
       }
       await Promise.all(removedAttachmentIds.map((id) => attachmentRepository.delete(id)))
+      if (eventId) clearEditEventDraft(eventId)
+      clearTabDestination(tabBaseForReturnTo(returnTo))
       navigate(returnTo)
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : '事件更新失敗')
@@ -202,6 +237,8 @@ export default function EventDetailPage() {
 
     try {
       await deleteEventWithAttachments(event)
+      if (eventId) clearEditEventDraft(eventId)
+      clearTabDestination(tabBaseForReturnTo(returnTo))
       navigate(returnTo, { replace: true })
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : '事件刪除失敗')
@@ -334,7 +371,7 @@ export default function EventDetailPage() {
           {errorMessage && <p className="error-notice" role="alert">{errorMessage}</p>}
 
           <div className="mt-6 grid grid-cols-2 gap-3">
-            <button type="button" className="detail-secondary-button" onClick={() => setIsEditing(false)} disabled={isSaving}><X size={17} />取消</button>
+            <button type="button" className="detail-secondary-button" onClick={() => { if (eventId) clearEditEventDraft(eventId); clearTabDestination(tabBaseForReturnTo(returnTo)); setIsEditing(false) }} disabled={isSaving}><X size={17} />取消</button>
             <button type="submit" className="detail-save-button" disabled={!eventDate || (!title.trim() && !detail.trim()) || isSaving || isProcessingFiles}>
               {isSaving ? <LoaderCircle size={17} className="animate-spin" /> : <Check size={17} />}
               儲存
