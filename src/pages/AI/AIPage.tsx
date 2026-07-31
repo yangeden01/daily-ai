@@ -42,6 +42,7 @@ export default function AIPage() {
   const mode = appModeFromSearch(`?${searchParams.toString()}`)
   const isNotesMode = mode === 'notes'
   const queryFromUrl = searchParams.get('q')?.trim() ?? ''
+  const categoryFromUrl = searchParams.get('category')?.trim() ?? ''
   const [input, setInput] = useState(queryFromUrl)
   const [result, setResult] = useState<EventQueryResult | null>(null)
   const [loading, setLoading] = useState(false)
@@ -52,13 +53,23 @@ export default function AIPage() {
   const [searchFiles, setSearchFiles] = useState(() => /(附件|附檔)/.test(queryFromUrl))
   const [selectedTag, setSelectedTag] = useState(() => queryFromUrl.match(/#([^\s#，。？！]+)/)?.[1] ?? '')
   const [tagOptions, setTagOptions] = useState<string[]>([])
+  const [selectedCategory, setSelectedCategory] = useState(categoryFromUrl)
+  const [categoryOptions, setCategoryOptions] = useState<string[]>([])
   const [noteSort, setNoteSort] = useState<NoteSort | null>(() => /頻繁更新記事/.test(queryFromUrl) ? 'frequent' : /最近更新記事/.test(queryFromUrl) ? 'recent' : null)
 
   useEffect(() => {
     eventRepository.getAll()
-      .then((events) => setTagOptions([...new Set(events.filter(isNotesMode ? isNoteEvent : isDailyEvent).flatMap((event) => event.tags).map((tag) => tag.trim()).filter(Boolean))]
-        .sort((left, right) => left.localeCompare(right, 'zh-TW'))))
-      .catch(() => setTagOptions([]))
+      .then((events) => {
+        const visibleEvents = events.filter(isNotesMode ? isNoteEvent : isDailyEvent)
+        setTagOptions([...new Set(visibleEvents.flatMap((event) => event.tags).map((tag) => tag.trim()).filter(Boolean))]
+          .sort((left, right) => left.localeCompare(right, 'zh-TW')))
+        setCategoryOptions([...new Set(visibleEvents.map((event) => event.category.trim()).filter(Boolean))]
+          .sort((left, right) => left.localeCompare(right, 'zh-TW')))
+      })
+      .catch(() => {
+        setTagOptions([])
+        setCategoryOptions([])
+      })
   }, [isNotesMode])
 
   useEffect(() => {
@@ -70,17 +81,20 @@ export default function AIPage() {
     setSearchPhotos(/照片/.test(queryFromUrl))
     setSearchFiles(/(附件|附檔)/.test(queryFromUrl))
     setSelectedTag(queryFromUrl.match(/#([^\s#，。？！]+)/)?.[1] ?? '')
+    setSelectedCategory(categoryFromUrl)
     setNoteSort(/頻繁更新記事/.test(queryFromUrl) ? 'frequent' : /最近更新記事/.test(queryFromUrl) ? 'recent' : null)
     // Switching modes starts from that mode's own search context instead of carrying the other mode's query.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode])
 
-  const executeQuery = useCallback(async (query: string) => {
-    setSearchHistory((current) => {
-      const next = addSearchHistory(current, query)
-      saveSearchHistory(next, mode)
-      return next
-    })
+  const executeQuery = useCallback(async (query: string, category: string) => {
+    if (query) {
+      setSearchHistory((current) => {
+        const next = addSearchHistory(current, query)
+        saveSearchHistory(next, mode)
+        return next
+      })
+    }
     setLoading(true)
     setError(null)
     setUnrecognized(false)
@@ -89,15 +103,28 @@ export default function AIPage() {
       const explicitSort = /頻繁更新記事/.test(query) ? 'frequent' : /最近更新記事/.test(query) ? 'recent' : null
       const queryWithoutSort = query.replace(/(?:頻繁|最近)更新記事/g, ' ').replace(/\s+/g, ' ').trim()
       let nextResult = queryWithoutSort ? await localQueryEngine.query(queryWithoutSort) : null
+      if (!nextResult && category) {
+        const events = await eventRepository.getAll()
+        nextResult = { query: { rawText: query || `分類：${category}`, operation: 'related', criteria: {} }, events, count: events.length, amountTotal: 0 }
+      }
       if (isNotesMode && explicitSort && !queryWithoutSort) {
         const allNotes = (await eventRepository.getAll()).filter(isNoteEvent)
         const noteEvents = sortNotes(allNotes, explicitSort)
         nextResult = { query: { rawText: query, operation: 'list', criteria: {} }, events: noteEvents, count: noteEvents.length, amountTotal: 0 }
-      } else if (nextResult) {
-        const visible = nextResult.events.filter(isNotesMode ? isNoteEvent : isDailyEvent)
+      }
+      if (nextResult) {
+        const visible = nextResult.events
+          .filter(isNotesMode ? isNoteEvent : isDailyEvent)
+          .filter((event) => !category || event.category.trim().toLocaleLowerCase() === category.toLocaleLowerCase())
         const activeSort = explicitSort ?? noteSort
         const ordered = isNotesMode && activeSort ? sortNotes(visible, activeSort) : visible
-        nextResult = { ...nextResult, events: ordered, count: ordered.length, amountTotal: ordered.reduce((sum, event) => sum + (event.amount ?? 0), 0) }
+        nextResult = {
+          ...nextResult,
+          query: { ...nextResult.query, criteria: { ...nextResult.query.criteria, ...(category ? { category } : {}) } },
+          events: ordered,
+          count: ordered.length,
+          amountTotal: ordered.reduce((sum, event) => sum + (event.amount ?? 0), 0),
+        }
       }
       setResult(nextResult)
       setUnrecognized(nextResult === null)
@@ -109,15 +136,17 @@ export default function AIPage() {
     }
   }, [isNotesMode, mode, noteSort])
 
-  const updateQueryParams = (query: string) => {
+  const updateQueryParams = (query: string, category = selectedCategory) => {
     const next = new URLSearchParams(searchParams)
     if (query) next.set('q', query)
     else next.delete('q')
+    if (category) next.set('category', category)
+    else next.delete('category')
     setSearchParams(next)
   }
 
   useEffect(() => {
-    if (!queryFromUrl) {
+    if (!queryFromUrl && !categoryFromUrl) {
       setInput('')
       setResult(null)
       setError(null)
@@ -128,8 +157,9 @@ export default function AIPage() {
     setSearchPhotos(/照片/.test(queryFromUrl))
     setSearchFiles(/(附件|附檔)/.test(queryFromUrl))
     setSelectedTag(queryFromUrl.match(/#([^\s#，。？！]+)/)?.[1] ?? '')
-    void executeQuery(queryFromUrl)
-  }, [executeQuery, queryFromUrl])
+    setSelectedCategory(categoryFromUrl)
+    void executeQuery(queryFromUrl, categoryFromUrl)
+  }, [categoryFromUrl, executeQuery, queryFromUrl])
 
   const guidedQueryFor = (photos: boolean, files: boolean, tag: string) => {
     const itemLabel = isNotesMode ? '記事' : '事件'
@@ -164,18 +194,32 @@ export default function AIPage() {
     setInput(query)
     if (!tag) return
     if (query === queryFromUrl) {
-      void executeQuery(query)
+      void executeQuery(query, selectedCategory)
       return
     }
     updateQueryParams(query)
   }
 
+  const selectCategoryAndSearch = (category: string) => {
+    setSelectedCategory(category)
+    if (!category && !input.trim()) {
+      setResult(null)
+      updateQueryParams('', '')
+      return
+    }
+    if (input.trim() === queryFromUrl && category === categoryFromUrl) {
+      void executeQuery(input.trim(), category)
+      return
+    }
+    updateQueryParams(input.trim(), category)
+  }
+
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault()
     const query = input.trim()
-    if (!query || loading) return
+    if ((!query && !selectedCategory) || loading) return
     if (query === queryFromUrl) {
-      void executeQuery(query)
+      void executeQuery(query, selectedCategory)
       return
     }
     updateQueryParams(query)
@@ -184,7 +228,7 @@ export default function AIPage() {
   const repeatSearch = (query: string) => {
     setInput(query)
     if (query === queryFromUrl) {
-      void executeQuery(query)
+      void executeQuery(query, selectedCategory)
       return
     }
     updateQueryParams(query)
@@ -265,19 +309,28 @@ export default function AIPage() {
             搜尋附檔{isNotesMode ? '記事' : '事件'}
           </label>
         </fieldset>
-        <div className="ai-composer-actions">
-          <label className="search-tag-action">
-            <Tag size={19} aria-hidden="true" />
-            <span className="shrink-0">搜尋 Tag</span>
-            <select className="search-tag-select" value={selectedTag} onChange={(event) => selectTagAndSearch(event.target.value)}>
-              <option value="">全部 Tags</option>
-              {tagOptions.map((tag) => <option value={tag} key={tag}>{tag}</option>)}
+        <div className="search-refine-panel">
+          <label className="search-category-action">
+            <span className="shrink-0 font-medium">搜尋分類</span>
+            <select className="search-category-select" value={selectedCategory} onChange={(event) => selectCategoryAndSearch(event.target.value)}>
+              <option value="">全部分類</option>
+              {categoryOptions.map((category) => <option value={category} key={category}>{category}</option>)}
             </select>
           </label>
-          <button type="submit" className="send-button" aria-label="送出本機查詢" disabled={!input.trim() || loading}>
-            {loading && <LoaderCircle size={18} className="animate-spin" />}
-            <span>查詢</span>
-          </button>
+          <div className="ai-composer-actions">
+            <label className="search-tag-action">
+              <Tag size={19} aria-hidden="true" />
+              <span className="shrink-0">搜尋 Tag</span>
+              <select className="search-tag-select" value={selectedTag} onChange={(event) => selectTagAndSearch(event.target.value)}>
+                <option value="">全部 Tags</option>
+                {tagOptions.map((tag) => <option value={tag} key={tag}>{tag}</option>)}
+              </select>
+            </label>
+            <button type="submit" className="send-button" aria-label="送出本機查詢" disabled={(!input.trim() && !selectedCategory) || loading}>
+              {loading && <LoaderCircle size={18} className="animate-spin" />}
+              <span>查詢</span>
+            </button>
+          </div>
         </div>
       </form>
 
