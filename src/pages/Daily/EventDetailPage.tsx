@@ -14,6 +14,7 @@ import { clearEditEventDraft, getEditEventDraft, saveEditEventDraft } from '../.
 import { clearTabDestination, tabBaseForReturnTo } from '../../utils/tabNavigationMemory'
 import { appModeFromSearch, routeForMode } from '../../utils/appMode'
 import { isDailyEvent, isNoteEvent } from '../../utils/noteEvents'
+import { LinkifiedText } from '../../components/LinkifiedText'
 
 const formatDateTime = (value: string): string =>
   new Intl.DateTimeFormat('zh-TW', {
@@ -428,13 +429,17 @@ export default function EventDetailPage() {
           <section className="detail-card">
             <div className="border-b border-stone-100 p-5 dark:border-white/10 sm:p-6">
               {isNote ? <p className="event-date !col-span-1">最近修改：{formatDateTime(event.lastEditedAt ?? event.updatedAt)}</p> : <time className="event-date !col-span-1" dateTime={event.date}>{event.date}</time>}
-              <h2 className="mt-2 text-2xl font-bold tracking-tight text-stone-950 dark:text-white">{event.title}</h2>
+              <h2 className="mt-2 whitespace-pre-wrap text-2xl font-bold tracking-tight text-stone-950 dark:text-white">
+                <LinkifiedText text={event.title} />
+              </h2>
               <span className="event-category mt-3 inline-block">{event.category}</span>
             </div>
 
             <div className="p-5 sm:p-6">
               <p className="detail-label">Detail</p>
-              <p className="whitespace-pre-wrap text-[15px] leading-7 text-stone-700 dark:text-stone-300">{event.detail}</p>
+              <p className="whitespace-pre-wrap text-[15px] leading-7 text-stone-700 dark:text-stone-300">
+                <LinkifiedText text={event.detail} />
+              </p>
 
               <p className="detail-label mt-7">Tags</p>
               <div className="flex flex-wrap gap-2">

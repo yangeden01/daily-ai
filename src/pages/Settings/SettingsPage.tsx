@@ -120,7 +120,7 @@ export default function SettingsPage() {
       const { fullBackupService } = await import('../../services/FullBackupService')
       const result = await fullBackupService.mergeBackup(await file.arrayBuffer())
       setStatus('success')
-      setMessage(`完整備份合併完成：新增 ${result.addedEvents} 筆事件、${result.addedAttachments} 個附件；略過 ${result.skippedEvents} 筆重複事件、${result.skippedAttachments} 個重複附件。`)
+      setMessage(`完整備份合併完成：新增 ${result.addedEvents} 筆、更新 ${result.updatedEvents} 筆事件／記事、加入 ${result.addedAttachments} 個附件；保留 ${result.skippedEvents} 筆較新或相同資料、略過 ${result.skippedAttachments} 個重複附件。`)
     } catch (error) {
       setStatus('error')
       setMessage(error instanceof Error ? error.message : '完整備份合併失敗')

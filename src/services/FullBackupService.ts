@@ -40,6 +40,7 @@ export interface RestoreResult {
 
 export interface MergeRestoreResult {
   addedEvents: number
+  updatedEvents: number
   skippedEvents: number
   addedAttachments: number
   skippedAttachments: number
@@ -56,6 +57,14 @@ const eventFingerprint = (event: Event): string => JSON.stringify([
   event.date, event.title.trim(), event.detail.trim(), event.category.trim(), event.amount ?? null,
   [...event.tags].map((tag) => tag.trim()).filter(Boolean).sort(),
 ])
+
+const isImportedEventNewer = (importedEvent: Event, existingEvent: Event): boolean => {
+  const importedTime = Date.parse(importedEvent.updatedAt)
+  const existingTime = Date.parse(existingEvent.updatedAt)
+  if (!Number.isFinite(importedTime)) return false
+  if (!Number.isFinite(existingTime)) return true
+  return importedTime > existingTime
+}
 
 const isSafePath = (path: string): boolean =>
   Boolean(path) && !path.includes('\\') && !path.startsWith('/') && !path.includes('\0') &&
@@ -146,13 +155,26 @@ export class FullBackupService {
     const eventsByFingerprint = new Map(mergedEvents.map((event) => [eventFingerprint(event), event]))
     const attachmentIds = new Set(mergedAttachments.map(({ id }) => id))
     let addedEvents = 0
+    let updatedEvents = 0
     let skippedEvents = 0
     let addedAttachments = 0
     let skippedAttachments = 0
 
     for (const importedEvent of imported.events) {
-      let target = eventsById.get(importedEvent.id) ?? eventsByFingerprint.get(eventFingerprint(importedEvent))
-      if (target) {
+      const existingById = eventsById.get(importedEvent.id)
+      let target = existingById ?? eventsByFingerprint.get(eventFingerprint(importedEvent))
+      if (target && existingById && isImportedEventNewer(importedEvent, existingById)) {
+        const previousFingerprint = eventFingerprint(target)
+        for (let index = mergedAttachments.length - 1; index >= 0; index -= 1) {
+          if (mergedAttachments[index].eventId !== target.id) continue
+          attachmentIds.delete(mergedAttachments[index].id)
+          mergedAttachments.splice(index, 1)
+        }
+        Object.assign(target, { ...importedEvent, tags: [...importedEvent.tags], attachmentIds: [] })
+        if (eventsByFingerprint.get(previousFingerprint) === target) eventsByFingerprint.delete(previousFingerprint)
+        eventsByFingerprint.set(eventFingerprint(target), target)
+        updatedEvents += 1
+      } else if (target) {
         skippedEvents += 1
       } else {
         let id = importedEvent.id
@@ -194,7 +216,7 @@ export class FullBackupService {
     }
 
     return {
-      addedEvents, skippedEvents, addedAttachments, skippedAttachments,
+      addedEvents, updatedEvents, skippedEvents, addedAttachments, skippedAttachments,
       eventCount: mergedEvents.length, attachmentCount: mergedAttachments.length,
     }
   }
