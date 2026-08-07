@@ -7,6 +7,7 @@ import { calculateEventStatistics } from '../../utils/calculateEventStatistics'
 import { restoreListPosition, saveListPosition } from '../../utils/listPosition'
 import { appModeFromSearch, routeForMode } from '../../utils/appMode'
 import { isDailyEvent, isNoteEvent, sortNotes } from '../../utils/noteEvents'
+import { LinkifiedText } from '../../components/LinkifiedText'
 
 const currentMonth = () => {
   const now = new Date()
@@ -149,7 +150,7 @@ export default function DashboardPage() {
                   >
                     <div className="min-w-0 flex-1">
                       <time className="text-xs text-stone-400" dateTime={isNotesMode ? event.lastEditedAt ?? event.updatedAt : event.date}>{isNotesMode ? `修改於 ${new Date(event.lastEditedAt ?? event.updatedAt).toLocaleDateString('zh-TW')}` : event.date}</time>
-                      <p className="mt-1 truncate text-sm font-semibold text-stone-900 dark:text-stone-100">{event.title}</p>
+                      <p className="mt-1 truncate text-sm font-semibold text-stone-900 dark:text-stone-100"><LinkifiedText text={event.title} /></p>
                     </div>
                     <span className="shrink-0 rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300">{event.category}</span>
                     <ChevronRight size={16} className="shrink-0 text-stone-300 dark:text-stone-600" aria-hidden="true" />

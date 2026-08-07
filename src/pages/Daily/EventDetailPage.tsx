@@ -15,6 +15,7 @@ import { clearTabDestination, tabBaseForReturnTo } from '../../utils/tabNavigati
 import { appModeFromSearch, routeForMode } from '../../utils/appMode'
 import { isDailyEvent, isNoteEvent } from '../../utils/noteEvents'
 import { LinkifiedText } from '../../components/LinkifiedText'
+import { EditorIndentToolbar } from '../../components/EditorIndentToolbar/EditorIndentToolbar'
 
 const formatDateTime = (value: string): string =>
   new Intl.DateTimeFormat('zh-TW', {
@@ -61,6 +62,7 @@ export default function EventDetailPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const photoInputRef = useRef<HTMLInputElement>(null)
   const attachmentInputRef = useRef<HTMLInputElement>(null)
+  const detailInputRef = useRef<HTMLTextAreaElement>(null)
   const isNote = event ? isNoteEvent(event) : mode === 'notes'
 
   useEffect(() => {
@@ -326,9 +328,10 @@ export default function EventDetailPage() {
 
           <label className="detail-field-label mt-5" htmlFor="event-detail">Detail</label>
           <div className="clearable-field mt-2">
-            <textarea id="event-detail" className="detail-input !mt-0 min-h-40 resize-y !pr-12" value={detail} onChange={(inputEvent) => setDetail(inputEvent.target.value)} />
+            <textarea ref={detailInputRef} id="event-detail" className="detail-input !mt-0 min-h-40 resize-y !pr-12" value={detail} onChange={(inputEvent) => setDetail(inputEvent.target.value)} />
             <button type="button" className="clear-field-button !top-3 !translate-y-0" onClick={() => setDetail('')} aria-label="清除事件內容" disabled={!detail}><X size={17} /></button>
           </div>
+          <EditorIndentToolbar textareaRef={detailInputRef} value={detail} onChange={setDetail} />
 
           <label className="detail-field-label mt-5" htmlFor="event-category">分類</label>
           <div className="category-composer mt-2">

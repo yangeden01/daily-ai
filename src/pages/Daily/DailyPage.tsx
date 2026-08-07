@@ -14,6 +14,8 @@ import DateWheelPicker from '../../components/DateWheelPicker/DateWheelPicker'
 import { clearCreateEventDraft, getCreateEventDraft, saveCreateEventDraft } from '../../utils/eventDrafts'
 import { appModeFromSearch, routeForMode } from '../../utils/appMode'
 import { isDailyEvent, isNoteEvent, noteUpdatedAt, sortNotes, type NoteSort } from '../../utils/noteEvents'
+import { EditorIndentToolbar } from '../../components/EditorIndentToolbar/EditorIndentToolbar'
+import { LinkifiedText } from '../../components/LinkifiedText'
 
 export default function DailyPage() {
   const location = useLocation()
@@ -37,6 +39,7 @@ export default function DailyPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const photoInputRef = useRef<HTMLInputElement>(null)
   const attachmentInputRef = useRef<HTMLInputElement>(null)
+  const detailInputRef = useRef<HTMLTextAreaElement>(null)
   const draftModeRef = useRef(mode)
 
   const loadEvents = useCallback(async () => {
@@ -211,6 +214,7 @@ export default function DailyPage() {
         <label className="detail-field-label mt-4" htmlFor="daily-event">Detail</label>
         <section className="editor-card relative mt-2">
           <textarea
+            ref={detailInputRef}
             id="daily-event"
             className="create-event-textarea !pr-14"
             value={eventDetail}
@@ -220,6 +224,7 @@ export default function DailyPage() {
               : '寫下想記錄的事\n例如 : Eden 中樂透彩'}
           />
           <button type="button" className="clear-field-button !top-3 !translate-y-0" onClick={() => setEventDetail('')} aria-label="清除事件內容" disabled={!eventDetail}><X size={17} /></button>
+          <EditorIndentToolbar textareaRef={detailInputRef} value={eventDetail} onChange={setEventDetail} />
           <div className="editor-toolbar">
             <button type="button" className="tool-button" onClick={() => photoInputRef.current?.click()}><Camera size={19} />照片</button>
             <button type="button" className="tool-button" onClick={() => attachmentInputRef.current?.click()}><FilePlus2 size={19} />附件</button>
@@ -337,7 +342,7 @@ export default function DailyPage() {
           {isLoadingEvents ? <div className="empty-timeline"><LoaderCircle className="animate-spin" size={22} /><p>載入 Timeline…</p></div> : events.length > 0 ? events.map((event) => (
             <Link className="event-row event-row-link" to={routeForMode(`/daily/${event.id}`, mode)} state={{ returnTo: routeForMode('/daily', mode), returnLabel: isNotesMode ? 'Notes' : 'Timeline' }} key={event.id} data-event-id={event.id} onClick={() => saveListPosition(routeForMode('/daily', mode), event.id)}>
               <time className="event-date" dateTime={isNotesMode ? noteUpdatedAt(event) : event.date}>{isNotesMode ? `修改於 ${new Date(noteUpdatedAt(event)).toLocaleDateString('zh-TW')}` : event.date}</time>
-              <h3 className="event-title">{event.title}</h3>
+              <h3 className="event-title"><LinkifiedText text={event.title} /></h3>
               <span className="flex items-center gap-2">
                 <span className="event-category">{event.category}</span>
                 <ChevronRight size={16} className="text-stone-300 dark:text-stone-600" />

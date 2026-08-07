@@ -7,6 +7,7 @@ import { restoreListPosition, saveListPosition } from '../../utils/listPosition'
 import { eventRepository } from '../../repositories'
 import { appModeFromSearch, routeForMode } from '../../utils/appMode'
 import { isDailyEvent, isNoteEvent, sortNotes, type NoteSort } from '../../utils/noteEvents'
+import { LinkifiedText } from '../../components/LinkifiedText'
 
 const operationLabels: Record<EventQueryOperation, string> = {
   list: '列出事件',
@@ -412,8 +413,8 @@ export default function AIPage() {
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="text-xs text-stone-500 dark:text-stone-400">{isNotesMode ? `修改於 ${new Date(event.lastEditedAt ?? event.updatedAt).toLocaleDateString('zh-TW')}` : event.date}</p>
-                        <h4 className="mt-1 truncate font-semibold text-stone-950 dark:text-white">{event.title}</h4>
-                        <p className="mt-1 line-clamp-2 text-sm leading-5 text-stone-600 dark:text-stone-300">{event.detail}</p>
+                        <h4 className="mt-1 truncate font-semibold text-stone-950 dark:text-white"><LinkifiedText text={event.title} /></h4>
+                        <p className="mt-1 line-clamp-2 text-sm leading-5 text-stone-600 dark:text-stone-300"><LinkifiedText text={event.detail} /></p>
                       </div>
                       <span className="shrink-0 rounded-full bg-stone-100 px-2.5 py-1 text-xs text-stone-600 dark:bg-white/10 dark:text-stone-300">{event.category}</span>
                     </div>
