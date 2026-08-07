@@ -16,6 +16,7 @@ import { appModeFromSearch, routeForMode } from '../../utils/appMode'
 import { isDailyEvent, isNoteEvent, noteUpdatedAt, sortNotes, type NoteSort } from '../../utils/noteEvents'
 import { EditorIndentToolbar } from '../../components/EditorIndentToolbar/EditorIndentToolbar'
 import { LinkifiedText } from '../../components/LinkifiedText'
+import { continueListOnEnter } from '../../utils/textFormatting'
 
 export default function DailyPage() {
   const location = useLocation()
@@ -179,6 +180,22 @@ export default function DailyPage() {
     setTagInput('')
   }
 
+  const handleDetailKeyDown = (keyboardEvent: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (keyboardEvent.key !== 'Enter' || keyboardEvent.shiftKey) return
+    const result = continueListOnEnter(
+      eventDetail,
+      keyboardEvent.currentTarget.selectionStart,
+      keyboardEvent.currentTarget.selectionEnd,
+    )
+    if (!result) return
+    keyboardEvent.preventDefault()
+    setEventDetail(result.value)
+    requestAnimationFrame(() => {
+      detailInputRef.current?.focus()
+      detailInputRef.current?.setSelectionRange(result.selectionStart, result.selectionEnd)
+    })
+  }
+
   return (
     <main className="page-enter">
       <form onSubmit={handleSubmit}>
@@ -219,6 +236,7 @@ export default function DailyPage() {
             className="create-event-textarea !pr-14"
             value={eventDetail}
             onChange={(event) => setEventDetail(event.target.value)}
+            onKeyDown={handleDetailKeyDown}
             placeholder={isNotesMode
               ? '寫下想記錄的事\n例如 : Eden 環遊世界清單列表'
               : '寫下想記錄的事\n例如 : Eden 中樂透彩'}

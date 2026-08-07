@@ -1,6 +1,6 @@
-import { Bold, IndentDecrease, IndentIncrease, List, ListChecks, ListOrdered } from 'lucide-react'
+import { IndentDecrease, IndentIncrease, List, ListChecks, ListOrdered } from 'lucide-react'
 import type { RefObject } from 'react'
-import { toggleBold, updateListFormat, type ListFormat } from '../../utils/textFormatting'
+import { updateListFormat, type ListFormat } from '../../utils/textFormatting'
 import { updateTextIndent, type IndentDirection } from '../../utils/textIndent'
 
 interface EditorIndentToolbarProps {
@@ -32,17 +32,10 @@ export const EditorIndentToolbar = ({ textareaRef, value, onChange }: EditorInde
     applyResult(updateListFormat(value, textarea.selectionStart, textarea.selectionEnd, format))
   }
 
-  const applyBold = () => {
-    const textarea = textareaRef.current
-    if (!textarea) return
-    applyResult(toggleBold(value, textarea.selectionStart, textarea.selectionEnd))
-  }
-
   const tools = [
     { label: '編號清單', icon: ListOrdered, action: () => applyList('ordered') },
     { label: '項目符號', icon: List, action: () => applyList('bullet') },
     { label: '待辦清單', icon: ListChecks, action: () => applyList('todo') },
-    { label: '粗體', icon: Bold, action: applyBold },
     { label: '增加縮排', icon: IndentIncrease, action: () => applyIndent('increase') },
     { label: '減少縮排', icon: IndentDecrease, action: () => applyIndent('decrease') },
   ]

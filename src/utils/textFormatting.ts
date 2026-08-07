@@ -28,6 +28,7 @@ export const updateListFormat = (
   selectionEnd: number,
   format: ListFormat,
 ): TextIndentResult => {
+  const isCollapsed = selectionStart === selectionEnd
   const { lineStart, lineEnd } = getLineRange(value, selectionStart, selectionEnd)
   const source = value.slice(lineStart, lineEnd)
   const lines = source.split('\n')
@@ -51,38 +52,34 @@ export const updateListFormat = (
 
   return {
     value: nextValue,
-    selectionStart: lineStart,
-    selectionEnd: selectionStart === selectionEnd ? lineStart + transformed.length : selectionEnd + delta,
+    selectionStart: isCollapsed ? lineStart + transformed.length : lineStart,
+    selectionEnd: isCollapsed ? lineStart + transformed.length : selectionEnd + delta,
   }
 }
 
-export const toggleBold = (
+export const continueListOnEnter = (
   value: string,
   selectionStart: number,
   selectionEnd: number,
-): TextIndentResult => {
-  if (selectionStart === selectionEnd) {
-    return {
-      value: `${value.slice(0, selectionStart)}****${value.slice(selectionEnd)}`,
-      selectionStart: selectionStart + 2,
-      selectionEnd: selectionStart + 2,
-    }
-  }
+): TextIndentResult | null => {
+  if (selectionStart !== selectionEnd) return null
 
-  const selected = value.slice(selectionStart, selectionEnd)
-  const isBold = selected.startsWith('**') && selected.endsWith('**') && selected.length >= 4
-  if (isBold) {
-    const plain = selected.slice(2, -2)
-    return {
-      value: `${value.slice(0, selectionStart)}${plain}${value.slice(selectionEnd)}`,
-      selectionStart,
-      selectionEnd: selectionStart + plain.length,
-    }
-  }
+  const lineStart = value.lastIndexOf('\n', Math.max(0, selectionStart - 1)) + 1
+  const lineBeforeCaret = value.slice(lineStart, selectionStart)
+  const match = lineBeforeCaret.match(/^(\s*)(?:(\d+)\.|([•*-])|([☐☑☒])|(- \[[ xX]\]))\s+/u)
+  if (!match) return null
+
+  const prefix = match[2]
+    ? `${Number(match[2]) + 1}. `
+    : match[4] || match[5]
+      ? '☐ '
+      : '• '
+  const insertion = `\n${match[1]}${prefix}`
+  const caret = selectionStart + insertion.length
 
   return {
-    value: `${value.slice(0, selectionStart)}**${selected}**${value.slice(selectionEnd)}`,
-    selectionStart: selectionStart + 2,
-    selectionEnd: selectionEnd + 2,
+    value: `${value.slice(0, selectionStart)}${insertion}${value.slice(selectionEnd)}`,
+    selectionStart: caret,
+    selectionEnd: caret,
   }
 }

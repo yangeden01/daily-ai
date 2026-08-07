@@ -16,6 +16,7 @@ import { appModeFromSearch, routeForMode } from '../../utils/appMode'
 import { isDailyEvent, isNoteEvent } from '../../utils/noteEvents'
 import { LinkifiedText } from '../../components/LinkifiedText'
 import { EditorIndentToolbar } from '../../components/EditorIndentToolbar/EditorIndentToolbar'
+import { continueListOnEnter } from '../../utils/textFormatting'
 
 const formatDateTime = (value: string): string =>
   new Intl.DateTimeFormat('zh-TW', {
@@ -240,6 +241,22 @@ export default function EventDetailPage() {
     setTagInput('')
   }
 
+  const handleDetailKeyDown = (keyboardEvent: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (keyboardEvent.key !== 'Enter' || keyboardEvent.shiftKey) return
+    const result = continueListOnEnter(
+      detail,
+      keyboardEvent.currentTarget.selectionStart,
+      keyboardEvent.currentTarget.selectionEnd,
+    )
+    if (!result) return
+    keyboardEvent.preventDefault()
+    setDetail(result.value)
+    requestAnimationFrame(() => {
+      detailInputRef.current?.focus()
+      detailInputRef.current?.setSelectionRange(result.selectionStart, result.selectionEnd)
+    })
+  }
+
   const removeTag = (tagToRemove: string) => {
     setTags((current) => current.filter((tag) => tag !== tagToRemove))
   }
@@ -328,7 +345,7 @@ export default function EventDetailPage() {
 
           <label className="detail-field-label mt-5" htmlFor="event-detail">Detail</label>
           <div className="clearable-field mt-2">
-            <textarea ref={detailInputRef} id="event-detail" className="detail-input !mt-0 min-h-40 resize-y !pr-12" value={detail} onChange={(inputEvent) => setDetail(inputEvent.target.value)} />
+            <textarea ref={detailInputRef} id="event-detail" className="detail-input !mt-0 min-h-40 resize-y !pr-12" value={detail} onChange={(inputEvent) => setDetail(inputEvent.target.value)} onKeyDown={handleDetailKeyDown} />
             <button type="button" className="clear-field-button !top-3 !translate-y-0" onClick={() => setDetail('')} aria-label="清除事件內容" disabled={!detail}><X size={17} /></button>
           </div>
           <EditorIndentToolbar textareaRef={detailInputRef} value={detail} onChange={setDetail} />
