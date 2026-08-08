@@ -1,12 +1,11 @@
-import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from 'react'
-import { ArrowLeft, Camera, Check, Copy, Download, FilePlus2, FileText, LoaderCircle, Pencil, Plus, Tag, Trash2, X } from 'lucide-react'
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react'
+import { ArrowLeft, Check, Copy, Download, FileText, LoaderCircle, Pencil, Plus, Tag, Trash2, X } from 'lucide-react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import type { Attachment } from '../../models/Attachment'
 import type { Event } from '../../models/Event'
 import { attachmentRepository, eventRepository } from '../../repositories'
-import { filesToAttachments, formatFileSize, validateAttachmentFile } from '../../utils/attachments'
+import { filesToAttachments, formatFileSize } from '../../utils/attachments'
 import { normalizeTags } from '../../utils/normalizeTags'
-import { loadPhotoStorageMode, optimizeSelectedFiles } from '../../utils/photoStorage'
 import { deleteEventWithAttachments } from '../../services/EventDeletionService'
 import { copyEventWithAttachments } from '../../services/EventCopyService'
 import DateWheelPicker from '../../components/DateWheelPicker/DateWheelPicker'
@@ -16,7 +15,9 @@ import { appModeFromSearch, routeForMode } from '../../utils/appMode'
 import { isDailyEvent, isNoteEvent } from '../../utils/noteEvents'
 import { LinkifiedText } from '../../components/LinkifiedText'
 import { EditorIndentToolbar } from '../../components/EditorIndentToolbar/EditorIndentToolbar'
-import { continueListOnEnter } from '../../utils/textFormatting'
+import { AttachmentPicker } from '../../components/AttachmentPicker/AttachmentPicker'
+import { handleListEditingKey, parseTodoLine, toggleTodoLineAt, type ListEditingKey } from '../../utils/textFormatting'
+import { prepareSelectedAttachments } from '../../services/AttachmentPreparationService'
 
 const formatDateTime = (value: string): string =>
   new Intl.DateTimeFormat('zh-TW', {
@@ -61,8 +62,6 @@ export default function EventDetailPage() {
   const [newFiles, setNewFiles] = useState<File[]>([])
   const [removedAttachmentIds, setRemovedAttachmentIds] = useState<string[]>([])
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const photoInputRef = useRef<HTMLInputElement>(null)
-  const attachmentInputRef = useRef<HTMLInputElement>(null)
   const detailInputRef = useRef<HTMLTextAreaElement>(null)
   const isNote = event ? isNoteEvent(event) : mode === 'notes'
 
@@ -135,6 +134,38 @@ export default function EventDetailPage() {
     setIsEditing(true)
   }
 
+  const handleDetailClick = (clickEvent: ReactMouseEvent<HTMLElement>) => {
+    const target = clickEvent.target as HTMLElement
+    if (target.closest('a, button, input, select, textarea')) return
+    startEditing()
+  }
+
+  const handleToggleTodo = async (lineIndex: number) => {
+    if (!event || isEditing) return
+    const nextDetail = toggleTodoLineAt(event.detail, lineIndex)
+    if (nextDetail === event.detail) return
+
+    setErrorMessage(null)
+    try {
+      const timestamp = new Date().toISOString()
+      const updatedEvent: Event = {
+        ...event,
+        detail: nextDetail,
+        updatedAt: timestamp,
+        ...(isNote
+          ? {
+              updateCount: (event.updateCount ?? 0) + 1,
+              lastEditedAt: timestamp,
+            }
+          : {}),
+      }
+      await eventRepository.update(event.id, updatedEvent)
+      setEvent(updatedEvent)
+    } catch {
+      setErrorMessage('待辦狀態更新失敗')
+    }
+  }
+
   const handleSave = async (submitEvent: FormEvent<HTMLFormElement>) => {
     submitEvent.preventDefault()
     const normalizedTitle = title.trim()
@@ -189,16 +220,13 @@ export default function EventDetailPage() {
   const selectFiles = async (inputEvent: ChangeEvent<HTMLInputElement>) => {
     const selected = Array.from(inputEvent.target.files ?? [])
     inputEvent.target.value = ''
-    const firstError = selected.map(validateAttachmentFile).find(Boolean)
-    if (firstError) {
-      setErrorMessage(firstError)
-      return
-    }
     setErrorMessage(null)
     setIsProcessingFiles(true)
     try {
-      const prepared = await optimizeSelectedFiles(selected, loadPhotoStorageMode())
+      const prepared = await prepareSelectedAttachments(selected)
       setNewFiles((current) => [...current, ...prepared])
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : '檔案處理失敗')
     } finally {
       setIsProcessingFiles(false)
     }
@@ -242,11 +270,13 @@ export default function EventDetailPage() {
   }
 
   const handleDetailKeyDown = (keyboardEvent: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (keyboardEvent.key !== 'Enter' || keyboardEvent.shiftKey) return
-    const result = continueListOnEnter(
+    if (!['Enter', 'Backspace', 'Tab'].includes(keyboardEvent.key)) return
+    const result = handleListEditingKey(
       detail,
       keyboardEvent.currentTarget.selectionStart,
       keyboardEvent.currentTarget.selectionEnd,
+      keyboardEvent.key as ListEditingKey,
+      keyboardEvent.shiftKey,
     )
     if (!result) return
     keyboardEvent.preventDefault()
@@ -348,7 +378,18 @@ export default function EventDetailPage() {
             <textarea ref={detailInputRef} id="event-detail" className="detail-input !mt-0 min-h-40 resize-y !pr-12" value={detail} onChange={(inputEvent) => setDetail(inputEvent.target.value)} onKeyDown={handleDetailKeyDown} />
             <button type="button" className="clear-field-button !top-3 !translate-y-0" onClick={() => setDetail('')} aria-label="清除事件內容" disabled={!detail}><X size={17} /></button>
           </div>
-          <EditorIndentToolbar textareaRef={detailInputRef} value={detail} onChange={setDetail} />
+          <EditorIndentToolbar
+            textareaRef={detailInputRef}
+            value={detail}
+            onChange={setDetail}
+            trailing={(
+              <AttachmentPicker
+                count={attachments.filter(({ id }) => !removedAttachmentIds.includes(id)).length + newFiles.length}
+                isProcessing={isProcessingFiles}
+                onSelectFiles={selectFiles}
+              />
+            )}
+          />
 
           <label className="detail-field-label mt-5" htmlFor="event-category">分類</label>
           <div className="category-composer mt-2">
@@ -418,13 +459,6 @@ export default function EventDetailPage() {
           </div>
           <p className="mt-2 text-xs leading-5 text-stone-400">空白與重複的 Tags 會自動移除。</p>
 
-          <p className="detail-field-label mt-5">照片與附件</p>
-          <div className="attachment-edit-actions">
-            <button type="button" onClick={() => photoInputRef.current?.click()}><Camera size={17} />新增照片</button>
-            <button type="button" onClick={() => attachmentInputRef.current?.click()}><FilePlus2 size={17} />新增附件</button>
-          </div>
-          <input ref={photoInputRef} aria-label="選擇新增照片" className="sr-only" type="file" accept="image/*" multiple onChange={selectFiles} />
-          <input ref={attachmentInputRef} aria-label="選擇新增附件" className="sr-only" type="file" multiple onChange={selectFiles} />
           <div className="mt-3 space-y-2">
             {isProcessingFiles && <p className="text-xs text-stone-400">正在處理照片…</p>}
             {attachments.filter(({ id }) => !removedAttachmentIds.includes(id)).map((attachment) => (
@@ -458,7 +492,45 @@ export default function EventDetailPage() {
             <div className="p-5 sm:p-6">
               <p className="detail-label">Detail</p>
               <p className="whitespace-pre-wrap text-[15px] leading-7 text-stone-700 dark:text-stone-300">
-                <LinkifiedText text={event.detail} />
+                <div
+                  className="event-detail-editable"
+                  aria-label="點擊以編輯 Detail"
+                  onClick={handleDetailClick}
+                >
+                  {event.detail.split('\n').map((line, lineIndex) => {
+                    const todo = parseTodoLine(line)
+                    if (todo) {
+                      return (
+                        <div
+                          className={`event-detail-line event-detail-todo${todo.checked ? ' is-checked' : ''}`}
+                          key={`${lineIndex}-${line}`}
+                        >
+                          <button
+                            type="button"
+                            className="event-detail-todo-toggle"
+                            aria-label={`${todo.checked ? '取消完成' : '標記完成'}：${todo.content || '待辦事項'}`}
+                            aria-pressed={todo.checked}
+                            onClick={(clickEvent) => {
+                              clickEvent.stopPropagation()
+                              void handleToggleTodo(lineIndex)
+                            }}
+                          >
+                            {todo.checked ? '☑' : '☐'}
+                          </button>
+                          <span>
+                            <LinkifiedText text={todo.content} />
+                          </span>
+                        </div>
+                      )
+                    }
+
+                    return (
+                      <div className="event-detail-line" key={`${lineIndex}-${line}`}>
+                        <LinkifiedText text={line || '\u00a0'} />
+                      </div>
+                    )
+                  })}
+                </div>
               </p>
 
               <p className="detail-label mt-7">Tags</p>

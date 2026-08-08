@@ -1,5 +1,5 @@
 import { IndentDecrease, IndentIncrease, List, ListChecks, ListOrdered } from 'lucide-react'
-import type { RefObject } from 'react'
+import type { ReactNode, RefObject } from 'react'
 import { updateListFormat, type ListFormat } from '../../utils/textFormatting'
 import { updateTextIndent, type IndentDirection } from '../../utils/textIndent'
 
@@ -7,9 +7,10 @@ interface EditorIndentToolbarProps {
   textareaRef: RefObject<HTMLTextAreaElement | null>
   value: string
   onChange: (value: string) => void
+  trailing?: ReactNode
 }
 
-export const EditorIndentToolbar = ({ textareaRef, value, onChange }: EditorIndentToolbarProps) => {
+export const EditorIndentToolbar = ({ textareaRef, value, onChange, trailing }: EditorIndentToolbarProps) => {
   const applyResult = (result: ReturnType<typeof updateTextIndent>) => {
     const textarea = textareaRef.current
     if (!textarea) return
@@ -55,6 +56,7 @@ export const EditorIndentToolbar = ({ textareaRef, value, onChange }: EditorInde
           <span className="sr-only">{label}</span>
         </button>
       ))}
+      {trailing}
     </div>
   )
 }

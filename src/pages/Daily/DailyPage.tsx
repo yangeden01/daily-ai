@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from 'react'
-import { Camera, Check, ChevronRight, FilePlus2, Inbox, LoaderCircle, NotebookPen, Plus, Tag, X } from 'lucide-react'
+import { Check, ChevronRight, Inbox, LoaderCircle, NotebookPen, Plus, Tag, X } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
 import type { Event } from '../../models/Event'
 import { attachmentRepository, eventRepository } from '../../repositories'
 import { aiParserService } from '../../services/ai'
-import { filesToAttachments, formatFileSize, validateAttachmentFile } from '../../utils/attachments'
+import { filesToAttachments, formatFileSize } from '../../utils/attachments'
 import { toLocalDateInputValue } from '../../utils/localDate'
 import { normalizeTags } from '../../utils/normalizeTags'
-import { loadPhotoStorageMode, optimizeSelectedFiles } from '../../utils/photoStorage'
 import { sortEventsNewestFirst } from '../../utils/sortEvents'
 import { restoreListPosition, saveListPosition } from '../../utils/listPosition'
 import DateWheelPicker from '../../components/DateWheelPicker/DateWheelPicker'
@@ -15,8 +14,10 @@ import { clearCreateEventDraft, getCreateEventDraft, saveCreateEventDraft } from
 import { appModeFromSearch, routeForMode } from '../../utils/appMode'
 import { isDailyEvent, isNoteEvent, noteUpdatedAt, sortNotes, type NoteSort } from '../../utils/noteEvents'
 import { EditorIndentToolbar } from '../../components/EditorIndentToolbar/EditorIndentToolbar'
+import { AttachmentPicker } from '../../components/AttachmentPicker/AttachmentPicker'
 import { LinkifiedText } from '../../components/LinkifiedText'
-import { continueListOnEnter } from '../../utils/textFormatting'
+import { handleListEditingKey, type ListEditingKey } from '../../utils/textFormatting'
+import { prepareSelectedAttachments } from '../../services/AttachmentPreparationService'
 
 export default function DailyPage() {
   const location = useLocation()
@@ -38,8 +39,6 @@ export default function DailyPage() {
   const [isProcessingFiles, setIsProcessingFiles] = useState(false)
   const [isLoadingEvents, setIsLoadingEvents] = useState(true)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const photoInputRef = useRef<HTMLInputElement>(null)
-  const attachmentInputRef = useRef<HTMLInputElement>(null)
   const detailInputRef = useRef<HTMLTextAreaElement>(null)
   const draftModeRef = useRef(mode)
 
@@ -144,16 +143,13 @@ export default function DailyPage() {
   const selectFiles = async (inputEvent: ChangeEvent<HTMLInputElement>) => {
     const selected = Array.from(inputEvent.target.files ?? [])
     inputEvent.target.value = ''
-    const firstError = selected.map(validateAttachmentFile).find(Boolean)
-    if (firstError) {
-      setErrorMessage(firstError)
-      return
-    }
     setErrorMessage(null)
     setIsProcessingFiles(true)
     try {
-      const prepared = await optimizeSelectedFiles(selected, loadPhotoStorageMode())
+      const prepared = await prepareSelectedAttachments(selected)
       setPendingFiles((current) => [...current, ...prepared])
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : '檔案處理失敗')
     } finally {
       setIsProcessingFiles(false)
     }
@@ -181,11 +177,13 @@ export default function DailyPage() {
   }
 
   const handleDetailKeyDown = (keyboardEvent: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (keyboardEvent.key !== 'Enter' || keyboardEvent.shiftKey) return
-    const result = continueListOnEnter(
+    if (!['Enter', 'Backspace', 'Tab'].includes(keyboardEvent.key)) return
+    const result = handleListEditingKey(
       eventDetail,
       keyboardEvent.currentTarget.selectionStart,
       keyboardEvent.currentTarget.selectionEnd,
+      keyboardEvent.key as ListEditingKey,
+      keyboardEvent.shiftKey,
     )
     if (!result) return
     keyboardEvent.preventDefault()
@@ -242,16 +240,14 @@ export default function DailyPage() {
               : '寫下想記錄的事\n例如 : Eden 中樂透彩'}
           />
           <button type="button" className="clear-field-button !top-3 !translate-y-0" onClick={() => setEventDetail('')} aria-label="清除事件內容" disabled={!eventDetail}><X size={17} /></button>
-          <EditorIndentToolbar textareaRef={detailInputRef} value={eventDetail} onChange={setEventDetail} />
-          <div className="editor-toolbar">
-            <button type="button" className="tool-button" onClick={() => photoInputRef.current?.click()}><Camera size={19} />照片</button>
-            <button type="button" className="tool-button" onClick={() => attachmentInputRef.current?.click()}><FilePlus2 size={19} />附件</button>
-            <span className="flex items-center justify-center text-xs font-semibold text-stone-400">{isProcessingFiles ? '處理照片中…' : `${pendingFiles.length} 個檔案`}</span>
-          </div>
+          <EditorIndentToolbar
+            textareaRef={detailInputRef}
+            value={eventDetail}
+            onChange={setEventDetail}
+            trailing={<AttachmentPicker count={pendingFiles.length} isProcessing={isProcessingFiles} onSelectFiles={selectFiles} />}
+          />
         </section>
 
-        <input ref={photoInputRef} aria-label="選擇照片檔案" className="sr-only" type="file" accept="image/*" multiple onChange={selectFiles} />
-        <input ref={attachmentInputRef} aria-label="選擇附件檔案" className="sr-only" type="file" multiple onChange={selectFiles} />
         {pendingFiles.length > 0 && (
           <div className="pending-file-list">
             {pendingFiles.map((file, index) => (

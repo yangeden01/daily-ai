@@ -532,12 +532,40 @@
     background-color: var(--selection-surface);
   }
 
-  .text-indent-toolbar button {
+  .text-indent-toolbar > button {
     @apply inline-flex min-h-11 min-w-0 items-center justify-center rounded-xl border border-stone-200 bg-white p-2 text-stone-700 transition hover:border-indigo-300 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-white/10 dark:bg-white/10 dark:text-stone-200;
   }
 
-  .text-indent-toolbar svg {
+  .text-indent-toolbar > button svg {
     @apply h-6 w-6 shrink-0;
+  }
+
+  .attachment-picker {
+    @apply relative min-w-0;
+  }
+
+  .attachment-picker-trigger {
+    @apply relative inline-flex min-h-11 w-full min-w-0 items-center justify-center rounded-xl border border-stone-200 bg-white p-2 text-stone-700 transition hover:border-indigo-300 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:bg-white/10 dark:text-stone-200;
+  }
+
+  .attachment-picker-trigger svg {
+    @apply h-6 w-6 shrink-0;
+  }
+
+  .attachment-picker-count {
+    @apply absolute right-1 top-1 grid min-h-4 min-w-4 place-items-center rounded-full bg-indigo-600 px-1 text-[10px] font-bold leading-4 text-white;
+  }
+
+  .attachment-picker-menu {
+    @apply absolute bottom-[calc(100%+0.5rem)] right-0 z-30 min-w-36 overflow-hidden rounded-2xl border border-stone-200 bg-white p-1.5 shadow-xl dark:border-white/10 dark:bg-[#25262c];
+  }
+
+  .attachment-picker-menu button {
+    @apply flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-semibold text-stone-700 transition hover:bg-indigo-50 hover:text-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-stone-200 dark:hover:bg-white/10;
+  }
+
+  .attachment-picker-menu button svg {
+    @apply h-5 w-5 shrink-0 text-indigo-500;
   }
 
   .pending-file-list {
@@ -883,4 +911,49 @@ html[data-background="paper"] .detail-card,
 html[data-background="paper"] .dashboard-card {
   border-color: #dfd1b5;
   background-color: rgb(255 251 242 / 0.94);
+}
+.event-detail-editable {
+  margin: -0.25rem;
+  padding: 0.25rem;
+  cursor: text;
+  border-radius: 1rem;
+  transition: background-color 160ms ease;
+}
+
+.event-detail-editable:hover {
+  background: rgb(99 102 241 / 5%);
+}
+
+.event-detail-line {
+  min-height: 1.5em;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.event-detail-todo {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+}
+
+.event-detail-todo-toggle {
+  flex: none;
+  padding: 0 0.1rem;
+  border: 0;
+  background: transparent;
+  color: #4f46e5;
+  font: inherit;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.event-detail-todo-toggle:focus-visible {
+  border-radius: 0.25rem;
+  outline: 2px solid #6366f1;
+  outline-offset: 2px;
+}
+
+.event-detail-todo.is-checked > span {
+  opacity: 0.65;
+  text-decoration: line-through;
 }
