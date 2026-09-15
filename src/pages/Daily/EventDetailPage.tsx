@@ -22,6 +22,7 @@ import { CategoryField } from '../../components/EventEditor/CategoryField'
 import { TagsField } from '../../components/EventEditor/TagsField'
 import { handleListEditingKey, parseTodoLine, toggleTodoLineAt, type ListEditingKey } from '../../utils/textFormatting'
 import { prepareSelectedAttachments } from '../../services/AttachmentPreparationService'
+import { saveFile } from '../../utils/fileSaver'
 
 const formatDateTime = (value: string): string =>
   new Intl.DateTimeFormat('zh-TW', {
@@ -371,14 +372,11 @@ export default function EventDetailPage() {
       return
     }
 
-    const url = URL.createObjectURL(attachment.blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = attachment.filename
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
-    setTimeout(() => URL.revokeObjectURL(url), 0)
+    void saveFile({
+      fileName: attachment.filename,
+      data: attachment.blob,
+      mimeType: attachment.type || 'application/octet-stream'
+    })
   }
 
   const addTags = (values: string[]) => {

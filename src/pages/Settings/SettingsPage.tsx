@@ -1,10 +1,11 @@
 import { useRef, useState, type ChangeEvent } from 'react'
-import { ArchiveRestore, Check, Database, Download, GitMerge, Images, Info, LoaderCircle, Palette, RefreshCw, Trash2, Type, X } from 'lucide-react'
+import { ArchiveRestore, Check, Copy, Database, Download, FolderCheck, GitMerge, Images, Info, LoaderCircle, Palette, RefreshCw, Share2, Trash2, Type, X } from 'lucide-react'
 import { usePWA } from '../../contexts/PWAContext'
 import { useAppearance } from '../../contexts/AppearanceContext'
 import type { BackgroundTheme, TextTheme } from '../../utils/appearance'
 import { loadPhotoStorageMode, savePhotoStorageMode, type PhotoStorageMode } from '../../utils/photoStorage'
 import { APP_VERSION } from '../../version'
+import { saveFile, shareExportedFile, type FileSaveOutcome } from '../../utils/fileSaver'
 
 type BackupStatus = 'idle' | 'working' | 'success' | 'error'
 type BackupAction = 'export' | 'merge' | 'replace'
@@ -16,6 +17,8 @@ export default function SettingsPage() {
   const [status, setStatus] = useState<BackupStatus>('idle')
   const [selectedBackupAction, setSelectedBackupAction] = useState<BackupAction>('export')
   const [message, setMessage] = useState<string | null>(null)
+  const [exportNotice, setExportNotice] = useState<FileSaveOutcome | null>(null)
+  const [copySuccess, setCopySuccess] = useState(false)
   const [photoStorageMode, setPhotoStorageMode] = useState<PhotoStorageMode>(loadPhotoStorageMode)
   const [updateCheckStatus, setUpdateCheckStatus] = useState<UpdateCheckStatus>('idle')
   const [isForceReloading, setIsForceReloading] = useState(false)
@@ -88,23 +91,29 @@ export default function SettingsPage() {
   const handleFullExport = async () => {
     setStatus('working')
     setMessage(null)
+    setExportNotice(null)
     try {
       const { fullBackupService } = await import('../../services/FullBackupService')
       const data = await fullBackupService.exportBackup()
-      const url = URL.createObjectURL(new Blob([data.slice().buffer], { type: 'application/zip' }))
       const now = new Date()
       const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
       const filename = `Daily-AI-Backup-${date}.zip`
-      const link = document.createElement('a')
-      link.href = url
-      link.download = filename
-      document.body.appendChild(link)
-      link.click()
-      link.remove()
-      setTimeout(() => URL.revokeObjectURL(url), 0)
+
+      const outcome = await saveFile({
+        fileName: filename,
+        data,
+        mimeType: 'application/zip',
+        shareAfterSave: false
+      })
+
       setStatus('success')
-      setMessage(`已匯出 ${filename}。請到瀏覽器的「下載內容」尋找；iPhone 可開啟「檔案」App 的「下載項目」，Android／Windows 可到 Downloads（下載）資料夾。`)
+      setExportNotice(outcome)
+      setMessage(`備份檔案已成功儲存至手機/裝置！`)
     } catch (error) {
+      if (error instanceof Error && error.message === '已取消儲存檔案') {
+        setStatus('idle')
+        return
+      }
       setStatus('error')
       setMessage(error instanceof Error ? error.message : '完整備份匯出失敗')
     }
@@ -291,7 +300,69 @@ export default function SettingsPage() {
         </button>
       </div>
 
-      {message && (
+      {exportNotice && (
+        <div className="mt-4 overflow-hidden rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4 text-emerald-950 shadow-sm dark:border-emerald-800/60 dark:bg-emerald-950/40 dark:text-emerald-200">
+          <div className="flex items-start gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-sm">
+              <FolderCheck size={20} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-semibold text-sm">備份檔案已成功儲存至手機</span>
+                <span className="rounded-full bg-emerald-200/80 px-2 py-0.5 text-xs font-semibold text-emerald-800 dark:bg-emerald-800/60 dark:text-emerald-200">
+                  {exportNotice.fileSizeText}
+                </span>
+              </div>
+              <p className="mt-1 text-xs font-mono font-medium text-emerald-800 dark:text-emerald-300 break-all">
+                {exportNotice.fileName}
+              </p>
+
+              <div className="mt-2.5 rounded-xl border border-emerald-200/80 bg-white/90 p-3 text-xs text-stone-700 dark:border-emerald-800/40 dark:bg-stone-900/90 dark:text-stone-300">
+                <div className="font-semibold text-stone-900 dark:text-stone-100 flex items-center gap-1.5 mb-1.5">
+                  <span>📁 手機儲存位置：</span>
+                </div>
+                <div className="font-mono text-xs bg-stone-100 dark:bg-stone-800 px-2.5 py-2 rounded-lg text-emerald-700 dark:text-emerald-300 break-all font-semibold select-all border border-stone-200 dark:border-stone-700">
+                  {exportNotice.location}
+                </div>
+                <p className="mt-2 text-xs text-stone-600 dark:text-stone-400 leading-relaxed">
+                  💡 <strong>如何找到此檔案</strong>：請開啟手機的「檔案」或「檔案管理員」App，在「下載 (Download)」資料夾中即可找到。日後若要還原，點選上方的「匯入備份」並選擇此檔案即可。
+                </p>
+              </div>
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                {exportNotice.base64Data && (
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700 active:scale-95"
+                    onClick={() => {
+                      if (exportNotice.base64Data) {
+                        void shareExportedFile(exportNotice.fileName, exportNotice.base64Data, exportNotice.mimeType || 'application/zip')
+                      }
+                    }}
+                  >
+                    <Share2 size={14} />
+                    分享 / 另存至其他 App (雲端硬碟、LINE等)
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-300 bg-white px-3 py-1.5 text-xs font-medium text-emerald-800 shadow-sm transition hover:bg-emerald-50 dark:border-emerald-700 dark:bg-stone-900 dark:text-emerald-300 dark:hover:bg-stone-800"
+                  onClick={() => {
+                    void navigator.clipboard.writeText(exportNotice.location)
+                    setCopySuccess(true)
+                    setTimeout(() => setCopySuccess(false), 2000)
+                  }}
+                >
+                  <Copy size={14} />
+                  {copySuccess ? '已複製儲存路徑！' : '複製路徑'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {message && !exportNotice && (
         <div className={status === 'error' ? 'error-notice' : 'success-notice'} role={status === 'error' ? 'alert' : 'status'}>
           {status === 'error' ? <X size={16} /> : <Check size={16} />}
           <span>{message}</span>

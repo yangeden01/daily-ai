@@ -1,4 +1,5 @@
 import { Note } from '../types';
+import { saveFile } from './fileSaver';
 
 export function formatDateTime(timestamp: number): string {
   const date = new Date(timestamp);
@@ -68,27 +69,14 @@ export function exportNoteAsFile(note: Note, format: 'md' | 'txt') {
     }
   }
 
-  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${title.replace(/[\/\\?%*:|"<>]/g, '_')}.${format}`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  const fileName = `${title.replace(/[\/\\?%*:|"<>]/g, '_')}.${format}`;
+  const mimeType = format === 'md' ? 'text/markdown;charset=utf-8' : 'text/plain;charset=utf-8';
+  void saveFile({ fileName, data: content, mimeType });
 }
 
 export function exportAllNotesAsJson(notes: Note[]) {
   const data = JSON.stringify(notes, null, 2);
-  const blob = new Blob([data], { type: 'application/json;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
   const dateStr = new Date().toISOString().split('T')[0];
-  a.href = url;
-  a.download = `notes_backup_${dateStr}.json`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  const fileName = `notes_backup_${dateStr}.json`;
+  void saveFile({ fileName, data, mimeType: 'application/json;charset=utf-8' });
 }
