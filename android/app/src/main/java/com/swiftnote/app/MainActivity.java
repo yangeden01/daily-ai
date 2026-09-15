@@ -2,6 +2,9 @@ package com.swiftnote.app;
 
 import android.content.Intent;
 import android.os.Bundle;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
@@ -11,7 +14,38 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(WidgetBridgePlugin.class);
         registerPlugin(FileBridgePlugin.class);
         super.onCreate(savedInstanceState);
+        setupWindowInsets();
         handleRouteIntent(getIntent());
+    }
+
+    private void setupWindowInsets() {
+        if (getWindow() != null && getWindow().getDecorView() != null) {
+            ViewCompat.setOnApplyWindowInsetsListener(getWindow().getDecorView(), (v, windowInsets) -> {
+                Insets insets = windowInsets.getInsets(
+                    WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout()
+                );
+                float density = getResources().getDisplayMetrics().density;
+                int topPx = (int) Math.ceil(insets.top / density);
+                int bottomPx = (int) Math.ceil(insets.bottom / density);
+                int leftPx = (int) Math.ceil(insets.left / density);
+                int rightPx = (int) Math.ceil(insets.right / density);
+
+                if (getBridge() != null && getBridge().getWebView() != null) {
+                    getBridge().getWebView().post(() -> {
+                        String js = String.format(
+                            java.util.Locale.US,
+                            "document.documentElement.style.setProperty('--safe-area-inset-top', '%dpx');" +
+                            "document.documentElement.style.setProperty('--safe-area-inset-bottom', '%dpx');" +
+                            "document.documentElement.style.setProperty('--safe-area-inset-left', '%dpx');" +
+                            "document.documentElement.style.setProperty('--safe-area-inset-right', '%dpx');",
+                            topPx, bottomPx, leftPx, rightPx
+                        );
+                        getBridge().getWebView().evaluateJavascript(js, null);
+                    });
+                }
+                return windowInsets;
+            });
+        }
     }
 
     @Override
