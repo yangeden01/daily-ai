@@ -1,63 +1,147 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/header_root"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:gravity="center_vertical"
     android:orientation="horizontal"
-    android:paddingTop="6dp"
-    android:paddingBottom="4dp">
+    android:paddingStart="4dp"
+    android:paddingEnd="4dp"
+    android:paddingTop="8dp"
+    android:paddingBottom="6dp">
 
-    <TextView
-        android:id="@+id/header_badge_todo"
+    <!-- Section Title & Badge Area (clickable to toggle collapse) -->
+    <LinearLayout
+        android:id="@+id/header_title_area"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:background="@drawable/badge_todo"
-        android:paddingStart="8dp"
-        android:paddingTop="2dp"
-        android:paddingEnd="8dp"
-        android:paddingBottom="2dp"
-        android:text="待做事項"
-        android:textColor="#991B1B"
-        android:textSize="11sp"
-        android:textStyle="bold" />
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
 
-    <TextView
-        android:id="@+id/header_badge_daily"
+        <TextView
+            android:id="@+id/header_badge_todo"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/badge_todo"
+            android:paddingStart="8dp"
+            android:paddingTop="2dp"
+            android:paddingEnd="8dp"
+            android:paddingBottom="2dp"
+            android:text="待做事項"
+            android:textColor="#991B1B"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/header_badge_daily"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/badge_daily"
+            android:paddingStart="8dp"
+            android:paddingTop="2dp"
+            android:paddingEnd="8dp"
+            android:paddingBottom="2dp"
+            android:text="未來7日"
+            android:textColor="#B45309"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/header_badge_anniversary"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/badge_anniversary"
+            android:paddingStart="8dp"
+            android:paddingTop="2dp"
+            android:paddingEnd="8dp"
+            android:paddingBottom="2dp"
+            android:text="未來3日紀念日"
+            android:textColor="#6B21A8"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/header_count"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:text="(0)"
+            android:textColor="#64748B"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <!-- Spacer -->
+    <ImageView
+        android:layout_width="0dp"
+        android:layout_height="1dp"
+        android:layout_weight="1" />
+
+    <!-- Action Buttons: 1. 折疊/展開  2. 新增事件 -->
+    <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:background="@drawable/badge_daily"
-        android:paddingStart="8dp"
-        android:paddingTop="2dp"
-        android:paddingEnd="8dp"
-        android:paddingBottom="2dp"
-        android:text="未來7日"
-        android:textColor="#B45309"
-        android:textSize="11sp"
-        android:textStyle="bold"
-        android:visibility="gone" />
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
 
-    <TextView
-        android:id="@+id/header_badge_anniversary"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:background="@drawable/badge_anniversary"
-        android:paddingStart="8dp"
-        android:paddingTop="2dp"
-        android:paddingEnd="8dp"
-        android:paddingBottom="2dp"
-        android:text="未來3日紀念日"
-        android:textColor="#6B21A8"
-        android:textSize="11sp"
-        android:textStyle="bold"
-        android:visibility="gone" />
+        <!-- 折疊 / 展開按鈕 -->
+        <LinearLayout
+            android:id="@+id/header_btn_collapse"
+            android:layout_width="wrap_content"
+            android:layout_height="26dp"
+            android:background="@drawable/btn_widget_action_bg"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp">
 
-    <TextView
-        android:id="@+id/header_count"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="6dp"
-        android:text="(0)"
-        android:textColor="#64748B"
-        android:textSize="11sp" />
+            <ImageView
+                android:id="@+id/header_icon_collapse"
+                android:layout_width="12dp"
+                android:layout_height="12dp"
+                android:src="@drawable/ic_widget_collapse" />
+
+            <TextView
+                android:id="@+id/header_text_collapse"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="3dp"
+                android:text="折疊"
+                android:textColor="#475569"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- 新增事件 (+) 按鈕 -->
+        <LinearLayout
+            android:id="@+id/header_btn_add"
+            android:layout_width="wrap_content"
+            android:layout_height="26dp"
+            android:layout_marginStart="6dp"
+            android:background="@drawable/btn_widget_action_bg"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp">
+
+            <ImageView
+                android:id="@+id/header_icon_add"
+                android:layout_width="12dp"
+                android:layout_height="12dp"
+                android:src="@drawable/ic_widget_add" />
+
+            <TextView
+                android:id="@+id/header_text_add"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="3dp"
+                android:text="新增"
+                android:textColor="#2563EB"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+    </LinearLayout>
 
 </LinearLayout>

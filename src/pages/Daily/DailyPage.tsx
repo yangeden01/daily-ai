@@ -128,6 +128,22 @@ export default function DailyPage() {
   }, [isLoadingEvents, mode])
 
   useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    if (params.get('action') === 'new') {
+      const cat = params.get('category')
+      if (cat) {
+        setEventCategory(cat)
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+      const timer = setTimeout(() => {
+        const titleInput = document.getElementById('daily-event-title') as HTMLInputElement | null
+        titleInput?.focus()
+      }, 150)
+      return () => clearTimeout(timer)
+    }
+  }, [location.search])
+
+  useEffect(() => {
     if (draftModeRef.current !== mode) {
       draftModeRef.current = mode
       return

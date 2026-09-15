@@ -16,6 +16,12 @@ import java.util.Locale;
 public class SwiftNoteWidgetProvider extends AppWidgetProvider {
 
     public static final String ACTION_REFRESH_WIDGET = "com.swiftnote.app.ACTION_REFRESH_WIDGET";
+    public static final String ACTION_TOGGLE_SECTION = "com.swiftnote.app.ACTION_TOGGLE_SECTION";
+    public static final String ACTION_ADD_ITEM = "com.swiftnote.app.ACTION_ADD_ITEM";
+    public static final String ACTION_OPEN_ITEM = "com.swiftnote.app.ACTION_OPEN_ITEM";
+
+    public static final String EXTRA_SECTION_TYPE = "extra_section_type";
+    public static final String EXTRA_ROUTE = "route";
 
     @Override
     public void onUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds) {
@@ -29,7 +35,43 @@ public class SwiftNoteWidgetProvider extends AppWidgetProvider {
     public void onReceive(Context context, Intent intent) {
         super.onReceive(context, intent);
 
+        if (intent == null) return;
         String action = intent.getAction();
+        if (action == null) return;
+
+        // 1. Handle toggle collapse/expand for a section
+        if (ACTION_TOGGLE_SECTION.equals(action)) {
+            int sectionType = intent.getIntExtra(EXTRA_SECTION_TYPE, 1);
+            WidgetStorage.toggleSectionCollapsed(context, sectionType);
+            updateAllWidgets(context);
+            return;
+        }
+
+        // 2. Handle add item (+) button
+        if (ACTION_ADD_ITEM.equals(action)) {
+            int sectionType = intent.getIntExtra(EXTRA_SECTION_TYPE, 1);
+            String route;
+            if (sectionType == 1) {
+                route = "/daily?mode=notes&action=new&category=%E5%BE%85%E5%81%9A%E4%BA%8B%E9%A0%85";
+            } else if (sectionType == 2) {
+                route = "/daily?mode=daily&action=new";
+            } else {
+                route = "/daily?mode=anniversary&action=new";
+            }
+            openAppWithRoute(context, route);
+            return;
+        }
+
+        // 3. Handle opening item from list
+        if (ACTION_OPEN_ITEM.equals(action)) {
+            String route = intent.getStringExtra(EXTRA_ROUTE);
+            if (route != null && !route.isEmpty()) {
+                openAppWithRoute(context, route);
+            }
+            return;
+        }
+
+        // 4. Handle refresh and system clock/timezone changes
         if (ACTION_REFRESH_WIDGET.equals(action) ||
             Intent.ACTION_DATE_CHANGED.equals(action) ||
             Intent.ACTION_TIME_CHANGED.equals(action) ||
@@ -43,6 +85,13 @@ public class SwiftNoteWidgetProvider extends AppWidgetProvider {
 
             updateAllWidgets(context);
         }
+    }
+
+    private static void openAppWithRoute(Context context, String route) {
+        Intent appIntent = new Intent(context, MainActivity.class);
+        appIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        appIntent.putExtra(EXTRA_ROUTE, route);
+        context.startActivity(appIntent);
     }
 
     public static void updateAllWidgets(Context context) {
@@ -98,10 +147,9 @@ public class SwiftNoteWidgetProvider extends AppWidgetProvider {
         views.setRemoteAdapter(R.id.widget_list, serviceIntent);
         views.setEmptyView(R.id.widget_list, R.id.widget_empty_view);
 
-        // Set up item click pending intent template
-        Intent clickIntent = new Intent(context, MainActivity.class);
-        clickIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-        PendingIntent clickPendingIntent = PendingIntent.getActivity(
+        // Set up item click pending intent template (Broadcast to SwiftNoteWidgetProvider)
+        Intent clickIntent = new Intent(context, SwiftNoteWidgetProvider.class);
+        PendingIntent clickPendingIntent = PendingIntent.getBroadcast(
                 context,
                 2,
                 clickIntent,

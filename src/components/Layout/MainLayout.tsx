@@ -15,55 +15,6 @@ export default function MainLayout() {
     document.documentElement.setAttribute('data-app-mode', mode)
   }, [mode])
 
-  useEffect(() => {
-    const handlePointerDown = (event: PointerEvent) => {
-      const target = event.target as HTMLElement | null
-      if (!target) return
-      const active = document.activeElement
-      if (!(active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement)) {
-        return
-      }
-      // If the tap is inside an interactive element, do not force blur
-      if (target.closest('input, textarea, button, a, label, select, [role="button"], .text-indent-toolbar, .clear-field-button, .date-wheel-column, .attachment-picker, .event-detail-editable, .anniversary-sort-switch, .note-sort-switch')) {
-        return
-      }
-      active.blur()
-    }
-
-    window.addEventListener('pointerdown', handlePointerDown, { passive: true })
-
-    // Listen for mobile viewport resize (e.g. system keyboard dismiss button ⌄ or back gesture)
-    const viewport = window.visualViewport
-    let lastHeight = viewport ? viewport.height : window.innerHeight
-
-    const handleViewportResize = () => {
-      const currentHeight = viewport ? viewport.height : window.innerHeight
-      // If viewport expanded by more than 80px (keyboard closed by system hide button ⌄ or back gesture)
-      if (currentHeight - lastHeight > 80) {
-        const active = document.activeElement
-        if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) {
-          active.blur()
-        }
-      }
-      lastHeight = currentHeight
-    }
-
-    if (viewport) {
-      viewport.addEventListener('resize', handleViewportResize)
-    } else {
-      window.addEventListener('resize', handleViewportResize)
-    }
-
-    return () => {
-      window.removeEventListener('pointerdown', handlePointerDown)
-      if (viewport) {
-        viewport.removeEventListener('resize', handleViewportResize)
-      } else {
-        window.removeEventListener('resize', handleViewportResize)
-      }
-    }
-  }, [])
-
   return (
     <div className="min-h-[100dvh]" data-mode={mode}>
       <Header />

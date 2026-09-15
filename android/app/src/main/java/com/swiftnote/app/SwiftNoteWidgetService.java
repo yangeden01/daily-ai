@@ -43,6 +43,7 @@ public class SwiftNoteWidgetService extends RemoteViewsService {
             String sectionTitle;
             int sectionCount;
             int sectionType; // 1: todo, 2: daily, 3: anniversary
+            boolean isCollapsed;
 
             String id;
             String title;
@@ -197,20 +198,25 @@ public class SwiftNoteWidgetService extends RemoteViewsService {
         }
 
         private void addSection(String title, int sectionType, List<WidgetItem> items, String emptyMessage) {
+            boolean isCollapsed = WidgetStorage.isSectionCollapsed(mContext, sectionType);
+
             WidgetItem header = new WidgetItem();
             header.type = ItemType.SECTION_HEADER;
             header.sectionTitle = title;
             header.sectionCount = items.size();
             header.sectionType = sectionType;
+            header.isCollapsed = isCollapsed;
             mItems.add(header);
 
-            if (items.isEmpty()) {
-                WidgetItem empty = new WidgetItem();
-                empty.type = ItemType.EMPTY_MESSAGE;
-                empty.emptyMessage = emptyMessage;
-                mItems.add(empty);
-            } else {
-                mItems.addAll(items);
+            if (!isCollapsed) {
+                if (items.isEmpty()) {
+                    WidgetItem empty = new WidgetItem();
+                    empty.type = ItemType.EMPTY_MESSAGE;
+                    empty.emptyMessage = emptyMessage;
+                    mItems.add(empty);
+                } else {
+                    mItems.addAll(items);
+                }
             }
         }
 
@@ -250,6 +256,29 @@ public class SwiftNoteWidgetService extends RemoteViewsService {
                         views.setViewVisibility(R.id.header_badge_daily, View.GONE);
                         views.setViewVisibility(R.id.header_badge_anniversary, View.VISIBLE);
                     }
+
+                    // Toggle collapse icon & text
+                    if (item.isCollapsed) {
+                        views.setImageViewResource(R.id.header_icon_collapse, R.drawable.ic_widget_expand);
+                        views.setTextViewText(R.id.header_text_collapse, "展開");
+                    } else {
+                        views.setImageViewResource(R.id.header_icon_collapse, R.drawable.ic_widget_collapse);
+                        views.setTextViewText(R.id.header_text_collapse, "折疊");
+                    }
+
+                    // 1. Collapse toggle fill-in intent (both collapse button and title badge area)
+                    Intent collapseIntent = new Intent();
+                    collapseIntent.setAction(SwiftNoteWidgetProvider.ACTION_TOGGLE_SECTION);
+                    collapseIntent.putExtra(SwiftNoteWidgetProvider.EXTRA_SECTION_TYPE, item.sectionType);
+                    views.setOnClickFillInIntent(R.id.header_btn_collapse, collapseIntent);
+                    views.setOnClickFillInIntent(R.id.header_title_area, collapseIntent);
+
+                    // 2. Add event fill-in intent (+)
+                    Intent addIntent = new Intent();
+                    addIntent.setAction(SwiftNoteWidgetProvider.ACTION_ADD_ITEM);
+                    addIntent.putExtra(SwiftNoteWidgetProvider.EXTRA_SECTION_TYPE, item.sectionType);
+                    views.setOnClickFillInIntent(R.id.header_btn_add, addIntent);
+
                     return views;
                 }
 
@@ -264,7 +293,8 @@ public class SwiftNoteWidgetService extends RemoteViewsService {
                     }
 
                     Intent fillInIntent = new Intent();
-                    fillInIntent.putExtra("route", item.route);
+                    fillInIntent.setAction(SwiftNoteWidgetProvider.ACTION_OPEN_ITEM);
+                    fillInIntent.putExtra(SwiftNoteWidgetProvider.EXTRA_ROUTE, item.route);
                     views.setOnClickFillInIntent(R.id.todo_item_root, fillInIntent);
                     return views;
                 }
@@ -282,7 +312,8 @@ public class SwiftNoteWidgetService extends RemoteViewsService {
                     }
 
                     Intent fillInIntent = new Intent();
-                    fillInIntent.putExtra("route", item.route);
+                    fillInIntent.setAction(SwiftNoteWidgetProvider.ACTION_OPEN_ITEM);
+                    fillInIntent.putExtra(SwiftNoteWidgetProvider.EXTRA_ROUTE, item.route);
                     views.setOnClickFillInIntent(R.id.daily_item_root, fillInIntent);
                     return views;
                 }
@@ -300,7 +331,8 @@ public class SwiftNoteWidgetService extends RemoteViewsService {
                     }
 
                     Intent fillInIntent = new Intent();
-                    fillInIntent.putExtra("route", item.route);
+                    fillInIntent.setAction(SwiftNoteWidgetProvider.ACTION_OPEN_ITEM);
+                    fillInIntent.putExtra(SwiftNoteWidgetProvider.EXTRA_ROUTE, item.route);
                     views.setOnClickFillInIntent(R.id.anniversary_item_root, fillInIntent);
                     return views;
                 }

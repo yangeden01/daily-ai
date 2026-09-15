@@ -27,4 +27,20 @@ public class WidgetStorage {
     public static String getLastUpdateTime(Context context) {
         return getPrefs(context).getString(KEY_LAST_UPDATE_TIME, null);
     }
+
+    private static final String KEY_COLLAPSED_PREFIX = "section_collapsed_";
+
+    public static boolean isSectionCollapsed(Context context, int sectionType) {
+        return getPrefs(context).getBoolean(KEY_COLLAPSED_PREFIX + sectionType, false);
+    }
+
+    public static void setSectionCollapsed(Context context, int sectionType, boolean collapsed) {
+        getPrefs(context).edit().putBoolean(KEY_COLLAPSED_PREFIX + sectionType, collapsed).apply();
+    }
+
+    public static boolean toggleSectionCollapsed(Context context, int sectionType) {
+        boolean nextState = !isSectionCollapsed(context, sectionType);
+        setSectionCollapsed(context, sectionType, nextState);
+        return nextState;
+    }
 }
