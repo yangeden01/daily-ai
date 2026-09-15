@@ -235,18 +235,20 @@ public class SwiftNoteWidgetService extends RemoteViewsService {
             switch (item.type) {
                 case SECTION_HEADER: {
                     RemoteViews views = new RemoteViews(mContext.getPackageName(), R.layout.widget_section_header);
-                    views.setTextViewText(R.id.header_badge, item.sectionTitle);
                     views.setTextViewText(R.id.header_count, "(" + item.sectionCount + ")");
 
                     if (item.sectionType == 1) { // Todo
-                        views.setInt(R.id.header_badge, "setBackgroundResource", R.drawable.badge_todo);
-                        views.setTextColor(R.id.header_badge, Color.parseColor("#991B1B"));
+                        views.setViewVisibility(R.id.header_badge_todo, View.VISIBLE);
+                        views.setViewVisibility(R.id.header_badge_daily, View.GONE);
+                        views.setViewVisibility(R.id.header_badge_anniversary, View.GONE);
                     } else if (item.sectionType == 2) { // Daily
-                        views.setInt(R.id.header_badge, "setBackgroundResource", R.drawable.badge_daily);
-                        views.setTextColor(R.id.header_badge, Color.parseColor("#B45309"));
+                        views.setViewVisibility(R.id.header_badge_todo, View.GONE);
+                        views.setViewVisibility(R.id.header_badge_daily, View.VISIBLE);
+                        views.setViewVisibility(R.id.header_badge_anniversary, View.GONE);
                     } else { // Anniversary
-                        views.setInt(R.id.header_badge, "setBackgroundResource", R.drawable.badge_anniversary);
-                        views.setTextColor(R.id.header_badge, Color.parseColor("#6B21A8"));
+                        views.setViewVisibility(R.id.header_badge_todo, View.GONE);
+                        views.setViewVisibility(R.id.header_badge_daily, View.GONE);
+                        views.setViewVisibility(R.id.header_badge_anniversary, View.VISIBLE);
                     }
                     return views;
                 }

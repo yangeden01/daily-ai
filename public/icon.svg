@@ -1,137 +1,209 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <!-- Background Gradients -->
-    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#4338ca"/>
-      <stop offset="50%" stop-color="#3730a3"/>
-      <stop offset="100%" stop-color="#1e1b4b"/>
-    </linearGradient>
-    
-    <radialGradient id="ambientGlow" cx="40%" cy="30%" r="70%">
-      <stop offset="0%" stop-color="#818cf8" stop-opacity="0.45"/>
-      <stop offset="60%" stop-color="#4f46e5" stop-opacity="0.15"/>
-      <stop offset="100%" stop-color="#1e1b4b" stop-opacity="0"/>
+    <!-- Background Gradient (Soft modern off-white/light blue studio canvas) -->
+    <radialGradient id="studioGlow" cx="50%" cy="42%" r="65%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="60%" stop-color="#F1F5F9"/>
+      <stop offset="100%" stop-color="#E2E8F0"/>
     </radialGradient>
 
-    <linearGradient id="bookCoverGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#ffffff"/>
-      <stop offset="60%" stop-color="#f8fafc"/>
-      <stop offset="100%" stop-color="#e2e8f0"/>
+    <!-- Blue Cover 3D Gradients -->
+    <linearGradient id="coverSurface" x1="20%" y1="10%" x2="80%" y2="90%">
+      <stop offset="0%" stop-color="#38BDF8"/>
+      <stop offset="35%" stop-color="#0284C7"/>
+      <stop offset="100%" stop-color="#0369A1"/>
     </linearGradient>
 
-    <linearGradient id="spineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#4f46e5"/>
-      <stop offset="100%" stop-color="#3730a3"/>
+    <linearGradient id="coverSideDepth" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0284C7"/>
+      <stop offset="100%" stop-color="#075985"/>
     </linearGradient>
 
-    <linearGradient id="goldRibbon" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#fef08a"/>
-      <stop offset="40%" stop-color="#f59e0b"/>
-      <stop offset="100%" stop-color="#d97706"/>
+    <linearGradient id="coverBottomLip" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0369A1"/>
+      <stop offset="100%" stop-color="#082F49"/>
     </linearGradient>
 
-    <linearGradient id="penBodyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#fbbf24"/>
-      <stop offset="50%" stop-color="#f59e0b"/>
-      <stop offset="100%" stop-color="#b45309"/>
+    <!-- White Paper Gradients -->
+    <linearGradient id="paperSurface" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="85%" stop-color="#F8FAFC"/>
+      <stop offset="100%" stop-color="#EEF2F6"/>
     </linearGradient>
 
-    <linearGradient id="starGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#ffffff"/>
-      <stop offset="50%" stop-color="#fde047"/>
-      <stop offset="100%" stop-color="#f59e0b"/>
+    <!-- Spiral Ring 3D Gradients -->
+    <linearGradient id="spiralRingGrad" x1="0%" y1="0%" x2="100%" y2="60%">
+      <stop offset="0%" stop-color="#0369A1"/>
+      <stop offset="25%" stop-color="#0EA5E9"/>
+      <stop offset="50%" stop-color="#E0F2FE"/>
+      <stop offset="75%" stop-color="#0284C7"/>
+      <stop offset="100%" stop-color="#075985"/>
     </linearGradient>
 
-    <!-- Filters -->
-    <filter id="shadowMain" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="18" stdDeviation="20" flood-color="#0f172a" flood-opacity="0.45"/>
-      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#0f172a" flood-opacity="0.25"/>
+    <!-- Pencil 3D Gradients -->
+    <linearGradient id="pencilEraser" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F472B6"/>
+      <stop offset="60%" stop-color="#EC4899"/>
+      <stop offset="100%" stop-color="#BE185D"/>
+    </linearGradient>
+
+    <linearGradient id="pencilFerrule" x1="0%" y1="0%" x2="100%" y2="60%">
+      <stop offset="0%" stop-color="#94A3B8"/>
+      <stop offset="35%" stop-color="#F8FAFC"/>
+      <stop offset="70%" stop-color="#CBD5E1"/>
+      <stop offset="100%" stop-color="#64748B"/>
+    </linearGradient>
+
+    <!-- Pencil Body Facets -->
+    <linearGradient id="pencilFacetTop" x1="0%" y1="0%" x2="100%" y2="50%">
+      <stop offset="0%" stop-color="#FDE047"/>
+      <stop offset="100%" stop-color="#FACC15"/>
+    </linearGradient>
+    <linearGradient id="pencilFacetMid" x1="0%" y1="0%" x2="100%" y2="50%">
+      <stop offset="0%" stop-color="#FACC15"/>
+      <stop offset="100%" stop-color="#EAB308"/>
+    </linearGradient>
+    <linearGradient id="pencilFacetBot" x1="0%" y1="0%" x2="100%" y2="50%">
+      <stop offset="0%" stop-color="#CA8A04"/>
+      <stop offset="100%" stop-color="#A16207"/>
+    </linearGradient>
+
+    <!-- Pencil Sharpened Wood -->
+    <linearGradient id="pencilWood" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FEF08A"/>
+      <stop offset="50%" stop-color="#FDE68A"/>
+      <stop offset="100%" stop-color="#FCD34D"/>
+    </linearGradient>
+
+    <!-- Filters for Realistic 3D Soft Shadows -->
+    <filter id="bookDropShadow" x="-20%" y="-20%" width="150%" height="150%">
+      <feDropShadow dx="8" dy="24" stdDeviation="22" flood-color="#0369A1" flood-opacity="0.28"/>
+      <feDropShadow dx="2" dy="8" stdDeviation="10" flood-color="#0F172A" flood-opacity="0.18"/>
     </filter>
 
-    <filter id="shadowPen" x="-30%" y="-30%" width="160%" height="160%">
-      <feDropShadow dx="6" dy="12" stdDeviation="10" flood-color="#090d16" flood-opacity="0.4"/>
+    <filter id="pencilShadow" x="-40%" y="-40%" width="180%" height="180%">
+      <feDropShadow dx="-6" dy="12" stdDeviation="9" flood-color="#0F172A" flood-opacity="0.32"/>
     </filter>
 
-    <filter id="starGlow" x="-50%" y="-50%" width="200%" height="200%">
-      <feDropShadow dx="0" dy="0" stdDeviation="8" flood-color="#fde047" flood-opacity="0.6"/>
+    <filter id="spiralShadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="3" dy="4" stdDeviation="3" flood-color="#0369A1" flood-opacity="0.35"/>
     </filter>
   </defs>
 
-  <!-- Full-bleed background with ambient lighting -->
-  <rect width="512" height="512" fill="url(#bgGrad)"/>
-  <rect width="512" height="512" fill="url(#ambientGlow)"/>
+  <!-- Background App Canvas -->
+  <rect width="512" height="512" rx="112" fill="url(#studioGlow)"/>
 
-  <!-- Subtle aesthetic background geometric ring -->
-  <circle cx="256" cy="256" r="190" stroke="#6366f1" stroke-width="1.5" stroke-opacity="0.25" fill="none"/>
-  <circle cx="256" cy="256" r="215" stroke="#818cf8" stroke-width="1" stroke-dasharray="6 8" stroke-opacity="0.18" fill="none"/>
+  <!-- Main Composition: Tilted 3D Spiral Notebook & Pencil -->
+  <g id="notebook_and_pencil" transform="translate(10, 8)">
 
-  <!-- Main Central Journal Composition -->
-  <g filter="url(#shadowMain)" transform="translate(0, 4)">
-    <!-- Bottom paper layer -->
-    <rect x="136" y="108" width="248" height="304" rx="28" fill="#94a3b8" opacity="0.3"/>
-    
-    <!-- Middle paper layer -->
-    <rect x="130" y="102" width="254" height="306" rx="26" fill="#cbd5e1"/>
-    <rect x="126" y="98" width="258" height="306" rx="24" fill="#e2e8f0"/>
+    <!-- 1. Notebook Outer Group with Drop Shadow -->
+    <g filter="url(#bookDropShadow)">
 
-    <!-- Front Hardcover / Journal Sheet -->
-    <rect x="120" y="92" width="264" height="312" rx="24" fill="url(#bookCoverGrad)"/>
+      <!-- Blue Cover 3D Backing / Thickness -->
+      <!-- Base 3D extrusion layer (bottom right lip) -->
+      <rect x="94" y="80" width="298" height="348" rx="34" fill="url(#coverBottomLip)"/>
+      <rect x="90" y="74" width="298" height="348" rx="34" fill="url(#coverSideDepth)"/>
+      <!-- Blue Cover Surface -->
+      <rect x="86" y="68" width="296" height="346" rx="32" fill="url(#coverSurface)"/>
 
-    <!-- Left Spine -->
-    <path d="M120 116 C120 102.745 130.745 92 144 92 L168 92 L168 404 L144 404 C130.745 404 120 393.255 120 380 Z" fill="url(#spineGrad)"/>
-    
-    <!-- Spine Gold Accent Line -->
-    <line x1="168" y1="92" x2="168" y2="404" stroke="#818cf8" stroke-width="2"/>
-    <line x1="144" y1="102" x2="144" y2="394" stroke="#c7d2fe" stroke-width="1.5" stroke-dasharray="6 6" stroke-opacity="0.7"/>
+      <!-- Inner Paper Shadow on Cover -->
+      <rect x="136" y="82" width="232" height="316" rx="22" fill="#0369A1" opacity="0.3"/>
 
-    <!-- Golden Bookmark Ribbon Hanging Out -->
-    <path d="M272 92 L272 232 L292 214 L312 232 L312 92 Z" fill="url(#goldRibbon)"/>
-    <path d="M272 92 L312 92 L312 96 L272 96 Z" fill="#b45309" opacity="0.4"/>
+      <!-- Thick White Notepad Stack -->
+      <!-- Stack layers for 3D page effect -->
+      <rect x="134" y="80" width="232" height="316" rx="20" fill="#E2E8F0"/>
+      <rect x="132" y="78" width="232" height="316" rx="20" fill="#F1F5F9"/>
+      <!-- Topmost White Paper Sheet -->
+      <rect x="130" y="76" width="232" height="316" rx="18" fill="url(#paperSurface)"/>
 
-    <!-- Journal Content Elements -->
-    <!-- Title header bar -->
-    <rect x="194" y="148" width="68" height="12" rx="6" fill="#4f46e5"/>
-    <circle cx="182" cy="154" r="4" fill="#10b981"/>
+      <!-- Ruled Horizontal Writing Lines -->
+      <g stroke="#BAE6FD" stroke-width="4.5" stroke-linecap="round" opacity="0.85">
+        <line x1="172" y1="136" x2="336" y2="136"/>
+        <line x1="172" y1="178" x2="336" y2="178"/>
+        <line x1="172" y1="220" x2="336" y2="220"/>
+        <line x1="172" y1="262" x2="336" y2="262"/>
+        <line x1="172" y1="304" x2="336" y2="304"/>
+        <line x1="172" y1="346" x2="336" y2="346"/>
+      </g>
+    </g>
 
-    <!-- Note lines with varied widths -->
-    <rect x="180" y="184" width="168" height="8" rx="4" fill="#cbd5e1"/>
-    <rect x="180" y="212" width="144" height="8" rx="4" fill="#e2e8f0"/>
-    <rect x="180" y="240" width="156" height="8" rx="4" fill="#e2e8f0"/>
-    
-    <!-- Checkbox item line -->
-    <rect x="180" y="270" width="14" height="14" rx="4" fill="#4f46e5"/>
-    <path d="M183 277 L186 280 L191 273" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-    <rect x="204" y="273" width="124" height="8" rx="4" fill="#94a3b8"/>
+    <!-- 2. Spiral Binder Rings (Left Spine) -->
+    <!-- Punch Holes -->
+    <g fill="#075985" opacity="0.6">
+      <ellipse cx="146" cy="116" rx="6" ry="6"/>
+      <ellipse cx="146" cy="166" rx="6" ry="6"/>
+      <ellipse cx="146" cy="216" rx="6" ry="6"/>
+      <ellipse cx="146" cy="266" rx="6" ry="6"/>
+      <ellipse cx="146" cy="316" rx="6" ry="6"/>
+      <ellipse cx="146" cy="366" rx="6" ry="6"/>
+    </g>
 
-    <rect x="180" y="302" width="14" height="14" rx="4" fill="#e2e8f0"/>
-    <rect x="204" y="305" width="100" height="8" rx="4" fill="#cbd5e1"/>
+    <!-- 3D Spiral Rings Wrapping from Back to Front -->
+    <g filter="url(#spiralShadow)">
+      <!-- Ring 1 -->
+      <g transform="translate(0, 0)">
+        <path d="M 100 128 C 76 122, 74 102, 98 94 C 122 86, 150 94, 150 114 C 150 126, 142 128, 140 120 C 136 106, 116 100, 102 106 C 90 110, 88 118, 104 122 Z" fill="url(#spiralRingGrad)"/>
+      </g>
+      <!-- Ring 2 -->
+      <g transform="translate(0, 50)">
+        <path d="M 100 128 C 76 122, 74 102, 98 94 C 122 86, 150 94, 150 114 C 150 126, 142 128, 140 120 C 136 106, 116 100, 102 106 C 90 110, 88 118, 104 122 Z" fill="url(#spiralRingGrad)"/>
+      </g>
+      <!-- Ring 3 -->
+      <g transform="translate(0, 100)">
+        <path d="M 100 128 C 76 122, 74 102, 98 94 C 122 86, 150 94, 150 114 C 150 126, 142 128, 140 120 C 136 106, 116 100, 102 106 C 90 110, 88 118, 104 122 Z" fill="url(#spiralRingGrad)"/>
+      </g>
+      <!-- Ring 4 -->
+      <g transform="translate(0, 150)">
+        <path d="M 100 128 C 76 122, 74 102, 98 94 C 122 86, 150 94, 150 114 C 150 126, 142 128, 140 120 C 136 106, 116 100, 102 106 C 90 110, 88 118, 104 122 Z" fill="url(#spiralRingGrad)"/>
+      </g>
+      <!-- Ring 5 -->
+      <g transform="translate(0, 200)">
+        <path d="M 100 128 C 76 122, 74 102, 98 94 C 122 86, 150 94, 150 114 C 150 126, 142 128, 140 120 C 136 106, 116 100, 102 106 C 90 110, 88 118, 104 122 Z" fill="url(#spiralRingGrad)"/>
+      </g>
+      <!-- Ring 6 -->
+      <g transform="translate(0, 250)">
+        <path d="M 100 128 C 76 122, 74 102, 98 94 C 122 86, 150 94, 150 114 C 150 126, 142 128, 140 120 C 136 106, 116 100, 102 106 C 90 110, 88 118, 104 122 Z" fill="url(#spiralRingGrad)"/>
+      </g>
+    </g>
 
-    <!-- Calendar mini grid hint at bottom -->
-    <rect x="180" y="334" width="140" height="6" rx="3" fill="#f1f5f9"/>
-  </g>
+    <!-- 3. Classic 3D Wooden Pencil (Diagonally Across Notepad) -->
+    <g filter="url(#pencilShadow)" transform="translate(332, 238) rotate(-38)">
 
-  <!-- Modern Stylized Stylus / Pen (Floating with 3D Depth) -->
-  <g filter="url(#shadowPen)" transform="translate(348, 290) rotate(-42)">
-    <!-- Pen Barrel -->
-    <rect x="-11" y="-60" width="22" height="110" rx="11" fill="url(#penBodyGrad)"/>
-    <!-- Pen Clip -->
-    <rect x="-4" y="-52" width="8" height="42" rx="4" fill="#ffffff" opacity="0.8"/>
-    <!-- Pen Grip Ring -->
-    <rect x="-11" y="28" width="22" height="6" rx="2" fill="#1e1b4b"/>
-    <!-- Pen Cone Tip -->
-    <path d="M-11 50 L11 50 L0 76 Z" fill="#1e1b4b"/>
-    <!-- Nib Ball / Spark -->
-    <circle cx="0" cy="74" r="3" fill="#ffffff"/>
-  </g>
+      <!-- Pink Eraser (Top) -->
+      <path d="M -17 -168 C -17 -184, 17 -184, 17 -168 L 17 -144 L -17 -144 Z" fill="url(#pencilEraser)"/>
+      <!-- Eraser highlight -->
+      <path d="M -9 -178 C -4 -182, 4 -182, 9 -178 L 9 -144 L -9 -144 Z" fill="#FBCFE8" opacity="0.45"/>
 
-  <!-- AI Intelligence Star Sparkle (Top Right) -->
-  <g filter="url(#starGlow)" transform="translate(378, 122)">
-    <path d="M0 -22 Q0 0 22 0 Q0 0 0 22 Q0 0 -22 0 Q0 0 0 -22 Z" fill="url(#starGrad)"/>
-    <circle cx="0" cy="0" r="4" fill="#ffffff"/>
-  </g>
+      <!-- Metallic Silver Ferrule Band with Crimps -->
+      <rect x="-18" y="-144" width="36" height="34" rx="3" fill="url(#pencilFerrule)"/>
+      <!-- Ferrule Grooves -->
+      <line x1="-18" y1="-134" x2="18" y2="-134" stroke="#475569" stroke-width="2" opacity="0.6"/>
+      <line x1="-18" y1="-122" x2="18" y2="-122" stroke="#475569" stroke-width="2" opacity="0.6"/>
+      <line x1="-18" y1="-132" x2="18" y2="-132" stroke="#FFFFFF" stroke-width="1.5" opacity="0.7"/>
 
-  <!-- Secondary subtle sparkle -->
-  <g transform="translate(132, 136) scale(0.55)" opacity="0.85">
-    <path d="M0 -18 Q0 0 18 0 Q0 0 0 18 Q0 0 -18 0 Q0 0 0 -18 Z" fill="#fde047"/>
+      <!-- Yellow Hexagonal Pencil Body (3 Facets) -->
+      <!-- Left Facet (Highlight) -->
+      <polygon points="-18,-110 -6,-110 -6,108 -18,108" fill="url(#pencilFacetTop)"/>
+      <!-- Center Facet -->
+      <polygon points="-6,-110 6,-110 6,108 -6,108" fill="url(#pencilFacetMid)"/>
+      <!-- Right Facet (Shade) -->
+      <polygon points="6,-110 18,-110 18,108 6,108" fill="url(#pencilFacetBot)"/>
+
+      <!-- Facet Divider Crisp Lines -->
+      <line x1="-6" y1="-110" x2="-6" y2="108" stroke="#FEF08A" stroke-width="1.5" opacity="0.6"/>
+      <line x1="6" y1="-110" x2="6" y2="108" stroke="#854D0E" stroke-width="1.5" opacity="0.5"/>
+
+      <!-- Sharpened Cone (Wood) -->
+      <!-- Scalloped transition collar -->
+      <path d="M -18 108 Q -12 114 -6 108 Q 0 114 6 108 Q 12 114 18 108 L 0 166 Z" fill="url(#pencilWood)"/>
+      <!-- Wood grain shade on right side -->
+      <path d="M 6 108 Q 12 114 18 108 L 0 166 L 3 138 Z" fill="#F59E0B" opacity="0.35"/>
+
+      <!-- Black Graphite Tip Point -->
+      <polygon points="-7,144 7,144 0,168" fill="#0F172A"/>
+      <!-- Tip Specular Shimmer -->
+      <circle cx="-1" cy="154" r="1.5" fill="#94A3B8"/>
+    </g>
+
   </g>
 </svg>
