@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">SwiftNote</string>
+    <string name="title_activity_main">SwiftNote</string>
+    <string name="package_name">com.swiftnote.app</string>
+    <string name="custom_url_scheme">com.swiftnote.app</string>
+</resources>

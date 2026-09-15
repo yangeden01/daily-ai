@@ -1,0 +1,152 @@
+import { Note, NoteColor } from './types';
+
+export interface CategoryInfo {
+  id: string;
+  name: string;
+  iconName: string;
+}
+
+export const DEFAULT_CATEGORIES: CategoryInfo[] = [
+  { id: 'all', name: '所有記事', iconName: 'FileText' },
+  { id: 'pinned', name: '已釘選', iconName: 'Pin' },
+  { id: 'work', name: '工作日常', iconName: 'Briefcase' },
+  { id: 'personal', name: '個人生活', iconName: 'User' },
+  { id: 'ideas', name: '靈感隨筆', iconName: 'Lightbulb' },
+  { id: 'study', name: '學習筆記', iconName: 'BookOpen' },
+  { id: 'trash', name: '垃圾桶', iconName: 'Trash2' },
+];
+
+export const COLOR_OPTIONS: { id: NoteColor; label: string; bgClass: string; borderClass: string; badgeClass: string; ringClass: string }[] = [
+  {
+    id: 'default',
+    label: '極簡白',
+    bgClass: 'bg-white hover:bg-zinc-50/80',
+    borderClass: 'border-zinc-200',
+    badgeClass: 'bg-zinc-100 text-zinc-700',
+    ringClass: 'ring-zinc-400',
+  },
+  {
+    id: 'amber',
+    label: '暖杏黃',
+    bgClass: 'bg-amber-50/70 hover:bg-amber-50',
+    borderClass: 'border-amber-200/80',
+    badgeClass: 'bg-amber-100/90 text-amber-800',
+    ringClass: 'ring-amber-400',
+  },
+  {
+    id: 'emerald',
+    label: '薄荷綠',
+    bgClass: 'bg-emerald-50/70 hover:bg-emerald-50',
+    borderClass: 'border-emerald-200/80',
+    badgeClass: 'bg-emerald-100/90 text-emerald-800',
+    ringClass: 'ring-emerald-400',
+  },
+  {
+    id: 'sky',
+    label: '晴空藍',
+    bgClass: 'bg-sky-50/70 hover:bg-sky-50',
+    borderClass: 'border-sky-200/80',
+    badgeClass: 'bg-sky-100/90 text-sky-800',
+    ringClass: 'ring-sky-400',
+  },
+  {
+    id: 'rose',
+    label: '山茶粉',
+    bgClass: 'bg-rose-50/70 hover:bg-rose-50',
+    borderClass: 'border-rose-200/80',
+    badgeClass: 'bg-rose-100/90 text-rose-800',
+    ringClass: 'ring-rose-400',
+  },
+  {
+    id: 'indigo',
+    label: '靜謐靛',
+    bgClass: 'bg-indigo-50/70 hover:bg-indigo-50',
+    borderClass: 'border-indigo-200/80',
+    badgeClass: 'bg-indigo-100/90 text-indigo-800',
+    ringClass: 'ring-indigo-400',
+  },
+  {
+    id: 'violet',
+    label: '薰衣紫',
+    bgClass: 'bg-violet-50/70 hover:bg-violet-50',
+    borderClass: 'border-violet-200/80',
+    badgeClass: 'bg-violet-100/90 text-violet-800',
+    ringClass: 'ring-violet-400',
+  },
+  {
+    id: 'orange',
+    label: '夕陽橘',
+    bgClass: 'bg-orange-50/70 hover:bg-orange-50',
+    borderClass: 'border-orange-200/80',
+    badgeClass: 'bg-orange-100/90 text-orange-800',
+    ringClass: 'ring-orange-400',
+  },
+];
+
+export const INITIAL_NOTES: Note[] = [
+  {
+    id: 'note-1',
+    title: '歡迎使用你的個人記事本 📝',
+    content: '這是一款乾淨、快速且直覺的記事應用程式。\n\n特色功能包括：\n• 即時本機自動儲存，資料安全不遺失\n• 支援一般筆記與待辦清單 (Checklist) 雙模式\n• 快速標籤分類與自訂顏色主題\n• 釘選置頂重要事項與全文即時搜尋\n• 支援匯出為 Markdown、純文字或備份檔案',
+    category: 'personal',
+    color: 'amber',
+    isPinned: true,
+    isArchived: false,
+    isDeleted: false,
+    tags: ['指南', '快速入門'],
+    isChecklist: false,
+    checklistItems: [],
+    createdAt: Date.now() - 1000 * 60 * 60 * 24,
+    updatedAt: Date.now() - 1000 * 60 * 30,
+  },
+  {
+    id: 'note-2',
+    title: '本週重要待辦清單',
+    content: '',
+    category: 'work',
+    color: 'sky',
+    isPinned: true,
+    isArchived: false,
+    isDeleted: false,
+    tags: ['工作', '待辦'],
+    isChecklist: true,
+    checklistItems: [
+      { id: 'item-1', text: '完成第四季專案計畫書草稿', completed: true },
+      { id: 'item-2', text: '與設計團隊進行介面設計審查', completed: true },
+      { id: 'item-3', text: '整理每週進度報告與數據指標', completed: false },
+      { id: 'item-4', text: '預訂下週客戶線上會議時間', completed: false },
+    ],
+    createdAt: Date.now() - 1000 * 60 * 60 * 12,
+    updatedAt: Date.now() - 1000 * 60 * 15,
+  },
+  {
+    id: 'note-3',
+    title: '產品設計與排版靈感',
+    content: '現代化介面設計要素：\n1. 充足的負空間與呼吸感\n2. 高對比但溫和的色彩層次\n3. 清晰明確的視覺節奏與字體層級\n4. 順暢自然的微互動與動效反饋',
+    category: 'ideas',
+    color: 'emerald',
+    isPinned: false,
+    isArchived: false,
+    isDeleted: false,
+    tags: ['設計', 'UI/UX', '靈感'],
+    isChecklist: false,
+    checklistItems: [],
+    createdAt: Date.now() - 1000 * 60 * 60 * 48,
+    updatedAt: Date.now() - 1000 * 60 * 60 * 2,
+  },
+  {
+    id: 'note-4',
+    title: '推薦閱讀書單與筆記',
+    content: '• 《原子習慣》：每天進步 1%，一年後將帶來 37 倍的成長\n• 《精準提問》：好問題比標準答案更有價值\n• 《深度工作力》：專注力是現代知識工作者最強大的超能力',
+    category: 'study',
+    color: 'violet',
+    isPinned: false,
+    isArchived: false,
+    isDeleted: false,
+    tags: ['書單', '成長'],
+    isChecklist: false,
+    checklistItems: [],
+    createdAt: Date.now() - 1000 * 60 * 60 * 72,
+    updatedAt: Date.now() - 1000 * 60 * 60 * 5,
+  },
+];

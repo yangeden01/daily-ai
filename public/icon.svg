@@ -1,0 +1,137 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Background Gradients -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4338ca"/>
+      <stop offset="50%" stop-color="#3730a3"/>
+      <stop offset="100%" stop-color="#1e1b4b"/>
+    </linearGradient>
+    
+    <radialGradient id="ambientGlow" cx="40%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#818cf8" stop-opacity="0.45"/>
+      <stop offset="60%" stop-color="#4f46e5" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#1e1b4b" stop-opacity="0"/>
+    </radialGradient>
+
+    <linearGradient id="bookCoverGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="60%" stop-color="#f8fafc"/>
+      <stop offset="100%" stop-color="#e2e8f0"/>
+    </linearGradient>
+
+    <linearGradient id="spineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#4f46e5"/>
+      <stop offset="100%" stop-color="#3730a3"/>
+    </linearGradient>
+
+    <linearGradient id="goldRibbon" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fef08a"/>
+      <stop offset="40%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#d97706"/>
+    </linearGradient>
+
+    <linearGradient id="penBodyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fbbf24"/>
+      <stop offset="50%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#b45309"/>
+    </linearGradient>
+
+    <linearGradient id="starGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="50%" stop-color="#fde047"/>
+      <stop offset="100%" stop-color="#f59e0b"/>
+    </linearGradient>
+
+    <!-- Filters -->
+    <filter id="shadowMain" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="18" stdDeviation="20" flood-color="#0f172a" flood-opacity="0.45"/>
+      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#0f172a" flood-opacity="0.25"/>
+    </filter>
+
+    <filter id="shadowPen" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="6" dy="12" stdDeviation="10" flood-color="#090d16" flood-opacity="0.4"/>
+    </filter>
+
+    <filter id="starGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="0" stdDeviation="8" flood-color="#fde047" flood-opacity="0.6"/>
+    </filter>
+  </defs>
+
+  <!-- Full-bleed background with ambient lighting -->
+  <rect width="512" height="512" fill="url(#bgGrad)"/>
+  <rect width="512" height="512" fill="url(#ambientGlow)"/>
+
+  <!-- Subtle aesthetic background geometric ring -->
+  <circle cx="256" cy="256" r="190" stroke="#6366f1" stroke-width="1.5" stroke-opacity="0.25" fill="none"/>
+  <circle cx="256" cy="256" r="215" stroke="#818cf8" stroke-width="1" stroke-dasharray="6 8" stroke-opacity="0.18" fill="none"/>
+
+  <!-- Main Central Journal Composition -->
+  <g filter="url(#shadowMain)" transform="translate(0, 4)">
+    <!-- Bottom paper layer -->
+    <rect x="136" y="108" width="248" height="304" rx="28" fill="#94a3b8" opacity="0.3"/>
+    
+    <!-- Middle paper layer -->
+    <rect x="130" y="102" width="254" height="306" rx="26" fill="#cbd5e1"/>
+    <rect x="126" y="98" width="258" height="306" rx="24" fill="#e2e8f0"/>
+
+    <!-- Front Hardcover / Journal Sheet -->
+    <rect x="120" y="92" width="264" height="312" rx="24" fill="url(#bookCoverGrad)"/>
+
+    <!-- Left Spine -->
+    <path d="M120 116 C120 102.745 130.745 92 144 92 L168 92 L168 404 L144 404 C130.745 404 120 393.255 120 380 Z" fill="url(#spineGrad)"/>
+    
+    <!-- Spine Gold Accent Line -->
+    <line x1="168" y1="92" x2="168" y2="404" stroke="#818cf8" stroke-width="2"/>
+    <line x1="144" y1="102" x2="144" y2="394" stroke="#c7d2fe" stroke-width="1.5" stroke-dasharray="6 6" stroke-opacity="0.7"/>
+
+    <!-- Golden Bookmark Ribbon Hanging Out -->
+    <path d="M272 92 L272 232 L292 214 L312 232 L312 92 Z" fill="url(#goldRibbon)"/>
+    <path d="M272 92 L312 92 L312 96 L272 96 Z" fill="#b45309" opacity="0.4"/>
+
+    <!-- Journal Content Elements -->
+    <!-- Title header bar -->
+    <rect x="194" y="148" width="68" height="12" rx="6" fill="#4f46e5"/>
+    <circle cx="182" cy="154" r="4" fill="#10b981"/>
+
+    <!-- Note lines with varied widths -->
+    <rect x="180" y="184" width="168" height="8" rx="4" fill="#cbd5e1"/>
+    <rect x="180" y="212" width="144" height="8" rx="4" fill="#e2e8f0"/>
+    <rect x="180" y="240" width="156" height="8" rx="4" fill="#e2e8f0"/>
+    
+    <!-- Checkbox item line -->
+    <rect x="180" y="270" width="14" height="14" rx="4" fill="#4f46e5"/>
+    <path d="M183 277 L186 280 L191 273" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <rect x="204" y="273" width="124" height="8" rx="4" fill="#94a3b8"/>
+
+    <rect x="180" y="302" width="14" height="14" rx="4" fill="#e2e8f0"/>
+    <rect x="204" y="305" width="100" height="8" rx="4" fill="#cbd5e1"/>
+
+    <!-- Calendar mini grid hint at bottom -->
+    <rect x="180" y="334" width="140" height="6" rx="3" fill="#f1f5f9"/>
+  </g>
+
+  <!-- Modern Stylized Stylus / Pen (Floating with 3D Depth) -->
+  <g filter="url(#shadowPen)" transform="translate(348, 290) rotate(-42)">
+    <!-- Pen Barrel -->
+    <rect x="-11" y="-60" width="22" height="110" rx="11" fill="url(#penBodyGrad)"/>
+    <!-- Pen Clip -->
+    <rect x="-4" y="-52" width="8" height="42" rx="4" fill="#ffffff" opacity="0.8"/>
+    <!-- Pen Grip Ring -->
+    <rect x="-11" y="28" width="22" height="6" rx="2" fill="#1e1b4b"/>
+    <!-- Pen Cone Tip -->
+    <path d="M-11 50 L11 50 L0 76 Z" fill="#1e1b4b"/>
+    <!-- Nib Ball / Spark -->
+    <circle cx="0" cy="74" r="3" fill="#ffffff"/>
+  </g>
+
+  <!-- AI Intelligence Star Sparkle (Top Right) -->
+  <g filter="url(#starGlow)" transform="translate(378, 122)">
+    <path d="M0 -22 Q0 0 22 0 Q0 0 0 22 Q0 0 -22 0 Q0 0 0 -22 Z" fill="url(#starGrad)"/>
+    <circle cx="0" cy="0" r="4" fill="#ffffff"/>
+  </g>
+
+  <!-- Secondary subtle sparkle -->
+  <g transform="translate(132, 136) scale(0.55)" opacity="0.85">
+    <path d="M0 -18 Q0 0 18 0 Q0 0 0 18 Q0 0 -18 0 Q0 0 0 -18 Z" fill="#fde047"/>
+  </g>
+</svg>
