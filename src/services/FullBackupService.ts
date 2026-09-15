@@ -111,13 +111,16 @@ export class FullBackupService {
     ])
     this.validateAttachmentLimits(attachments)
 
-    const zipEntries: Record<string, Uint8Array> = { 'Daily.xlsx': workbook }
+    const zipEntries: Record<string, Uint8Array | [Uint8Array, { level: number }]> = { 'Daily.xlsx': workbook }
     const manifestAttachments: ManifestAttachment[] = []
 
     for (const attachment of attachments) {
       if (!attachment.blob) throw new Error(`${attachment.filename} 缺少實際檔案內容，無法建立完整備份。`)
       const path = toZipPath(attachment)
-      zipEntries[path] = new Uint8Array(await attachment.blob.arrayBuffer())
+      const buffer = new Uint8Array(await attachment.blob.arrayBuffer())
+      const isPrecompressed = attachment.type === 'image' || attachment.type === 'pdf' ||
+        attachment.mimeType.startsWith('image/') || attachment.mimeType === 'application/pdf'
+      zipEntries[path] = isPrecompressed ? [buffer, { level: 0 }] : buffer
       manifestAttachments.push({
         id: attachment.id,
         eventId: attachment.eventId,
@@ -139,7 +142,7 @@ export class FullBackupService {
       attachments: manifestAttachments,
     }
     zipEntries['manifest.json'] = strToU8(JSON.stringify(manifest, null, 2))
-    return zipSync(zipEntries, { level: 6 })
+    return zipSync(zipEntries, { level: 1 })
   }
 
   async restoreBackup(data: ArrayBuffer | Uint8Array): Promise<RestoreResult> {

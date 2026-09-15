@@ -18,53 +18,103 @@ export interface FileSaveOutcome {
   mimeType?: string
 }
 
+const CHUNK_SIZE = 256 * 1024 // 256 KB chunks for low-memory stream transfer
+
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
 }
 
-async function dataToBase64(data: Uint8Array | Blob | string): Promise<string> {
-  if (typeof data === 'string') {
-    return btoa(unescape(encodeURIComponent(data)))
-  }
+function normalizeToBlob(data: Uint8Array | Blob | string, mimeType: string): Blob {
   if (data instanceof Blob) {
-    const buffer = await data.arrayBuffer()
-    return uint8ArrayToBase64(new Uint8Array(buffer))
+    return data
   }
-  return uint8ArrayToBase64(data)
+  if (typeof data === 'string') {
+    return new Blob([data], { type: mimeType })
+  }
+  return new Blob([data.slice().buffer], { type: mimeType })
 }
 
-function uint8ArrayToBase64(bytes: Uint8Array): string {
-  let binary = ''
-  const len = bytes.byteLength
-  const chunkSize = 8192
-  for (let i = 0; i < len; i += chunkSize) {
-    const chunk = bytes.subarray(i, Math.min(i + chunkSize, len))
-    binary += String.fromCharCode.apply(null, Array.from(chunk))
-  }
-  return btoa(binary)
+function blobSliceToBase64(slice: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      const result = reader.result as string
+      if (!result) {
+        resolve('')
+        return
+      }
+      const commaIndex = result.indexOf(',')
+      resolve(commaIndex >= 0 ? result.substring(commaIndex + 1) : result)
+    }
+    reader.onerror = () => reject(reader.error || new Error('分塊讀取失敗'))
+    reader.readAsDataURL(slice)
+  })
 }
 
 export async function saveFile(params: SaveFileParams): Promise<FileSaveOutcome> {
   const { fileName, data, mimeType = 'application/octet-stream', shareAfterSave = false } = params
-
-  const byteLength = typeof data === 'string'
-    ? new Blob([data]).size
-    : data instanceof Blob
-      ? data.size
-      : data.byteLength
-
-  const sizeText = formatBytes(byteLength)
+  const blob = normalizeToBlob(data, mimeType)
+  const sizeText = formatBytes(blob.size)
 
   // 1. Android Native App (Capacitor)
   if (Capacitor.isNativePlatform()) {
-    const base64Data = await dataToBase64(data)
+    // Attempt chunked stream saving to completely prevent OOM / heap crashes
+    if (typeof FileBridge.startSaveFile === 'function') {
+      let transferId = ''
+      try {
+        const startResult = await FileBridge.startSaveFile({
+          fileName,
+          mimeType,
+        })
+        transferId = startResult.transferId
+
+        const totalBytes = blob.size
+        let offset = 0
+
+        while (offset < totalBytes) {
+          const slice = blob.slice(offset, Math.min(offset + CHUNK_SIZE, totalBytes))
+          const chunkBase64 = await blobSliceToBase64(slice)
+          await FileBridge.appendFileChunk({
+            transferId,
+            chunkBase64,
+          })
+          offset += CHUNK_SIZE
+        }
+
+        const finishResult = await FileBridge.finishSaveFile({
+          transferId,
+          shareAfterSave,
+        })
+
+        return {
+          success: true,
+          location: finishResult.savedLocation || '手機內部儲存空間 / Download (下載)',
+          fileName: finishResult.fileName || fileName,
+          fileSizeText: sizeText,
+          isNative: true,
+          mimeType,
+        }
+      } catch (chunkError) {
+        if (transferId) {
+          try {
+            await FileBridge.cancelSaveFile({ transferId })
+          } catch {
+            // Ignore cancellation error
+          }
+        }
+        throw chunkError
+      }
+    }
+
+    // Fallback for older plugin interface: convert blob safely using FileReader
+    const base64Data = await blobSliceToBase64(blob)
     const result = await FileBridge.saveFileToDevice({
       fileName,
       base64Data,
       mimeType,
-      shareAfterSave
+      shareAfterSave,
     })
 
     return {
@@ -74,11 +124,11 @@ export async function saveFile(params: SaveFileParams): Promise<FileSaveOutcome>
       fileSizeText: sizeText,
       isNative: true,
       base64Data,
-      mimeType
+      mimeType,
     }
   }
 
-  // 2. Web Browser: Try Modern File System Access API (showSaveFilePicker)
+  // 2. Web Browser: Modern File System Access API (showSaveFilePicker)
   if (typeof window !== 'undefined' && 'showSaveFilePicker' in window) {
     try {
       const picker = (window as unknown as { showSaveFilePicker: (opts: unknown) => Promise<FileSystemFileHandle> }).showSaveFilePicker
@@ -87,17 +137,12 @@ export async function saveFile(params: SaveFileParams): Promise<FileSaveOutcome>
         types: [
           {
             description: fileName.endsWith('.zip') ? 'ZIP 壓縮備份檔' : '備份檔案',
-            accept: { [mimeType]: [fileName.includes('.') ? `.${fileName.split('.').pop()}` : '.*'] }
-          }
-        ]
+            accept: { [mimeType]: [fileName.includes('.') ? `.${fileName.split('.').pop()}` : '.*'] },
+          },
+        ],
       })
       const writable = await (handle as FileSystemFileHandle).createWritable()
-      const rawData = typeof data === 'string'
-        ? new TextEncoder().encode(data)
-        : data instanceof Blob
-          ? await data.arrayBuffer()
-          : data
-      await writable.write(rawData)
+      await writable.write(blob)
       await writable.close()
 
       return {
@@ -105,7 +150,7 @@ export async function saveFile(params: SaveFileParams): Promise<FileSaveOutcome>
         location: `已儲存至您指定的檔案路徑：${handle.name || fileName}`,
         fileName: handle.name || fileName,
         fileSizeText: sizeText,
-        isNative: false
+        isNative: false,
       }
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'name' in err && (err as { name: string }).name === 'AbortError') {
@@ -116,12 +161,6 @@ export async function saveFile(params: SaveFileParams): Promise<FileSaveOutcome>
   }
 
   // 3. Fallback: Classic Browser <a> tag download
-  const blob = typeof data === 'string'
-    ? new Blob([data], { type: mimeType })
-    : data instanceof Blob
-      ? data
-      : new Blob([data.slice().buffer], { type: mimeType })
-
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
@@ -136,7 +175,7 @@ export async function saveFile(params: SaveFileParams): Promise<FileSaveOutcome>
     location: '瀏覽器預設下載資料夾（Downloads）',
     fileName,
     fileSizeText: sizeText,
-    isNative: false
+    isNative: false,
   }
 }
 
@@ -153,7 +192,7 @@ export async function shareExportedFile(fileName: string, base64Data: string, mi
       const file = new File([byteNumbers], fileName, { type: mimeType })
       await navigator.share({
         files: [file],
-        title: fileName
+        title: fileName,
       })
     } catch {
       // User cancelled share

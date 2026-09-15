@@ -32,15 +32,19 @@ public class MainActivity extends BridgeActivity {
 
                 if (getBridge() != null && getBridge().getWebView() != null) {
                     getBridge().getWebView().post(() -> {
-                        String js = String.format(
-                            java.util.Locale.US,
-                            "document.documentElement.style.setProperty('--safe-area-inset-top', '%dpx');" +
-                            "document.documentElement.style.setProperty('--safe-area-inset-bottom', '%dpx');" +
-                            "document.documentElement.style.setProperty('--safe-area-inset-left', '%dpx');" +
-                            "document.documentElement.style.setProperty('--safe-area-inset-right', '%dpx');",
-                            topPx, bottomPx, leftPx, rightPx
-                        );
-                        getBridge().getWebView().evaluateJavascript(js, null);
+                        try {
+                            if (getBridge() != null && getBridge().getWebView() != null) {
+                                String js = String.format(
+                                    java.util.Locale.US,
+                                    "document.documentElement.style.setProperty('--safe-area-inset-top', '%dpx');" +
+                                    "document.documentElement.style.setProperty('--safe-area-inset-bottom', '%dpx');" +
+                                    "document.documentElement.style.setProperty('--safe-area-inset-left', '%dpx');" +
+                                    "document.documentElement.style.setProperty('--safe-area-inset-right', '%dpx');",
+                                    topPx, bottomPx, leftPx, rightPx
+                                );
+                                getBridge().getWebView().evaluateJavascript(js, null);
+                            }
+                        } catch (Throwable ignored) {}
                     });
                 }
                 return windowInsets;
@@ -62,13 +66,17 @@ public class MainActivity extends BridgeActivity {
 
         if (getBridge() != null && getBridge().getWebView() != null) {
             getBridge().getWebView().post(() -> {
-                String js = "window.__SWIFTNOTE_PENDING_ROUTE__ = '" + route + "';" +
-                        "window.dispatchEvent(new CustomEvent('swiftnote:navigate', { detail: { route: '" + route + "' } }));" +
-                        "if (window.history && window.history.pushState) {" +
-                        "  window.history.pushState({}, '', '" + route + "');" +
-                        "  window.dispatchEvent(new PopStateEvent('popstate'));" +
-                        "}";
-                getBridge().getWebView().evaluateJavascript(js, null);
+                try {
+                    if (getBridge() != null && getBridge().getWebView() != null) {
+                        String js = "window.__SWIFTNOTE_PENDING_ROUTE__ = '" + route + "';" +
+                                "window.dispatchEvent(new CustomEvent('swiftnote:navigate', { detail: { route: '" + route + "' } }));" +
+                                "if (window.history && window.history.pushState) {" +
+                                "  window.history.pushState({}, '', '" + route + "');" +
+                                "  window.dispatchEvent(new PopStateEvent('popstate'));" +
+                                "}";
+                        getBridge().getWebView().evaluateJavascript(js, null);
+                    }
+                } catch (Throwable ignored) {}
             });
         }
     }
