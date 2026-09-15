@@ -72,7 +72,7 @@ public class FileBridgePlugin extends Plugin {
             result.put("transferId", transferId);
             call.resolve(result);
         } catch (Throwable t) {
-            call.reject("初始化檔案寫入失敗: " + t.getMessage(), t);
+            call.reject("初始化檔案寫入失敗: " + t.getMessage());
         }
     }
 
@@ -105,7 +105,7 @@ public class FileBridgePlugin extends Plugin {
             result.put("bytesWritten", session.bytesWritten);
             call.resolve(result);
         } catch (Throwable t) {
-            call.reject("寫入分塊失敗: " + t.getMessage(), t);
+            call.reject("寫入分塊失敗: " + t.getMessage());
         }
     }
 
@@ -152,7 +152,7 @@ public class FileBridgePlugin extends Plugin {
                 try {
                     session.tempFile.delete();
                 } catch (Throwable ignored) {}
-                call.reject("儲存檔案至裝置失敗: " + t.getMessage(), t);
+                call.reject("儲存檔案至裝置失敗: " + t.getMessage());
             }
         }).start();
     }
@@ -230,7 +230,7 @@ public class FileBridgePlugin extends Plugin {
                         tempFile.delete();
                     } catch (Throwable ignored) {}
                 }
-                call.reject("儲存檔案失敗: " + t.getMessage(), t);
+                call.reject("儲存檔案失敗: " + t.getMessage());
             }
         }).start();
     }
@@ -271,7 +271,7 @@ public class FileBridgePlugin extends Plugin {
                 call.resolve(result);
 
             } catch (Throwable t) {
-                call.reject("分享檔案失敗: " + t.getMessage(), t);
+                call.reject("分享檔案失敗: " + t.getMessage());
             }
         }).start();
     }
