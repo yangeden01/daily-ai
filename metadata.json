@@ -1,6 +1,6 @@
 {
-  "name": "手機記事本",
-  "description": "記錄、搜尋與整理每日事件與筆記的本機優先個人日誌與手機記事本。",
+  "name": "EdenNote",
+  "description": "EdenNote - 記錄、搜尋與整理每日事件與筆記的本機優先個人日誌與手機記事本。",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

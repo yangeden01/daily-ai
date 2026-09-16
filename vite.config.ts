@@ -29,9 +29,9 @@ export default defineConfig({
       },
       manifest: {
         id: basePath,
-        name: '手機記事本 — 個人日誌與記事',
-        short_name: '手機記事本',
-        description: '記錄、搜尋與整理每日事件與筆記的手機記事本。',
+        name: 'EdenNote — 個人日誌與記事',
+        short_name: 'EdenNote',
+        description: '記錄、搜尋與整理每日事件與筆記的 EdenNote 手機記事本。',
         theme_color: '#4338ca',
         background_color: '#1e1b4b',
         display: 'standalone',

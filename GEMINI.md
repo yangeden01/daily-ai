@@ -1,6 +1,7 @@
 # Project Automation Instructions
 
-## GitHub Deployment & Credentials
+## Automated APK Deployment Skill
+- This project has a dedicated deployment skill defined in `skills/deploy-apk/SKILL.md` and executable script `./scripts/deploy-apk.sh`.
 - The project repository is `https://github.com/yangeden01/daily-ai.git`.
 - Local Git credentials are permanently stored via `credential.helper store` in `/root/.git-credentials` and the remote origin URL.
 - Whenever the user requests "deploy", "執行deploy", "部署", or asks to sync to GitHub:

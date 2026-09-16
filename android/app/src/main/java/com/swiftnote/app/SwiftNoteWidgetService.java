@@ -3,6 +3,7 @@ package com.swiftnote.app;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
+import android.util.TypedValue;
 import android.view.View;
 import android.widget.RemoteViews;
 import android.widget.RemoteViewsService;
@@ -230,6 +231,36 @@ public class SwiftNoteWidgetService extends RemoteViewsService {
             return mItems.size();
         }
 
+        private float getTitleSize(int level) {
+            switch (level) {
+                case WidgetStorage.FONT_SIZE_SMALL: return 12.0f;
+                case WidgetStorage.FONT_SIZE_LARGE: return 16.5f;
+                case WidgetStorage.FONT_SIZE_EXTRA_LARGE: return 19.5f;
+                case WidgetStorage.FONT_SIZE_MEDIUM:
+                default: return 14.0f;
+            }
+        }
+
+        private float getSubSize(int level) {
+            switch (level) {
+                case WidgetStorage.FONT_SIZE_SMALL: return 9.5f;
+                case WidgetStorage.FONT_SIZE_LARGE: return 12.5f;
+                case WidgetStorage.FONT_SIZE_EXTRA_LARGE: return 14.5f;
+                case WidgetStorage.FONT_SIZE_MEDIUM:
+                default: return 11.0f;
+            }
+        }
+
+        private float getHeaderSize(int level) {
+            switch (level) {
+                case WidgetStorage.FONT_SIZE_SMALL: return 10.0f;
+                case WidgetStorage.FONT_SIZE_LARGE: return 12.5f;
+                case WidgetStorage.FONT_SIZE_EXTRA_LARGE: return 14.0f;
+                case WidgetStorage.FONT_SIZE_MEDIUM:
+                default: return 11.0f;
+            }
+        }
+
         @Override
         public RemoteViews getViewAt(int position) {
             if (position < 0 || position >= mItems.size()) {
@@ -237,11 +268,21 @@ public class SwiftNoteWidgetService extends RemoteViewsService {
             }
 
             WidgetItem item = mItems.get(position);
+            int fontLevel = WidgetStorage.getFontSizeLevel(mContext);
+            float titleSize = getTitleSize(fontLevel);
+            float subSize = getSubSize(fontLevel);
+            float headerSize = getHeaderSize(fontLevel);
 
             switch (item.type) {
                 case SECTION_HEADER: {
                     RemoteViews views = new RemoteViews(mContext.getPackageName(), R.layout.widget_section_header);
                     views.setTextViewText(R.id.header_count, "(" + item.sectionCount + ")");
+                    views.setTextViewTextSize(R.id.header_badge_todo, TypedValue.COMPLEX_UNIT_SP, headerSize);
+                    views.setTextViewTextSize(R.id.header_badge_daily, TypedValue.COMPLEX_UNIT_SP, headerSize);
+                    views.setTextViewTextSize(R.id.header_badge_anniversary, TypedValue.COMPLEX_UNIT_SP, headerSize);
+                    views.setTextViewTextSize(R.id.header_count, TypedValue.COMPLEX_UNIT_SP, headerSize);
+                    views.setTextViewTextSize(R.id.header_text_collapse, TypedValue.COMPLEX_UNIT_SP, headerSize);
+                    views.setTextViewTextSize(R.id.header_text_add, TypedValue.COMPLEX_UNIT_SP, headerSize);
 
                     if (item.sectionType == 1) { // Todo
                         views.setViewVisibility(R.id.header_badge_todo, View.VISIBLE);
@@ -285,8 +326,11 @@ public class SwiftNoteWidgetService extends RemoteViewsService {
                 case TODO_ITEM: {
                     RemoteViews views = new RemoteViews(mContext.getPackageName(), R.layout.widget_item_todo);
                     views.setTextViewText(R.id.todo_title, item.title);
+                    views.setTextViewTextSize(R.id.todo_title, TypedValue.COMPLEX_UNIT_SP, titleSize);
+
                     if (item.date != null && !item.date.isEmpty()) {
                         views.setTextViewText(R.id.todo_date, item.date);
+                        views.setTextViewTextSize(R.id.todo_date, TypedValue.COMPLEX_UNIT_SP, subSize);
                         views.setViewVisibility(R.id.todo_date, View.VISIBLE);
                     } else {
                         views.setViewVisibility(R.id.todo_date, View.GONE);
@@ -303,9 +347,12 @@ public class SwiftNoteWidgetService extends RemoteViewsService {
                     RemoteViews views = new RemoteViews(mContext.getPackageName(), R.layout.widget_item_daily);
                     views.setTextViewText(R.id.daily_date, item.date);
                     views.setTextViewText(R.id.daily_title, item.title);
+                    views.setTextViewTextSize(R.id.daily_date, TypedValue.COMPLEX_UNIT_SP, subSize);
+                    views.setTextViewTextSize(R.id.daily_title, TypedValue.COMPLEX_UNIT_SP, titleSize);
 
                     if (item.category != null && !item.category.isEmpty()) {
                         views.setTextViewText(R.id.daily_category, item.category);
+                        views.setTextViewTextSize(R.id.daily_category, TypedValue.COMPLEX_UNIT_SP, subSize);
                         views.setViewVisibility(R.id.daily_category, View.VISIBLE);
                     } else {
                         views.setViewVisibility(R.id.daily_category, View.GONE);
@@ -322,9 +369,12 @@ public class SwiftNoteWidgetService extends RemoteViewsService {
                     RemoteViews views = new RemoteViews(mContext.getPackageName(), R.layout.widget_item_anniversary);
                     views.setTextViewText(R.id.anniversary_day, item.relativeDay);
                     views.setTextViewText(R.id.anniversary_title, item.title);
+                    views.setTextViewTextSize(R.id.anniversary_day, TypedValue.COMPLEX_UNIT_SP, subSize);
+                    views.setTextViewTextSize(R.id.anniversary_title, TypedValue.COMPLEX_UNIT_SP, titleSize);
 
                     if (item.anniversaryLabel != null && !item.anniversaryLabel.isEmpty()) {
                         views.setTextViewText(R.id.anniversary_label, item.anniversaryLabel);
+                        views.setTextViewTextSize(R.id.anniversary_label, TypedValue.COMPLEX_UNIT_SP, subSize);
                         views.setViewVisibility(R.id.anniversary_label, View.VISIBLE);
                     } else {
                         views.setViewVisibility(R.id.anniversary_label, View.GONE);
@@ -341,6 +391,7 @@ public class SwiftNoteWidgetService extends RemoteViewsService {
                 default: {
                     RemoteViews views = new RemoteViews(mContext.getPackageName(), R.layout.widget_item_empty);
                     views.setTextViewText(R.id.empty_text, item.emptyMessage);
+                    views.setTextViewTextSize(R.id.empty_text, TypedValue.COMPLEX_UNIT_SP, subSize);
                     return views;
                 }
             }

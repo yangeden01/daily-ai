@@ -27,7 +27,7 @@
                 android:id="@+id/widget_title"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="SwiftNote"
+                android:text="EdenNote"
                 android:textColor="#0F172A"
                 android:textSize="15sp"
                 android:textStyle="bold" />
@@ -39,6 +39,60 @@
                 android:text="已更新"
                 android:textColor="#64748B"
                 android:textSize="10sp" />
+        </LinearLayout>
+
+        <!-- Font Size Controls (Adjustable Font Size in Header) -->
+        <LinearLayout
+            android:id="@+id/widget_font_size_container"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:layout_marginEnd="6dp">
+
+            <TextView
+                android:id="@+id/widget_btn_font_smaller"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/btn_refresh_bg"
+                android:paddingStart="7dp"
+                android:paddingTop="4dp"
+                android:paddingEnd="7dp"
+                android:paddingBottom="4dp"
+                android:text="A⁻"
+                android:textColor="#334155"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_font_size_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/btn_refresh_bg"
+                android:layout_marginStart="3dp"
+                android:layout_marginEnd="3dp"
+                android:paddingStart="6dp"
+                android:paddingTop="4dp"
+                android:paddingEnd="6dp"
+                android:paddingBottom="4dp"
+                android:text="字體:中"
+                android:textColor="#2563EB"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_btn_font_larger"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/btn_refresh_bg"
+                android:paddingStart="7dp"
+                android:paddingTop="4dp"
+                android:paddingEnd="7dp"
+                android:paddingBottom="4dp"
+                android:text="A⁺"
+                android:textColor="#334155"
+                android:textSize="12sp"
+                android:textStyle="bold" />
         </LinearLayout>
 
         <TextView
@@ -81,7 +135,7 @@
         android:layout_height="0dp"
         android:layout_weight="1"
         android:gravity="center"
-        android:text="尚無資料，開啟 SwiftNote 同步"
+        android:text="尚無資料，開啟 EdenNote 同步"
         android:textColor="#94A3B8"
         android:textSize="13sp"
         android:visibility="gone" />

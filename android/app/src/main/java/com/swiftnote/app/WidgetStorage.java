@@ -43,4 +43,48 @@ public class WidgetStorage {
         setSectionCollapsed(context, sectionType, nextState);
         return nextState;
     }
+
+    private static final String KEY_FONT_SIZE_LEVEL = "font_size_level";
+    public static final int FONT_SIZE_SMALL = 0;
+    public static final int FONT_SIZE_MEDIUM = 1;
+    public static final int FONT_SIZE_LARGE = 2;
+    public static final int FONT_SIZE_EXTRA_LARGE = 3;
+
+    public static int getFontSizeLevel(Context context) {
+        return getPrefs(context).getInt(KEY_FONT_SIZE_LEVEL, FONT_SIZE_MEDIUM);
+    }
+
+    public static void setFontSizeLevel(Context context, int level) {
+        if (level < FONT_SIZE_SMALL) level = FONT_SIZE_SMALL;
+        if (level > FONT_SIZE_EXTRA_LARGE) level = FONT_SIZE_EXTRA_LARGE;
+        getPrefs(context).edit().putInt(KEY_FONT_SIZE_LEVEL, level).apply();
+    }
+
+    public static int cycleFontSizeLevel(Context context) {
+        int current = getFontSizeLevel(context);
+        int next = (current + 1) % 4;
+        setFontSizeLevel(context, next);
+        return next;
+    }
+
+    public static int adjustFontSizeLevel(Context context, int delta) {
+        int current = getFontSizeLevel(context);
+        int next = Math.max(FONT_SIZE_SMALL, Math.min(FONT_SIZE_EXTRA_LARGE, current + delta));
+        setFontSizeLevel(context, next);
+        return next;
+    }
+
+    public static String getFontSizeLabel(int level) {
+        switch (level) {
+            case FONT_SIZE_SMALL:
+                return "字體:小";
+            case FONT_SIZE_LARGE:
+                return "字體:大";
+            case FONT_SIZE_EXTRA_LARGE:
+                return "字體:特大";
+            case FONT_SIZE_MEDIUM:
+            default:
+                return "字體:中";
+        }
+    }
 }

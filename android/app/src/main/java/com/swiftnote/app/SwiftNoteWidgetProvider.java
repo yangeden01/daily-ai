@@ -19,6 +19,9 @@ public class SwiftNoteWidgetProvider extends AppWidgetProvider {
     public static final String ACTION_TOGGLE_SECTION = "com.swiftnote.app.ACTION_TOGGLE_SECTION";
     public static final String ACTION_ADD_ITEM = "com.swiftnote.app.ACTION_ADD_ITEM";
     public static final String ACTION_OPEN_ITEM = "com.swiftnote.app.ACTION_OPEN_ITEM";
+    public static final String ACTION_FONT_SMALLER = "com.swiftnote.app.ACTION_FONT_SMALLER";
+    public static final String ACTION_FONT_LARGER = "com.swiftnote.app.ACTION_FONT_LARGER";
+    public static final String ACTION_FONT_CYCLE = "com.swiftnote.app.ACTION_FONT_CYCLE";
 
     public static final String EXTRA_SECTION_TYPE = "extra_section_type";
     public static final String EXTRA_ROUTE = "route";
@@ -39,7 +42,24 @@ public class SwiftNoteWidgetProvider extends AppWidgetProvider {
         String action = intent.getAction();
         if (action == null) return;
 
-        // 1. Handle toggle collapse/expand for a section
+        // 1. Handle font size adjustment
+        if (ACTION_FONT_SMALLER.equals(action)) {
+            WidgetStorage.adjustFontSizeLevel(context, -1);
+            updateAllWidgets(context);
+            return;
+        }
+        if (ACTION_FONT_LARGER.equals(action)) {
+            WidgetStorage.adjustFontSizeLevel(context, 1);
+            updateAllWidgets(context);
+            return;
+        }
+        if (ACTION_FONT_CYCLE.equals(action)) {
+            WidgetStorage.cycleFontSizeLevel(context);
+            updateAllWidgets(context);
+            return;
+        }
+
+        // 2. Handle toggle collapse/expand for a section
         if (ACTION_TOGGLE_SECTION.equals(action)) {
             int sectionType = intent.getIntExtra(EXTRA_SECTION_TYPE, 1);
             WidgetStorage.toggleSectionCollapsed(context, sectionType);
@@ -47,7 +67,7 @@ public class SwiftNoteWidgetProvider extends AppWidgetProvider {
             return;
         }
 
-        // 2. Handle add item (+) button
+        // 3. Handle add item (+) button
         if (ACTION_ADD_ITEM.equals(action)) {
             int sectionType = intent.getIntExtra(EXTRA_SECTION_TYPE, 1);
             String route;
@@ -62,7 +82,7 @@ public class SwiftNoteWidgetProvider extends AppWidgetProvider {
             return;
         }
 
-        // 3. Handle opening item from list
+        // 4. Handle opening item from list
         if (ACTION_OPEN_ITEM.equals(action)) {
             String route = intent.getStringExtra(EXTRA_ROUTE);
             if (route != null && !route.isEmpty()) {
@@ -71,7 +91,7 @@ public class SwiftNoteWidgetProvider extends AppWidgetProvider {
             return;
         }
 
-        // 4. Handle refresh and system clock/timezone changes
+        // 5. Handle refresh and system clock/timezone changes
         if (ACTION_REFRESH_WIDGET.equals(action) ||
             Intent.ACTION_DATE_CHANGED.equals(action) ||
             Intent.ACTION_TIME_CHANGED.equals(action) ||
@@ -110,6 +130,9 @@ public class SwiftNoteWidgetProvider extends AppWidgetProvider {
     public static void updateAppWidget(Context context, AppWidgetManager appWidgetManager, int appWidgetId) {
         RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_layout);
 
+        // Update app title to EdenNote
+        views.setTextViewText(R.id.widget_title, "EdenNote");
+
         // Update header timestamp
         String lastTime = WidgetStorage.getLastUpdateTime(context);
         if (lastTime == null || lastTime.isEmpty()) {
@@ -117,6 +140,40 @@ public class SwiftNoteWidgetProvider extends AppWidgetProvider {
             lastTime = sdf.format(new Date());
         }
         views.setTextViewText(R.id.widget_updated_time, "更新於 " + lastTime);
+
+        // Update font size indicator & buttons
+        int fontLevel = WidgetStorage.getFontSizeLevel(context);
+        views.setTextViewText(R.id.widget_font_size_label, WidgetStorage.getFontSizeLabel(fontLevel));
+
+        Intent smallerIntent = new Intent(context, SwiftNoteWidgetProvider.class);
+        smallerIntent.setAction(ACTION_FONT_SMALLER);
+        PendingIntent smallerPendingIntent = PendingIntent.getBroadcast(
+                context,
+                10,
+                smallerIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+        views.setOnClickPendingIntent(R.id.widget_btn_font_smaller, smallerPendingIntent);
+
+        Intent largerIntent = new Intent(context, SwiftNoteWidgetProvider.class);
+        largerIntent.setAction(ACTION_FONT_LARGER);
+        PendingIntent largerPendingIntent = PendingIntent.getBroadcast(
+                context,
+                11,
+                largerIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+        views.setOnClickPendingIntent(R.id.widget_btn_font_larger, largerPendingIntent);
+
+        Intent cycleIntent = new Intent(context, SwiftNoteWidgetProvider.class);
+        cycleIntent.setAction(ACTION_FONT_CYCLE);
+        PendingIntent cyclePendingIntent = PendingIntent.getBroadcast(
+                context,
+                12,
+                cycleIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+        views.setOnClickPendingIntent(R.id.widget_font_size_label, cyclePendingIntent);
 
         // Launch main app when tapping title area
         Intent appIntent = new Intent(context, MainActivity.class);
