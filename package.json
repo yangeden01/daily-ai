@@ -47,5 +47,13 @@
     "tailwindcss": "3.4.17",
     "typescript": "latest",
     "vitest": "^4.1.10"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@google/genai",
+      "esbuild",
+      "protobufjs",
+      "sharp"
+    ]
   }
 }
