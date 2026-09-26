@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Calendar, CalendarDays, ChevronRight, Gift, Heart, Inbox, LayoutGrid, Moon, Sparkles, Sun } from 'lucide-react'
+import { Calendar, CalendarDays, ChevronRight, Gift, Heart, Inbox, LayoutGrid, Moon, Sparkles, Sun, Bot } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
 import type { Event } from '../../models/Event'
 import { eventRepository } from '../../repositories'
@@ -9,6 +9,7 @@ import { appModeFromSearch, routeForMode } from '../../utils/appMode'
 import { isAnniversaryEvent, isDailyEvent, isFutureDailyEvent, isNoteEvent, isTodoNote, sortNotes } from '../../utils/noteEvents'
 import { formatDateToYMD, formatSolarDateWithWeekday, getUpcomingAnniversaries, parseYMDToDate } from '../../utils/anniversary'
 import { LinkifiedText } from '../../components/LinkifiedText'
+import { AIAssistantPage } from './AIAssistantPage'
 
 const currentMonth = () => {
   const now = new Date()
@@ -25,6 +26,18 @@ export default function DashboardPage() {
   const mode = appModeFromSearch(`?${searchParams.toString()}`)
   const isNotesMode = mode === 'notes'
   const isAnniversaryMode = mode === 'anniversary'
+
+  const currentView = searchParams.get('view') || 'ai'
+
+  const setView = (nextView: 'ai' | 'stats') => {
+    const next = new URLSearchParams(searchParams)
+    if (nextView === 'ai') {
+      next.delete('view')
+    } else {
+      next.set('view', 'stats')
+    }
+    setSearchParams(next)
+  }
 
   const todayStr = useMemo(() => formatDateToYMD(new Date()), [])
   const monthFromUrl = searchParams.get('month')
@@ -128,8 +141,28 @@ export default function DashboardPage() {
     if (!isLoading) restoreListPosition(dashboardRouteKey)
   }, [dashboardRouteKey, isLoading])
 
+  if (currentView === 'ai') {
+    return <AIAssistantPage onSwitchToClassicStats={() => setView('stats')} />
+  }
+
   return (
     <main className="page-enter space-y-5">
+      {/* Return to AI Mode Banner */}
+      <div className="flex items-center justify-between rounded-2xl border border-indigo-200 bg-indigo-50/90 p-3 dark:border-indigo-900/60 dark:bg-indigo-950/40">
+        <div className="flex items-center gap-2 text-xs font-bold text-indigo-900 dark:text-indigo-200">
+          <Sparkles size={16} className="text-indigo-600 dark:text-indigo-400" />
+          <span>目前顯示：傳統統計圖表</span>
+        </div>
+        <button
+          type="button"
+          onClick={() => setView('ai')}
+          className="inline-flex items-center gap-1.5 rounded-full bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-indigo-700 active:scale-95"
+        >
+          <Bot size={14} />
+          <span>切換回 AI 模式</span>
+        </button>
+      </div>
+
       <section className="dashboard-heading">
         <div>
           <p className="section-label !mb-1 !px-0">

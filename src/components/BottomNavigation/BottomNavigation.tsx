@@ -1,13 +1,13 @@
 import { useEffect } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
-import { ChartNoAxesColumnIncreasing, NotebookPen, Search, Settings } from 'lucide-react'
+import { NotebookPen, Search, Settings, Sparkles } from 'lucide-react'
 import { clearTabDestination, getTabDestination, rememberTabDestination, tabBaseForReturnTo } from '../../utils/tabNavigationMemory'
 import { appModeFromSearch, routeForMode } from '../../utils/appMode'
 
 const navigationItems = [
   { to: '/daily', icon: NotebookPen, label: 'Input' },
   { to: '/ai', icon: Search, label: 'Search' },
-  { to: '/dashboard', icon: ChartNoAxesColumnIncreasing, label: 'Dashboard' },
+  { to: '/dashboard', icon: Sparkles, label: 'AI' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ]
 

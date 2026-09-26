@@ -75,7 +75,7 @@ export default function InstallGuideModal({ isOpen, onClose }: InstallGuideModal
             <div className="space-y-3">
               <p className="font-medium text-stone-900 dark:text-stone-100">手機主畫面安裝步驟：</p>
 
-              {installPlatform === 'ios' ? (
+              {installPlatform === 'ios-safari' || installPlatform === 'ios-browser' ? (
                 <ol className="space-y-2.5 text-xs leading-relaxed list-decimal list-inside bg-stone-50 dark:bg-stone-800/50 p-3.5 rounded-xl border border-stone-200 dark:border-stone-700/50">
                   <li>點擊 Safari 底部工具列的「<strong>分享</strong>」圖示 <Share className="inline w-3.5 h-3.5 mx-0.5 text-indigo-600" /></li>
                   <li>在功能選單中往下滑動，找到並點選「<strong>加入主畫面</strong>」</li>

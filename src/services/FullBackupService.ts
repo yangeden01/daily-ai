@@ -111,7 +111,7 @@ export class FullBackupService {
     ])
     this.validateAttachmentLimits(attachments)
 
-    const zipEntries: Record<string, Uint8Array | [Uint8Array, { level: number }]> = { 'Daily.xlsx': workbook }
+    const zipEntries: import('fflate').Zippable = { 'Daily.xlsx': workbook }
     const manifestAttachments: ManifestAttachment[] = []
 
     for (const attachment of attachments) {

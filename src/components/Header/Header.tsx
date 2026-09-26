@@ -9,7 +9,7 @@ import InstallGuideModal from '../InstallModal/InstallGuideModal'
 const pageTitles: Record<string, string> = {
   '/daily': 'Daily Record',
   '/ai': 'Search',
-  '/dashboard': 'Dashboard',
+  '/dashboard': 'EdenNote AI',
   '/settings': 'Settings',
 }
 
