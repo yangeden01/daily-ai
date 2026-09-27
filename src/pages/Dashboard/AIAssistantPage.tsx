@@ -28,14 +28,6 @@ interface Props {
 
 const STORAGE_KEY = 'edennote_ai_chat_history_v1'
 
-const quickSuggestions = [
-  { label: '📊 歷年加薪與成長率', prompt: '請幫我讀取歷年加薪資料，列出每次調薪記錄，並計算整體成長幅度與年化加薪速率（CAGR）。' },
-  { label: '⏱️ 加班與工時統計', prompt: '請統計我所有工作與加班紀錄，計算總加班時數與發生頻率。' },
-  { label: '💰 累積花費與各類支出', prompt: '請統計我資料庫中所有有金額的紀錄，列出各類別花費與最大筆的支出。' },
-  { label: '📅 整理今日重點記事', prompt: '請整理我今天的重點工作日誌與生活事件，歸納出目前的重點方向。' },
-  { label: '🔍 檢索特定關鍵字筆記', prompt: '請幫我檢索資料庫中與健康或看診相關的記事紀錄。' },
-]
-
 export const AIAssistantPage: React.FC<Props> = ({ onSwitchToClassicStats }) => {
   const [events, setEvents] = useState<Event[]>([])
   const [loadingEvents, setLoadingEvents] = useState(true)
@@ -313,39 +305,15 @@ export const AIAssistantPage: React.FC<Props> = ({ onSwitchToClassicStats }) => 
               </span>
             </div>
 
-            {/* Quick suggestion prompt cards */}
-            <div className="mt-6 w-full max-w-lg space-y-2 text-left">
-              <p className="px-1 text-xs font-bold text-stone-400 uppercase tracking-wider">
-                💡 快速提問建議（點選即可送出）
-              </p>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {quickSuggestions.map((item, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => void handleSend(item.prompt)}
-                    className="flex flex-col rounded-2xl border border-stone-200 bg-white p-3 text-left shadow-sm transition hover:border-indigo-400 hover:bg-indigo-50/40 active:scale-[0.99] dark:border-white/10 dark:bg-stone-900 dark:hover:border-indigo-500 dark:hover:bg-indigo-950/30"
-                  >
-                    <span className="text-xs font-bold text-stone-900 dark:text-stone-100">
-                      {item.label}
-                    </span>
-                    <span className="mt-1 line-clamp-2 text-[11px] leading-4 text-stone-500 dark:text-stone-400">
-                      {item.prompt}
-                    </span>
-                  </button>
-                ))}
-              </div>
-
-              {/* Direct jump to input tip */}
-              <div className="pt-2 text-center">
-                <button
-                  type="button"
-                  onClick={() => textareaRef.current?.focus()}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 transition hover:bg-indigo-100 active:scale-95 dark:bg-indigo-950/60 dark:text-indigo-300 dark:hover:bg-indigo-900/80"
-                >
-                  <span>💬 或直接在下方輸入框鍵入問題</span>
-                </button>
-              </div>
+            {/* Direct jump to input tip */}
+            <div className="mt-6 text-center">
+              <button
+                type="button"
+                onClick={() => textareaRef.current?.focus()}
+                className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-4 py-2 text-xs font-semibold text-indigo-700 transition hover:bg-indigo-100 active:scale-95 dark:bg-indigo-950/60 dark:text-indigo-300 dark:hover:bg-indigo-900/80"
+              >
+                <span>💬 請直接在下方輸入框鍵入問題即可開始對話</span>
+              </button>
             </div>
           </div>
         ) : (

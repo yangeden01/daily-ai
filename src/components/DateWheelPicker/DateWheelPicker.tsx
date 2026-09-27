@@ -1,5 +1,6 @@
-import { useState, useMemo, useRef } from 'react'
-import { CalendarDays, Calendar as CalendarIcon, Check, X, ChevronDown, RotateCcw } from 'lucide-react'
+import { useState, useMemo, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
+import { CalendarDays, Calendar as CalendarIcon, Check, X, ChevronDown } from 'lucide-react'
 import { toLocalDateInputValue } from '../../utils/localDate'
 
 interface DateWheelPickerProps {
@@ -68,6 +69,17 @@ export default function DateWheelPicker({ id, value, onChange, required }: DateW
   const dayOptions = useMemo(() => {
     return Array.from({ length: maxDays }, (_, i) => i + 1)
   }, [maxDays])
+
+  useEffect(() => {
+    if (isModalOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [isModalOpen])
 
   const openModal = () => {
     const parts = parseDateParts(value)
@@ -216,14 +228,14 @@ export default function DateWheelPicker({ id, value, onChange, required }: DateW
         </button>
       </div>
 
-      {/* 互動式日期調整彈窗（保證 Android 手機 WebView 100% 順暢運作） */}
-      {isModalOpen && (
+      {/* 互動式日期調整彈窗（透過 createPortal 掛載至 document.body，置中顯示，保證 100% 正常彈出） */}
+      {isModalOpen && typeof document !== 'undefined' && createPortal(
         <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-150"
+          className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-150"
           onClick={() => setIsModalOpen(false)}
         >
           <div
-            className="w-full max-w-sm rounded-3xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-white/10 p-5 shadow-2xl animate-in slide-in-from-bottom-4 duration-200"
+            className="w-full max-w-sm rounded-3xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-white/10 p-5 shadow-2xl animate-in zoom-in-95 duration-200"
             onClick={(e) => e.stopPropagation()}
           >
             {/* 彈窗標題列 */}
@@ -397,9 +409,11 @@ export default function DateWheelPicker({ id, value, onChange, required }: DateW
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )
 }
+
 
