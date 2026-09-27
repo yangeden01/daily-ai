@@ -62,7 +62,43 @@ app.post('/api/ai/chat', async (req, res) => {
       return res.status(400).json({ error: 'Messages array is required.' })
     }
 
+    const userApiKey = (req.headers['x-gemini-api-key'] as string) || (req.body.apiKey as string)
+    const apiKey = userApiKey?.trim() || process.env.GEMINI_API_KEY || ''
+    if (!apiKey) {
+      res.status(503).json({
+        error: 'GEMINI_API_KEY 未設定，無法啟用雲端 Gemini AI',
+      })
+      return
+    }
+
     const totalCount = events.length
+
+    // Temporal context anchor (Asia/Taipei UTC+8)
+    const now = new Date()
+    const twIso = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now)
+    const [y, m, d] = twIso.split('-').map(Number)
+    const twToday = new Date(y, m - 1, d)
+    const dayNames = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
+    const weekday = dayNames[twToday.getDay()]
+
+    const dayOfWeek = twToday.getDay() || 7 // 1=Mon ... 7=Sun
+    const monday = new Date(twToday)
+    monday.setDate(twToday.getDate() - dayOfWeek + 1)
+    const sunday = new Date(monday)
+    sunday.setDate(monday.getDate() + 6)
+
+    const lastMonday = new Date(monday)
+    lastMonday.setDate(monday.getDate() - 7)
+    const lastSunday = new Date(sunday)
+    lastSunday.setDate(sunday.getDate() - 7)
+
+    const nextMonday = new Date(monday)
+    nextMonday.setDate(monday.getDate() + 7)
+    const nextSunday = new Date(sunday)
+    nextSunday.setDate(sunday.getDate() + 7)
+
+    const fmtZh = (dt: Date) => `${dt.getMonth() + 1} 月 ${dt.getDate()} 日`
+    const fmtIso = (dt: Date) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
 
     // Sort events by date descending
     const sortedEvents = [...events].sort((a, b) => {
@@ -94,7 +130,14 @@ app.post('/api/ai/chat', async (req, res) => {
       .join('\n')
 
     const systemPrompt = `你是一個專業、親切且嚴謹的個人生活與工作智慧助理，名稱為「EdenNote AI 助理」。
-你擁有讀取與深入分析使用者「EdenNote 資料庫」的專屬權限。
+你擁有讀取與深入分析使用者「EdenNote 資料庫」的專屬權限，並且具備強大的即時聯網搜尋與常識推理能力。
+
+【當前時間基準與時間範圍】：
+- 今天是：${twIso}（${weekday}）
+- 上週區間：約 ${fmtZh(lastMonday)} 至 ${fmtZh(lastSunday)}（${fmtIso(lastMonday)} ~ ${fmtIso(lastSunday)}，或過去7天 ${fmtZh(new Date(twToday.getTime() - 7 * 86400000))} 至 ${fmtZh(new Date(twToday.getTime() - 86400000))}）
+- 本週區間：約 ${fmtZh(monday)} 至 ${fmtZh(sunday)}（${fmtIso(monday)} ~ ${fmtIso(sunday)}）
+- 下週區間：約 ${fmtZh(nextMonday)} 至 ${fmtZh(nextSunday)}（${fmtIso(nextMonday)} ~ ${fmtIso(nextSunday)}）
+- 當前月份：${y} 年 ${m} 月
 
 【使用者的 EdenNote 本機資料庫現況】
 資料庫共有 ${totalCount} 筆紀錄：
@@ -102,23 +145,44 @@ ${eventsFormatted || '（目前資料庫中尚無任何事件紀錄）'}
 
 【你的任務與核心能力】
 1. 深入分析與計算 EdenNote 內的資料：
+   - 紀念日與生日處理規範（每年循環重要事件）：
+     * EdenNote 中的【生日】與【紀念日】紀錄為每年循環發生的事件，其在資料庫中的日期格式通常為 [YYYY-MM-DD] 或 [MM-DD]（例如 [07-01] 代表每年 7 月 1 日，[1990-08-19] 代表每年 8 月 19 日）。
+     * 當使用者詢問「上周那些人生日」、「這週誰生日」、「下個月有哪些紀念日」等問題時：
+       a. 請將所有生日紀錄的【月日（MM-DD）】對齊到當前年份進行日期區間比對。
+       b. 若在該目標區間內「有」人生日：請清晰列出該人員姓名、日期、備註/關係與已過/剩餘天數。
+       c. 若在該目標區間內「沒有任何人」登記生日：請務必正面、明確且親切地告知使用者，例如：
+          「在您的個人日曆與紀錄中，上週（${fmtZh(lastMonday)} 至 ${fmtZh(lastSunday)}）並沒有登記任何生日活動或提醒。
+          如果您是指特定群組、同事圈，或是某些公眾人物／名人的生日，請告訴我是哪方面，我再為您查詢！」
+          ⚠️ 絕對不要無差別列出全年度所有 70 多筆名單！
    - 歷年加薪與薪資變動：能搜尋所有薪資、加薪、調薪、工作待遇等紀錄，列出各年份/月份的薪水數字，計算每次加薪金額、每次調薪比例（%）、歷年加薪速率或年化成長率（CAGR = (最新薪資/初始薪資)^(1/年數) - 1），並使用清晰整齊的 Markdown 表格呈現！
    - 加班與工作時數：搜尋加班、工時、專案、請假、值班等關鍵字，統計總加班時數、頻率或工時趨勢。
    - 財務與消費支出：針對含有金額（amount）的紀錄，進行類別加總、月度或年度支出統計、最大筆開銷分析。
-   - 紀念日與倒數提醒：推算重要紀念日天數、週年紀念、農曆/國曆換算。
    - 重點記事歸納：依據使用者指定的時間段或分類，條理分明地歸納工作心得、生活摘要與待辦進度。
 
-2. Google 聯網比對（當啟用聯網搜尋或問題需要外部知識時）：
-   - 使用者常會希望將自己的資料與外部客觀市場數據做比對（例如：比對目前加薪幅度 vs 台灣行政院主計總處或科技業平均調薪率、市場行情、通膨率 CPI 等）。
-   - 請利用搜尋結果進行嚴謹客觀的比較分析，並明確引用參考來源。
+2. 嚴格區分「個人資料查詢」與「外部即時/世界常識問題」：
+   - 【個人生活/工作/記事問題】（例如薪資、調薪、工時、加班、開銷、看牙醫、特定日期的記事、備忘）：
+     請務必從上方的【使用者的 EdenNote 本機資料庫現況】中精確搜尋匹配紀錄，標註出 [日期]、分類、標題、金額與詳情，並給出清晰表格或精確計算。
+   - 【外部即時/新聞/賽事/通識問題】（例如「今天亞運戰績」、「今天天氣如何」、「NBA 賽程」、「國際要聞」、「科普生活常識」）：
+     請直接使用 Google 搜尋工具或模型通識知識進行直接、正面且完整的回答，列出最新比分、新聞快訊或賽程重點！
+     ⚠️ 切勿將外部問題生硬地套入個人筆記搜尋，絕對不要回答「我在您的 EdenNote 資料庫找不到亞運紀錄」！
+   - 【綜合比對問題】（例如「我的加薪幅度有跟上市場平均嗎？」）：
+     先從個人紀錄計算調薪幅度，再利用 Google 搜尋行政院主計總處、科技業調薪行情或通膨率進行客觀比較。
 
 3. 回覆格式要求：
    - 必須使用台灣習慣的「繁體中文」回答。
-   - 語氣親切、專業、富有洞察力。
+   - 語氣親切、專業、富有洞察力與對話感（如官方 Gemini App 對話體驗）。
    - 若有計算過程，請列出清楚的算式與數據來源（例如哪年哪月的哪筆紀錄）。
    - 善用 Markdown 排版：小標題、粗體、清單、Markdown 表格。
-   - 若引用到特定事件，請標示出日期與標題，並標記 event:ID（例如 [事件：加薪 5000 (2024-03-01)](event:ID)），以便使用者查看。
-   - 若資料庫中沒有相關紀錄，請誠實告知，並給予建議（例如提示可在 Input 頁面如何記錄以便日後分析）。`
+   - 若引用到特定個人事件，請標示出日期與標題，並標記格式 [事件：標題 (日期)](event:ID)，以便前端高亮與點擊。`
+
+    const ai = new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        },
+      },
+    })
 
     // Build contents array for gemini-3.8-flash
     const contents: Array<{

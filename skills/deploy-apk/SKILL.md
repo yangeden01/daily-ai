@@ -13,7 +13,7 @@ This skill automates the end-to-end deployment process from Google AI Studio to 
 - **Release Tag**: `v1.0.0-apk`
 - **APK Download URL**: `https://github.com/yangeden01/daily-ai/releases/download/v1.0.0-apk/Daily-AI.apk`
 - **Release Page**: `https://github.com/yangeden01/daily-ai/releases/tag/v1.0.0-apk`
-- **Authentication**: Permanent token stored via `credential.helper store` in `/root/.git-credentials`. Never ask user for credentials.
+- **Authentication**: Permanent token stored via `credential.helper store` in `/app/applet/.git-credentials` or `/root/.git-credentials`. Never ask user for credentials if stored.
 
 ## When to Trigger
 Use this workflow whenever the user asks:

@@ -3,7 +3,7 @@
 ## Automated APK Deployment Skill
 - This project has a dedicated deployment skill defined in `skills/deploy-apk/SKILL.md` and executable script `./scripts/deploy-apk.sh`.
 - The project repository is `https://github.com/yangeden01/daily-ai.git`.
-- Local Git credentials are permanently stored via `credential.helper store` in `/root/.git-credentials` and the remote origin URL.
+- Local Git credentials are permanently stored via `credential.helper store` in `/app/applet/.git-credentials` (persistent workspace volume) and `/root/.git-credentials`.
 - Whenever the user requests "deploy", "執行deploy", "部署", or asks to sync to GitHub:
   1. Verify and compile the applet (`compile_applet`).
   2. Sync Android assets via `npx cap sync android` if native Android or web assets changed.

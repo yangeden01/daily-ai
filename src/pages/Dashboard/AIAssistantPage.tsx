@@ -14,11 +14,13 @@ import {
   BarChart2,
   Database,
   ExternalLink,
+  KeyRound,
+  X,
 } from 'lucide-react'
 import type { Event } from '../../models/Event'
 import { eventRepository } from '../../repositories'
 import { MarkdownMessage } from '../../components/AIChat/MarkdownMessage'
-import { sendChatMessage, type ChatMessage } from '../../services/aiService'
+import { sendChatMessage, getUserGeminiApiKey, setUserGeminiApiKey, testGeminiApiKey, type ChatMessage } from '../../services/aiService'
 
 interface Props {
   onSwitchToClassicStats?: () => void
@@ -51,6 +53,28 @@ export const AIAssistantPage: React.FC<Props> = ({ onSwitchToClassicStats }) => 
   const [enableSearch, setEnableSearch] = useState(true)
   const [isLocalMode, setIsLocalMode] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
+
+  // User Gemini API Key modal
+  const [userApiKey, setUserApiKey] = useState(() => getUserGeminiApiKey())
+  const [showKeyModal, setShowKeyModal] = useState(false)
+  const [keyInput, setKeyInput] = useState(() => getUserGeminiApiKey())
+  const [keyTestState, setKeyTestState] = useState<{ testing?: boolean; ok?: boolean; isDepleted?: boolean; msg?: string }>({})
+
+  const handleSaveModalKey = () => {
+    setUserApiKey(keyInput.trim())
+    setUserGeminiApiKey(keyInput.trim())
+    setShowKeyModal(false)
+  }
+
+  const handleTestModalKey = async () => {
+    setKeyTestState({ testing: true })
+    const res = await testGeminiApiKey(keyInput)
+    setKeyTestState({ testing: false, ok: res.ok, isDepleted: res.isDepleted, msg: res.message })
+    if (res.ok) {
+      setUserApiKey(keyInput.trim())
+      setUserGeminiApiKey(keyInput.trim())
+    }
+  }
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -188,6 +212,25 @@ export const AIAssistantPage: React.FC<Props> = ({ onSwitchToClassicStats }) => 
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Custom Gemini Key Button */}
+          <button
+            type="button"
+            onClick={() => {
+              setKeyInput(getUserGeminiApiKey())
+              setKeyTestState({})
+              setShowKeyModal(true)
+            }}
+            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold transition ${
+              userApiKey
+                ? 'bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-950/60 dark:text-indigo-300 dark:border-indigo-800'
+                : 'bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800'
+            }`}
+            title="設定或變更自訂 Gemini API Key"
+          >
+            <KeyRound size={12} className={userApiKey ? 'text-indigo-600 dark:text-indigo-400' : 'text-amber-600 dark:text-amber-400'} />
+            <span>{userApiKey ? '✨ Gemini 3.8 Flash' : '🔑 設定 Key'}</span>
+          </button>
+
           {/* Engine Mode or Google Search grounding toggle */}
           {isLocalMode ? (
             <span
@@ -362,9 +405,13 @@ export const AIAssistantPage: React.FC<Props> = ({ onSwitchToClassicStats }) => 
                       <div className="mt-2.5 flex items-center justify-between text-[11px] text-stone-400">
                         <div className="flex items-center gap-2">
                           <span>{message.timestamp}</span>
-                          {message.isLocalFallback && (
-                            <span className="inline-flex items-center gap-1 rounded bg-stone-100 px-1.5 py-0.5 text-[10px] font-medium text-stone-600 dark:bg-white/10 dark:text-stone-300">
+                          {message.isLocalFallback ? (
+                            <span className="inline-flex items-center gap-1 rounded bg-stone-100 px-1.5 py-0.5 text-[10px] font-medium text-stone-600 dark:bg-white/10 dark:text-stone-300" title="離線或預付額度維護時由本機引擎解答">
                               ⚡ 本機分析
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-300" title="由雲端 Gemini 3.8 Flash AI Agent 深度分析解答">
+                              ✨ Gemini AI Agent
                             </span>
                           )}
                         </div>
@@ -473,6 +520,123 @@ export const AIAssistantPage: React.FC<Props> = ({ onSwitchToClassicStats }) => 
           </div>
         </div>
       </div>
+
+      {/* Gemini API Key Configuration Modal */}
+      {showKeyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-md rounded-3xl border border-stone-200 bg-white p-5 shadow-2xl dark:border-stone-800 dark:bg-stone-900">
+            <div className="flex items-center justify-between pb-3 border-b border-stone-100 dark:border-stone-800">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-100 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400">
+                  <KeyRound size={18} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-stone-900 dark:text-stone-100">
+                    Google Gemini 3.8 Flash AI Agent
+                  </h3>
+                  <p className="text-[11px] text-stone-500 dark:text-stone-400">
+                    專屬金鑰直連 Google 官方 AI，享受原生對話與資料融合
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowKeyModal(false)}
+                className="rounded-full p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-600 dark:hover:bg-stone-800 dark:hover:text-stone-200"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              <p className="text-xs leading-relaxed text-stone-600 dark:text-stone-300">
+                設定您自己的 Gemini API Key 後，手機 APK 與網頁版將可直接獲得如 Google 官方 Gemini App 的強大智慧推理、聯網搜尋與 EdenNote 資料庫深度融合！
+              </p>
+
+              <div>
+                <label htmlFor="modal-key-input" className="block text-xs font-semibold text-stone-700 dark:text-stone-300">
+                  Gemini API Key
+                </label>
+                <div className="mt-1 flex gap-2">
+                  <input
+                    id="modal-key-input"
+                    type="password"
+                    autoComplete="off"
+                    value={keyInput}
+                    onChange={(e) => setKeyInput(e.target.value)}
+                    placeholder="貼上 AQ... 或 AIzaSy... 開頭的金鑰"
+                    className="flex-1 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-xs font-mono text-stone-800 focus:border-indigo-500 focus:bg-white focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handleTestModalKey()}
+                    disabled={keyTestState.testing || !keyInput.trim()}
+                    className="inline-flex items-center gap-1 rounded-xl border border-stone-300 bg-white px-3 py-2 text-xs font-semibold text-stone-700 shadow-sm hover:bg-stone-50 disabled:opacity-50 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200"
+                  >
+                    {keyTestState.testing ? (
+                      <LoaderCircle size={13} className="animate-spin text-amber-600" />
+                    ) : (
+                      <span>驗證</span>
+                    )}
+                  </button>
+                </div>
+
+                {keyTestState.msg && (
+                  <p
+                    className={`mt-1.5 text-xs font-medium ${
+                      keyTestState.ok
+                        ? keyTestState.isDepleted
+                          ? 'text-amber-600 dark:text-amber-400'
+                          : 'text-emerald-600 dark:text-emerald-400'
+                        : 'text-red-500 dark:text-red-400'
+                    }`}
+                  >
+                    {keyTestState.ok ? (keyTestState.isDepleted ? '🟡 ' : '🟢 ') : '⚠️ '}
+                    {keyTestState.msg}
+                  </p>
+                )}
+              </div>
+
+              <div className="rounded-xl bg-stone-50 p-2.5 text-[11px] text-stone-500 dark:bg-stone-800/60 dark:text-stone-400">
+                <div className="flex items-center justify-between">
+                  <span>還沒有金鑰？可至 Google 免費申請：</span>
+                  <a
+                    href="https://aistudio.google.com/app/apikey"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-0.5 font-semibold text-indigo-600 hover:underline dark:text-indigo-400"
+                  >
+                    <span>獲取 API Key</span>
+                    <ExternalLink size={10} />
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setKeyInput('')
+                  setUserApiKey('')
+                  setUserGeminiApiKey('')
+                  setShowKeyModal(false)
+                }}
+                className="rounded-xl px-3 py-1.5 text-xs font-medium text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-800"
+              >
+                清除金鑰
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveModalKey}
+                className="rounded-xl bg-indigo-600 px-4 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-indigo-700 active:scale-95"
+              >
+                儲存並啟用
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

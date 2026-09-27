@@ -274,14 +274,138 @@ export function localSmartAnalyze(prompt: string, events: Event[]): string {
     return report
   }
 
-  // G. 紀念日相關
-  if (p.includes('紀念日') || p.includes('生日') || p.includes('週年')) {
-    const anniEvents = events.filter((e) => e.recordType === 'anniversary' || e.category === '紀念日')
+  // G. 紀念日與生日相關（精確時間範圍推算與每年循環節日比對）
+  if (p.includes('紀念日') || p.includes('生日') || p.includes('週年') || p.includes('周年')) {
+    const anniEvents = events.filter((e) => e.recordType === 'anniversary' || e.category === '紀念日' || e.category === '生日')
+
+    const now = new Date()
+    const currentYear = now.getFullYear()
+    const fmtZh = (dt: Date) => `${dt.getMonth() + 1} 月 ${dt.getDate()} 日`
+    const toMmDd = (dt: Date) => `${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
+
+    const getDayMmDd = (e: Event): string => {
+      if (!e.date) return ''
+      const parts = e.date.split('-')
+      if (parts.length >= 3) return `${parts[1]}-${parts[2]}`
+      if (parts.length === 2) return `${parts[0]}-${parts[1]}`
+      return ''
+    }
+
+    // 判斷是否詢問「上週 / 上周」
+    if (p.includes('上周') || p.includes('上週') || p.includes('上一週') || p.includes('上一周') || p.includes('上個星期') || p.includes('上星期')) {
+      const dayOfWeek = now.getDay() || 7
+      const monday = new Date(now)
+      monday.setDate(now.getDate() - dayOfWeek + 1)
+      const lastMonday = new Date(monday)
+      lastMonday.setDate(monday.getDate() - 7)
+      const lastSunday = new Date(monday)
+      lastSunday.setDate(monday.getDate() - 1)
+
+      // 產生上週所有日期的 MM-DD 列表
+      const targetDays: string[] = []
+      const cur = new Date(lastMonday)
+      while (cur <= lastSunday) {
+        targetDays.push(toMmDd(cur))
+        cur.setDate(cur.getDate() + 1)
+      }
+
+      const matched = anniEvents.filter((e) => targetDays.includes(getDayMmDd(e)))
+
+      if (matched.length > 0) {
+        let report = `### 🎂 上週生日與紀念日紀錄（${fmtZh(lastMonday)} 至 ${fmtZh(lastSunday)}）\n\n`
+        report += `在您的個人紀錄中，上週共有 **${matched.length} 位** 人員過生日：\n\n`
+        for (const e of matched) {
+          report += `- **[${e.date || '無日期'}]**【${e.category}】**${e.title}**\n`
+          if (e.detail) report += `  > ${e.detail}\n`
+        }
+        return report
+      } else {
+        return `在您的個人日曆與紀錄中，上週（${fmtZh(lastMonday)} 至 ${fmtZh(lastSunday)}）並沒有登記任何生日活動或提醒。\n\n如果您是指特定群組、同事圈，或是某些公眾人物／名人的生日，請告訴我是哪方面，我再為您查詢！`
+      }
+    }
+
+    // 判斷是否詢問「本週 / 這周 / 這星期」
+    if (p.includes('這周') || p.includes('這週') || p.includes('本周') || p.includes('本週') || p.includes('這個星期') || p.includes('本星期')) {
+      const dayOfWeek = now.getDay() || 7
+      const monday = new Date(now)
+      monday.setDate(now.getDate() - dayOfWeek + 1)
+      const sunday = new Date(monday)
+      sunday.setDate(monday.getDate() + 6)
+
+      const targetDays: string[] = []
+      const cur = new Date(monday)
+      while (cur <= sunday) {
+        targetDays.push(toMmDd(cur))
+        cur.setDate(cur.getDate() + 1)
+      }
+
+      const matched = anniEvents.filter((e) => targetDays.includes(getDayMmDd(e)))
+      if (matched.length > 0) {
+        let report = `### 🎂 本週生日與紀念日（${fmtZh(monday)} 至 ${fmtZh(sunday)}）\n\n本週共有 **${matched.length} 位** 人員生日：\n\n`
+        for (const e of matched) {
+          report += `- **[${e.date || '無日期'}]**【${e.category}】**${e.title}**\n`
+          if (e.detail) report += `  > ${e.detail}\n`
+        }
+        return report
+      } else {
+        return `在您的個人日曆與紀錄中，本週（${fmtZh(monday)} 至 ${fmtZh(sunday)}）沒有登記任何生日或紀念日提醒。`
+      }
+    }
+
+    // 判斷是否詢問「下週 / 下周」
+    if (p.includes('下周') || p.includes('下週') || p.includes('下一週') || p.includes('下星期')) {
+      const dayOfWeek = now.getDay() || 7
+      const monday = new Date(now)
+      monday.setDate(now.getDate() - dayOfWeek + 1 + 7)
+      const sunday = new Date(monday)
+      sunday.setDate(monday.getDate() + 6)
+
+      const targetDays: string[] = []
+      const cur = new Date(monday)
+      while (cur <= sunday) {
+        targetDays.push(toMmDd(cur))
+        cur.setDate(cur.getDate() + 1)
+      }
+
+      const matched = anniEvents.filter((e) => targetDays.includes(getDayMmDd(e)))
+      if (matched.length > 0) {
+        let report = `### 🎂 下週生日與紀念日預告（${fmtZh(monday)} 至 ${fmtZh(sunday)}）\n\n下週共有 **${matched.length} 位** 人員生日：\n\n`
+        for (const e of matched) {
+          report += `- **[${e.date || '無日期'}]**【${e.category}】**${e.title}**\n`
+          if (e.detail) report += `  > ${e.detail}\n`
+        }
+        return report
+      } else {
+        return `在您的個人紀錄中，下週（${fmtZh(monday)} 至 ${fmtZh(sunday)}）沒有登記任何生日提醒。`
+      }
+    }
+
+    // 判斷是否詢問特定人物（例如「陳啟賓」）
+    const searchKeywords = extractSearchKeywords(prompt).filter((k) => !['生日', '紀念日', '週年', '那些', '哪些', '誰', '有誰'].includes(k))
+    if (searchKeywords.length > 0) {
+      const matched = anniEvents.filter((e) => {
+        const text = `${e.title} ${e.detail} ${e.category}`.toLowerCase()
+        return searchKeywords.some((k) => text.includes(k.toLowerCase()))
+      })
+      if (matched.length > 0) {
+        let report = `### 🎂 生日與紀念日查詢結果\n\n為您找到 **${matched.length} 筆** 與「${searchKeywords.join('、')}」相關的紀錄：\n\n`
+        for (const e of matched) {
+          report += `- **[${e.date || '無日期'}]**【${e.category}】**${e.title}**\n`
+          if (e.detail) report += `  > ${e.detail}\n`
+        }
+        return report
+      }
+    }
+
+    // 若無特定時間範圍，預設列出即將到來的紀念日
     if (anniEvents.length > 0) {
-      let report = `### 🎂 紀念日紀錄（共 ${anniEvents.length} 筆）\n\n`
-      for (const e of anniEvents.slice(0, 15)) {
+      let report = `### 🎂 紀念日與生日總覽（共 ${anniEvents.length} 筆）\n\n`
+      for (const e of anniEvents.slice(0, 10)) {
         report += `- **[${e.date || '無日期'}]**【${e.category}】**${e.title}**\n`
         if (e.detail) report += `  > ${e.detail}\n`
+      }
+      if (anniEvents.length > 10) {
+        report += `\n*（其餘 ${anniEvents.length - 10} 筆已保留於資料庫中，可輸入特定姓名或月份進行縮小查詢）*`
       }
       return report
     }
@@ -319,18 +443,335 @@ export function localSmartAnalyze(prompt: string, events: Event[]): string {
 }
 
 /**
+ * Resolve the API base URL for different environments (Android APK, GitHub Pages, or Vite Dev).
+ */
+export function getApiBaseUrl(): string {
+  if (typeof window === 'undefined') return ''
+
+  // 1. User custom server URL in Settings (if set)
+  const custom = localStorage.getItem('eden_ai_server_url')
+  if (custom && custom.trim()) {
+    return custom.trim().replace(/\/+$/, '')
+  }
+
+  // 2. Running in native Android/iOS APK (Capacitor) or static GitHub Pages
+  const isCapacitorNative =
+    window.location.protocol === 'capacitor:' ||
+    (window.location.hostname === 'localhost' && window.location.port !== '3000') ||
+    window.location.hostname.includes('github.io')
+
+  if (isCapacitorNative) {
+    return 'https://ais-dev-vo2jwpza6k6g6j2ucae765-290275720433.asia-northeast1.run.app'
+  }
+
+  // 3. Local web development or same-origin server
+  return ''
+}
+
+/**
+ * Health check status of the AI backend server
+ */
+export async function checkAiServerHealth(): Promise<{
+  ok: boolean
+  statusText: string
+  hasGeminiKey?: boolean
+  error?: string
+}> {
+  try {
+    const base = getApiBaseUrl()
+    const url = `${base}/api/health`
+    const res = await fetch(url, { method: 'GET' })
+    if (!res.ok) {
+      return { ok: false, statusText: `HTTP ${res.status}` }
+    }
+    const data = await res.json()
+    return {
+      ok: true,
+      statusText: '在線',
+      hasGeminiKey: Boolean(data.hasGeminiKey),
+    }
+  } catch (err) {
+    return {
+      ok: false,
+      statusText: '離線 / 無法連線',
+      error: err instanceof Error ? err.message : String(err),
+    }
+  }
+}
+
+export const DEFAULT_GEMINI_KEY =
+  (import.meta as any).env?.VITE_GEMINI_API_KEY || ''
+
+/**
+ * Gemini API Key management from user settings or localStorage.
+ */
+export function getUserGeminiApiKey(): string {
+  if (typeof window === 'undefined') return DEFAULT_GEMINI_KEY
+  const stored = localStorage.getItem('eden_user_gemini_api_key')
+  if (stored !== null && stored !== undefined) {
+    return stored
+  }
+  return DEFAULT_GEMINI_KEY
+}
+
+export function setUserGeminiApiKey(key: string): void {
+  if (typeof window === 'undefined') return
+  const trimmed = key.trim()
+  if (trimmed) {
+    localStorage.setItem('eden_user_gemini_api_key', trimmed)
+  } else {
+    localStorage.setItem('eden_user_gemini_api_key', '')
+  }
+}
+
+/**
+ * Test a Gemini API Key to verify connectivity and quota.
+ */
+export async function testGeminiApiKey(apiKey: string): Promise<{ ok: boolean; message: string; isDepleted?: boolean }> {
+  const key = apiKey.trim()
+  if (!key) {
+    return { ok: false, message: '請先輸入 API Key' }
+  }
+
+  try {
+    // 1. 先檢驗金鑰合法性 (List Models 檢驗認證)
+    const checkRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`, {
+      method: 'GET',
+    })
+    if (!checkRes.ok) {
+      const err = await checkRes.json().catch(() => ({}))
+      return { ok: false, message: `金鑰無效：${err.error?.message || `HTTP ${checkRes.status}`}` }
+    }
+
+    // 2. 測試 Gemini 3.8 Flash 生成能力與額度狀態
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${key}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: '請只回覆「連線成功」四個字' }] }],
+      }),
+    })
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      const msg = err.error?.message || `HTTP ${res.status}`
+      if (res.status === 402 || msg.includes('depleted') || msg.includes('RESOURCE_EXHAUSTED')) {
+        return {
+          ok: true,
+          isDepleted: true,
+          message: 'Google 驗證成功！此金鑰有效，目前專案尚無預付額度（已啟用本機分析引擎為您解答）。',
+        }
+      }
+      return { ok: false, message: `金鑰驗證失敗: ${msg}` }
+    }
+
+    return { ok: true, message: '✨ Gemini 3.8 Flash AI Agent 連線成功！' }
+  } catch (err) {
+    return {
+      ok: false,
+      message: `網路連線失敗: ${err instanceof Error ? err.message : String(err)}`,
+    }
+  }
+}
+
+/**
+ * Build rich system prompt with current temporal anchor and EdenNote events.
+ */
+export function buildGeminiSystemPrompt(events: Event[]): string {
+  const now = new Date()
+  const twIso = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now)
+  const [y, m, d] = twIso.split('-').map(Number)
+  const twToday = new Date(y, m - 1, d)
+  const dayNames = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
+  const weekday = dayNames[twToday.getDay()]
+
+  const dayOfWeek = twToday.getDay() || 7
+  const monday = new Date(twToday)
+  monday.setDate(twToday.getDate() - dayOfWeek + 1)
+  const sunday = new Date(monday)
+  sunday.setDate(monday.getDate() + 6)
+
+  const lastMonday = new Date(monday)
+  lastMonday.setDate(monday.getDate() - 7)
+  const lastSunday = new Date(sunday)
+  lastSunday.setDate(sunday.getDate() - 7)
+
+  const nextMonday = new Date(monday)
+  nextMonday.setDate(monday.getDate() + 7)
+  const nextSunday = new Date(sunday)
+  nextSunday.setDate(sunday.getDate() + 7)
+
+  const fmtZh = (dt: Date) => `${dt.getMonth() + 1} 月 ${dt.getDate()} 日`
+  const fmtIso = (dt: Date) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
+
+  const sortedEvents = [...events].sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+  const eventsFormatted = sortedEvents
+    .map((evt, idx) => {
+      const parts = [
+        `[${evt.date || '無日期'}]`,
+        evt.category ? `(${evt.category})` : '',
+        evt.title || '無標題',
+      ]
+      if (evt.amount !== undefined && evt.amount !== null) {
+        parts.push(`金額:${evt.amount}`)
+      }
+      if (evt.tags && evt.tags.length > 0) {
+        parts.push(`標籤:${evt.tags.join(',')}`)
+      }
+      if (evt.detail) {
+        parts.push(`詳情:${evt.detail.replace(/\r?\n/g, ' ').slice(0, 160)}`)
+      }
+      return `${idx + 1}. [ID:${evt.id}] ${parts.filter(Boolean).join(' ')}`
+    })
+    .join('\n')
+
+  return `你是一個專業、親切且嚴謹的個人生活與工作智慧助理，名稱為「EdenNote AI 助理」。
+你擁有讀取與深入分析使用者「EdenNote 資料庫」的專屬權限，並且具備強大的即時聯網搜尋與常識推理能力。
+
+【當前時間基準與時間範圍】：
+- 今天是：${twIso}（${weekday}）
+- 上週區間：約 ${fmtZh(lastMonday)} 至 ${fmtZh(lastSunday)}（${fmtIso(lastMonday)} ~ ${fmtIso(lastSunday)}）
+- 本週區間：約 ${fmtZh(monday)} 至 ${fmtZh(sunday)}（${fmtIso(monday)} ~ ${fmtIso(sunday)}）
+- 下週區間：約 ${fmtZh(nextMonday)} 至 ${fmtZh(nextSunday)}（${fmtIso(nextMonday)} ~ ${fmtIso(nextSunday)}）
+- 當前月份：${y} 年 ${m} 月
+
+【使用者的 EdenNote 本機資料庫現況】
+資料庫共有 ${events.length} 筆紀錄：
+${eventsFormatted || '（目前資料庫中尚無任何事件紀錄）'}
+
+【你的任務與核心能力】
+1. 深入分析與計算 EdenNote 內的資料：
+   - 紀念日與生日處理規範（每年循環重要事件）：
+     * EdenNote 中的【生日】與【紀念日】紀錄為每年循環發生的事件，其在資料庫中的日期格式通常為 [YYYY-MM-DD] 或 [MM-DD]（例如 [07-01] 代表每年 7 月 1 日，[1990-08-19] 代表每年 8 月 19 日）。
+     * 當使用者詢問「上周那些人生日」、「這週誰生日」、「下個月有哪些紀念日」等問題時：
+       a. 請將所有生日紀錄的【月日（MM-DD）】對齊到當前年份進行日期區間比對。
+       b. 若在該目標區間內「有」人生日：請清晰列出該人員姓名、日期、備註/關係與已過/剩餘天數。
+       c. 若在該目標區間內「沒有任何人」登記生日：請務必正面、明確且親切地告知使用者，例如：
+          「在您的個人日曆與紀錄中，上週（${fmtZh(lastMonday)} 至 ${fmtZh(lastSunday)}）並沒有登記任何生日活動或提醒。
+          如果您是指特定群組、同事圈，或是某些公眾人物／名人的生日，請告訴我是哪方面，我再為您查詢！」
+          ⚠️ 絕對不要無差別列出全年度所有名單！
+   - 歷年加薪與薪資變動：能搜尋所有薪資、加薪、調薪、工作待遇等紀錄，列出各年份/月份的薪水數字，計算每次加薪金額、每次調薪比例（%）、歷年加薪速率或年化成長率（CAGR），並使用清晰整齊的 Markdown 表格呈現！
+   - 加班與工作時數：搜尋加班、工時、專案、請假、值班等關鍵字，統計總加班時數、頻率或工時趨勢。
+   - 財務與消費支出：針對含有金額（amount）的紀錄，進行類別加總、月度或年度支出統計、最大筆開銷分析。
+   - 重點記事歸納：依據使用者指定的時間段或分類，條理分明地歸納工作心得、生活摘要與待辦進度。
+
+2. 嚴格區分「個人資料查詢」與「外部即時/世界常識問題」：
+   - 【個人生活/工作/記事問題】：精確比對資料庫紀錄，標註 [日期]、分類、標題、金額與詳情。
+   - 【外部即時/新聞/賽事/通識問題】（例如亞運戰績、天氣、NBA、即時新聞）：請直接使用 Google 搜尋工具或模型通識知識進行直接、正面且完整的回答！切勿生硬套入個人筆記搜尋！
+   - 【綜合比對問題】：先計算個人紀錄，再利用 Google 搜尋客觀外部數據比較。
+
+3. 回覆格式要求：
+   - 必須使用台灣習慣的「繁體中文」回答。
+   - 語氣親切、專業、富有洞察力與對話感（如官方 Gemini App 對話體驗）。
+   - 善用 Markdown 排版：小標題、粗體、清單、Markdown 表格。
+   - 若引用到特定個人事件，請標示出日期與標題，並標記格式 [事件：標題 (日期)](event:ID)。`
+}
+
+/**
+ * Directly call Google Gemini REST API from client (useful for mobile APK and direct key users).
+ */
+export async function directGeminiChat(
+  options: SendMessageOptions,
+  apiKey: string
+): Promise<ChatResponse> {
+  const { messages, events, enableSearch = true } = options
+  const systemPrompt = buildGeminiSystemPrompt(events)
+
+  const contents = messages.map((m) => ({
+    role: m.role === 'assistant' ? 'model' : 'user',
+    parts: [{ text: m.content }],
+  }))
+
+  const body: Record<string, unknown> = {
+    systemInstruction: {
+      parts: [{ text: systemPrompt }],
+    },
+    contents,
+  }
+
+  if (enableSearch) {
+    body.tools = [{ googleSearch: {} }]
+  }
+
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${apiKey.trim()}`
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    const errMsg = err.error?.message || `Gemini API 呼叫失敗: HTTP ${res.status}`
+    const isQuota = res.status === 402 || res.status === 429 || errMsg.includes('depleted') || errMsg.includes('RESOURCE_EXHAUSTED')
+    const errorObj = new Error(errMsg)
+    Object.assign(errorObj, { status: res.status, isQuota })
+    throw errorObj
+  }
+
+  const data = await res.json()
+  const candidate = data.candidates?.[0]
+  const reply = candidate?.content?.parts?.map((p: { text?: string }) => p.text || '').join('') || '（無回覆）'
+
+  const sources: Array<{ title: string; url: string }> = []
+  const groundingChunks = candidate?.groundingMetadata?.groundingChunks || []
+  for (const chunk of groundingChunks) {
+    if (chunk.web?.uri) {
+      sources.push({
+        title: chunk.web.title || chunk.web.uri,
+        url: chunk.web.uri,
+      })
+    }
+  }
+
+  return {
+    reply,
+    sources,
+    isLocalFallback: false,
+  }
+}
+
+/**
  * Send chat message to EdenNote AI backend with fallback.
  */
 export async function sendChatMessage(options: SendMessageOptions): Promise<ChatResponse> {
   const { messages, events, enableSearch = true } = options
   const latestUserPrompt = messages.filter((m) => m.role === 'user').slice(-1)[0]?.content || ''
+  const userApiKey = getUserGeminiApiKey()
 
+  // 1. 若使用者有設定自己的 Gemini API Key，優先嘗試直連 Gemini 3.8 Flash AI Agent
+  if (userApiKey) {
+    try {
+      const directResult = await directGeminiChat(options, userApiKey)
+      return directResult
+    } catch (directErr: unknown) {
+      console.warn('Direct Gemini call failed, checking error:', directErr)
+      const err = directErr as { status?: number; isQuota?: boolean; message?: string }
+      if (err?.status === 402 || err?.isQuota || String(err?.message).includes('depleted')) {
+        const fallbackReply = localSmartAnalyze(latestUserPrompt, events)
+        const tip = `\n\n---\n*⚡（提示：您提供的 Gemini API Key 已通過 Google 驗證！目前專案尚無預付額度 [402 Depleted]，系統已無縫啟用 EdenNote 深度分析引擎為您解答並精確融合個人紀錄。若需啟用 Google 官方雲端算力，可至 [Google AI Studio](https://ai.studio/projects) 啟用預付點數。）*`
+        return {
+          reply: `${fallbackReply}${tip}`,
+          isLocalFallback: true,
+        }
+      }
+    }
+  }
+
+  // 2. 透過後端伺服器代理呼叫
   try {
-    const res = await fetch('/api/ai/chat', {
+    const baseUrl = getApiBaseUrl()
+    const endpoint = `${baseUrl}/api/ai/chat`
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    }
+    if (userApiKey) {
+      headers['x-gemini-api-key'] = userApiKey
+    }
+
+    const res = await fetch(endpoint, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify({
         messages,
         events: events.map((e) => ({
@@ -354,8 +795,11 @@ export async function sendChatMessage(options: SendMessageOptions): Promise<Chat
       if (isQuota) {
         // Fallback to high-quality local analysis
         const fallbackReply = localSmartAnalyze(latestUserPrompt, events)
+        const tip = userApiKey
+          ? `\n\n---\n*⚡（提示：您設定的 Gemini API Key 額度已用盡或尚未開通付費專案，系統已啟動 EdenNote 本機深度分析引擎為您解答。）*`
+          : `\n\n---\n*⚡（提示：目前預設雲端額度維護中。若想體驗與截圖完全一致的原生「Gemini 3.8 Flash AI Agent」深度對話與即時聯網，您可隨時在「設定」中填入您自己的 Gemini API Key 即可直接啟用！）*`
         return {
-          reply: `${fallbackReply}\n\n---\n*⚡（提示：雲端 Gemini API 預付額度維護中，系統已自動啟用 EdenNote 本機深度分析引擎為您即時計算回答。）*`,
+          reply: `${fallbackReply}${tip}`,
           isLocalFallback: true,
         }
       }
