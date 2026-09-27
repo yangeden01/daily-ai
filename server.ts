@@ -157,13 +157,17 @@ ${eventsFormatted || '（目前資料庫中尚無任何事件紀錄）'}
       const errObj = apiErr as { status?: number; message?: string }
       console.error('Gemini API call failed:', errObj)
 
+      const errMsg = typeof errObj?.message === 'string' ? errObj.message : String(apiErr)
       const isQuotaError =
         errObj?.status === 402 ||
-        (typeof errObj?.message === 'string' &&
-          errObj.message.includes('credits are depleted')) ||
-        errObj?.status === 429
+        errObj?.status === 429 ||
+        errMsg.includes('credits are depleted') ||
+        errMsg.includes('402') ||
+        errMsg.includes('RESOURCE_EXHAUSTED') ||
+        errMsg.includes('Quota exceeded') ||
+        errMsg.includes('quota')
 
-      return res.status(errObj?.status || 500).json({
+      return res.status(isQuotaError ? 402 : (errObj?.status || 500)).json({
         error: isQuotaError
           ? 'GEMINI_QUOTA_DEPLETED'
           : errObj?.message || 'Gemini API 呼叫失敗',

@@ -29,9 +29,9 @@ const STORAGE_KEY = 'edennote_ai_chat_history_v1'
 const quickSuggestions = [
   { label: '📊 歷年加薪與成長率', prompt: '請幫我讀取歷年加薪資料，列出每次調薪記錄，並計算整體成長幅度與年化加薪速率（CAGR）。' },
   { label: '⏱️ 加班與工時統計', prompt: '請統計我所有工作與加班紀錄，計算總加班時數與發生頻率。' },
-  { label: '💰 累積花費與最大支出', prompt: '請統計我資料庫中所有有金額的紀錄，列出各類別花費與最大筆的支出。' },
-  { label: '🌐 比對市場薪資行情', prompt: '請利用 Google 搜尋比對目前台灣一般上班族與科技業的平均年薪調幅與市場行情，並提供客觀建議。' },
-  { label: '📝 近期重要記事摘要', prompt: '請整理我最近的重點工作記事與生活事件，歸納出目前的重點方向。' },
+  { label: '💰 累積花費與各類支出', prompt: '請統計我資料庫中所有有金額的紀錄，列出各類別花費與最大筆的支出。' },
+  { label: '📅 整理今日重點記事', prompt: '請整理我今天的重點工作日誌與生活事件，歸納出目前的重點方向。' },
+  { label: '🔍 檢索特定關鍵字筆記', prompt: '請幫我檢索資料庫中與健康或看診相關的記事紀錄。' },
 ]
 
 export const AIAssistantPage: React.FC<Props> = ({ onSwitchToClassicStats }) => {
@@ -49,6 +49,7 @@ export const AIAssistantPage: React.FC<Props> = ({ onSwitchToClassicStats }) => 
   const [input, setInput] = useState('')
   const [isSending, setIsSending] = useState(false)
   const [enableSearch, setEnableSearch] = useState(true)
+  const [isLocalMode, setIsLocalMode] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -115,6 +116,10 @@ export const AIAssistantPage: React.FC<Props> = ({ onSwitchToClassicStats }) => 
         events,
         enableSearch,
       })
+
+      if (response.isLocalFallback) {
+        setIsLocalMode(true)
+      }
 
       const assistantMessage: ChatMessage = {
         id: `assistant-${Date.now()}`,
@@ -183,20 +188,30 @@ export const AIAssistantPage: React.FC<Props> = ({ onSwitchToClassicStats }) => 
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-2">
-          {/* Google Search grounding toggle */}
-          <button
-            type="button"
-            onClick={() => setEnableSearch((prev) => !prev)}
-            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold transition ${
-              enableSearch
-                ? 'bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800'
-                : 'bg-stone-100 text-stone-400 border border-transparent dark:bg-stone-800 dark:text-stone-500'
-            }`}
-            title={enableSearch ? '已開啟 Google 聯網比對' : '已關閉 Google 聯網比對'}
-          >
-            <Globe size={12} />
-            <span>{enableSearch ? 'Google 聯網開' : '聯網關'}</span>
-          </button>
+          {/* Engine Mode or Google Search grounding toggle */}
+          {isLocalMode ? (
+            <span
+              className="inline-flex items-center gap-1 rounded-full border border-amber-300/80 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/60 dark:text-amber-300"
+              title="目前由 EdenNote 本機深度分析引擎提供離線私密運算"
+            >
+              <Database size={12} />
+              <span>本機分析引擎</span>
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setEnableSearch((prev) => !prev)}
+              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold transition ${
+                enableSearch
+                  ? 'bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800'
+                  : 'bg-stone-100 text-stone-400 border border-transparent dark:bg-stone-800 dark:text-stone-500'
+              }`}
+              title={enableSearch ? '已開啟 Google 聯網比對' : '已關閉 Google 聯網比對'}
+            >
+              <Globe size={12} />
+              <span>{enableSearch ? 'Google 聯網開' : '聯網關'}</span>
+            </button>
+          )}
 
           {/* Clear button */}
           {messages.length > 0 && (
@@ -239,7 +254,7 @@ export const AIAssistantPage: React.FC<Props> = ({ onSwitchToClassicStats }) => 
               EdenNote AI 助理
             </h2>
             <p className="mt-2 max-w-md text-xs sm:text-sm leading-relaxed text-stone-500 dark:text-stone-400">
-              我是專屬於您的 AI 模式，能深入閱讀並分析您在 EdenNote 內的所有紀錄（薪資、工時、筆記、紀念日），並具備 Google 聯網比對能力！
+              我是專屬於您的 EdenNote 智慧分析助理，能深入閱讀並分析您儲存在本裝置內的個人生活紀錄（薪資調幅、工時加班、記事備忘、消費與紀念日）！
             </p>
 
             {/* Quick feature badges */}
@@ -345,7 +360,14 @@ export const AIAssistantPage: React.FC<Props> = ({ onSwitchToClassicStats }) => 
 
                       {/* Action buttons (Copy) */}
                       <div className="mt-2.5 flex items-center justify-between text-[11px] text-stone-400">
-                        <span>{message.timestamp}</span>
+                        <div className="flex items-center gap-2">
+                          <span>{message.timestamp}</span>
+                          {message.isLocalFallback && (
+                            <span className="inline-flex items-center gap-1 rounded bg-stone-100 px-1.5 py-0.5 text-[10px] font-medium text-stone-600 dark:bg-white/10 dark:text-stone-300">
+                              ⚡ 本機分析
+                            </span>
+                          )}
+                        </div>
                         <button
                           type="button"
                           onClick={() => copyToClipboard(message.content, message.id)}

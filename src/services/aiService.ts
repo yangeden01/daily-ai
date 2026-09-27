@@ -24,13 +24,126 @@ export interface ChatResponse {
 }
 
 /**
+ * Extract meaningful search terms from natural Chinese or English queries.
+ */
+function extractSearchKeywords(rawPrompt: string): string[] {
+  const cleaned = rawPrompt
+    .replace(/[？?！!，,。.\n\r#；;:：、\t]/g, ' ')
+    .replace(/^(請幫我|幫我|我想查|我想知道|我想看|請問|查詢|搜尋|看一下|找一下|有沒有|有沒有記|統計|分析|整理)/g, '')
+    .trim()
+
+  const words: string[] = []
+  const parts = cleaned.split(/\s+/).filter(Boolean)
+
+  for (const part of parts) {
+    if (part.length >= 2) {
+      words.push(part)
+    }
+    // Also extract 2-character n-grams for compound Chinese phrases like "亞運戰績" -> ["亞運", "戰績"]
+    if (part.length >= 4) {
+      for (let i = 0; i <= part.length - 2; i += 2) {
+        const sub = part.slice(i, i + 2)
+        if (!['今天', '昨天', '明天', '什麼', '記錄', '記事', '資料'].includes(sub)) {
+          words.push(sub)
+        }
+      }
+    }
+  }
+
+  return [...new Set(words)]
+}
+
+/**
  * Local analytical engine to handle data queries directly if Gemini quota is unavailable.
  */
 export function localSmartAnalyze(prompt: string, events: Event[]): string {
-  const p = prompt.toLowerCase()
+  const p = prompt.trim().toLowerCase()
   const currency = new Intl.NumberFormat('zh-TW', { style: 'currency', currency: 'TWD', maximumFractionDigits: 0 })
+  const total = events.length
 
-  // 1. 薪資與加薪分析
+  // A. 外部即時資訊 / 體育賽事 / 新聞 / 天氣 / 股市等外部問題
+  const isExternalLiveQuery = /(亞運|奧運|世足|世界盃|中職|棒球|籃球|nba|mlb|賽程|戰績|比分|金牌|獎牌|體育|天氣|氣溫|下雨|降雨|即時新聞|今日新聞|國際新聞|頭條|股價|美股|台股|大盤|匯率|總統大選|熱搜)/i.test(prompt)
+  if (isExternalLiveQuery) {
+    // 檢查使用者本機紀錄是否有相關關鍵字
+    const keywords = extractSearchKeywords(prompt)
+    const matchingPersonalNotes = events.filter((e) => {
+      const text = `${e.title} ${e.detail} ${e.category} ${e.tags.join(' ')}`.toLowerCase()
+      return keywords.some((kw) => text.includes(kw.toLowerCase()))
+    }).slice(0, 5)
+
+    let response = `### 🏆 關於「${prompt}」查詢說明\n\n`
+    response += `您好！您詢問的是外部即時資訊或賽事新聞（**${prompt}**）。\n\n`
+
+    if (matchingPersonalNotes.length > 0) {
+      response += `#### 📝 在您的 EdenNote 個人筆記中找到相關紀錄：\n`
+      for (const e of matchingPersonalNotes) {
+        response += `- **[${e.date || '無日期'}]**【${e.category}】**${e.title}**\n`
+        if (e.detail) response += `  > ${e.detail.slice(0, 80)}\n`
+      }
+      response += `\n---\n`
+    } else {
+      response += `- **本機個人資料庫檢索**：\n`
+      response += `  經檢索您在 EdenNote 內的 **${total} 筆個人紀錄**，目前尚未包含與「**${keywords.join('、') || prompt}**」相關的個人事件或記事。\n\n`
+    }
+
+    response += `- **外部即時聯網說明**：\n`
+    response += `  目前系統處於 **EdenNote 本機專屬分析引擎模式**（雲端 Google 聯網搜尋額度暫時維護中）。本機引擎專注於安全離線分析您裝置內的個人生活與工作紀錄，**無法直接連線至外部新聞網站抓取今日最新即時賽況、新聞或比分**。\n\n`
+    response += `💡 **建議**：\n`
+    response += `1. **查詢即時賽果**：建議開啟手機瀏覽器搜尋「${prompt}」獲取最新體育快訊與即時比分。\n`
+    response += `2. **記錄個人心得**：若您想記錄觀賽心得或日常記事，可在底部的 **Input** 頁面隨時新增，我會為您永久妥善整理與調閱！`
+
+    return response
+  }
+
+  // B. 問候與功能介紹
+  const isGreeting = /^(你好|哈囉|嗨|hi|hello|早安|午安|晚安|你是誰|你的功能|你會做什麼|介紹一下|說明|幫助|help)$/i.test(prompt.replace(/[？?！!]/g, ''))
+  if (isGreeting) {
+    return `### 👋 您好！我是 EdenNote 專屬智慧分析助理\n\n很高興為您服務！我能深入分析與檢索儲存在您裝置內的 **${total} 筆個人生活紀錄**，協助您：\n\n` +
+      `1. 📊 **薪資與加薪成長率**：輸入「分析歷年加薪」，自動計算每次調幅與年化成長率（CAGR）。\n` +
+      `2. ⏱️ **工時與加班統計**：輸入「統計加班」，計算總工時與加班發生頻率。\n` +
+      `3. 💰 **消費與支出明細**：輸入「統計花費」，匯總各分類開銷佔比與最大筆支出。\n` +
+      `4. 🔍 **快速翻找任何記事**：只要輸入人名、關鍵字或日期（例如：「看牙」、「日本旅遊」），即刻為您精確調出！\n` +
+      `5. 🎂 **紀念日與倒數**：推算重要節日天數與農民曆對照。\n\n` +
+      `您可以直接在下方輸入框鍵入問題，或點選上方的快捷建議開始體驗！`
+  }
+
+  // C. 今天、昨天與特定日期檢索
+  const todayStr = new Date().toISOString().slice(0, 10)
+  const yesterday = new Date()
+  yesterday.setDate(yesterday.getDate() - 1)
+  const yesterdayStr = yesterday.toISOString().slice(0, 10)
+
+  if (p.includes('今天') || p.includes('今日')) {
+    const todayEvents = events.filter((e) => e.date === todayStr)
+    if (todayEvents.length > 0) {
+      let report = `### 📅 今日紀錄彙整（${todayStr}）\n\n今天您在 EdenNote 共有 **${todayEvents.length} 筆** 紀錄：\n\n`
+      for (const e of todayEvents) {
+        const amt = e.amount !== undefined ? `（${currency.format(e.amount)}）` : ''
+        report += `- 【${e.category}】**${e.title}** ${amt}\n`
+        if (e.detail) report += `  > ${e.detail}\n`
+      }
+      return report
+    } else {
+      return `### 📅 今日記事（${todayStr}）\n\n您今天尚未記錄任何日常事件或備忘筆記。\n\n💡 隨時點選底部的 **Input** 頁面，即可快速記下今天的所見所聞或待辦事項！`
+    }
+  }
+
+  if (p.includes('昨天') || p.includes('昨日')) {
+    const yestEvents = events.filter((e) => e.date === yesterdayStr)
+    if (yestEvents.length > 0) {
+      let report = `### 📅 昨日紀錄回顧（${yesterdayStr}）\n\n昨天共有 **${yestEvents.length} 筆** 紀錄：\n\n`
+      for (const e of yestEvents) {
+        const amt = e.amount !== undefined ? `（${currency.format(e.amount)}）` : ''
+        report += `- 【${e.category}】**${e.title}** ${amt}\n`
+        if (e.detail) report += `  > ${e.detail}\n`
+      }
+      return report
+    } else {
+      return `### 📅 昨日記事（${yesterdayStr}）\n\n您在昨天尚未新增紀錄。`
+    }
+  }
+
+  // D. 薪資與加薪分析
   if (p.includes('加薪') || p.includes('薪資') || p.includes('薪水') || p.includes('調薪') || p.includes('salary')) {
     const salaryEvents = events
       .filter((e) => {
@@ -40,7 +153,7 @@ export function localSmartAnalyze(prompt: string, events: Event[]): string {
       .sort((a, b) => (a.date || '').localeCompare(b.date || ''))
 
     if (salaryEvents.length === 0) {
-      return `### 📊 EdenNote 薪資與加薪資料分析\n\n目前在您的資料庫中尚未找到包含「薪資」、「加薪」或「調薪」關鍵字的紀錄。\n\n**💡 建議記錄方式：**\n您可以在 **Input** 頁面新增事件，例如：\n- 標題：「**年度考核調薪至 65,000**」\n- 分類：「**工作**」或「**薪資**」\n- 金額：「**65000**」\n- 標籤：「**#加薪 #薪資**」\n\n記錄後，隨時回來詢問我，即可為您自動計算加薪金額、每次調幅與歷年年化成長率（CAGR）！`
+      return `### 📊 EdenNote 薪資與加薪資料分析\n\n目前在您的資料庫中尚未找到包含「薪資」、「加薪」或「調薪」關鍵字的紀錄。\n\n**💡 建議記錄方式：**\n您可以在 **Input** 頁面新增事件，例如：\n- 標題：「**年度考核調薪至 65,000**」\n- 分類：「**工作**」或「**薪資**」\n- 金額：「**65000**」\n- 標籤：「**#加薪 #薪資**」\n\n記錄後隨時詢問我，即可為您自動計算加薪金額、每次調幅與歷年年化成長率（CAGR）！`
     }
 
     let report = `### 📊 歷年薪資與加薪記錄深入分析\n\n為您檢索到 **${salaryEvents.length} 筆** 與薪資/調薪相關的紀錄：\n\n`
@@ -53,7 +166,6 @@ export function localSmartAnalyze(prompt: string, events: Event[]): string {
       const amtStr = evt.amount !== undefined ? currency.format(evt.amount) : '未標記'
       report += `| ${evt.date || '無日期'} | **${evt.title}** | ${evt.category} | ${amtStr} | ${evt.detail?.slice(0, 30) || '無'} |\n`
 
-      // Try to extract numerical salary from amount or title
       if (evt.amount && evt.amount > 0) {
         amountsWithDates.push({ date: evt.date, amount: evt.amount, title: evt.title, id: evt.id })
       } else {
@@ -79,7 +191,6 @@ export function localSmartAnalyze(prompt: string, events: Event[]): string {
       report += `- **累計調升金額**：**+${currency.format(diff)}**\n`
       report += `- **整體成長幅度**：**+${pct}%**\n`
 
-      // Calculate annual growth if multi-year
       const y1 = Number(first.date.slice(0, 4))
       const y2 = Number(last.date.slice(0, 4))
       const years = y2 - y1
@@ -97,14 +208,12 @@ export function localSmartAnalyze(prompt: string, events: Event[]): string {
         const sign = stepDiff >= 0 ? '+' : ''
         report += `${i}. **${curr.date}**（${curr.title}）：較前次 ${sign}${currency.format(stepDiff)}（${sign}${stepPct}%）\n`
       }
-    } else {
-      report += `\n> 💡 **提示**：若要在往後計算加薪速率與 CAGR，建議在紀錄時於「**金額**」欄位填入調薪後的實際月薪（例如 60000），系統即可為您自動繪製跨年度成長曲線！`
     }
 
     return report
   }
 
-  // 2. 加班與工時分析
+  // E. 加班與工時分析
   if (p.includes('加班') || p.includes('工時') || p.includes('值班') || p.includes('overtime')) {
     const otEvents = events.filter((e) => {
       const text = `${e.title} ${e.detail} ${e.category} ${e.tags.join(' ')}`.toLowerCase()
@@ -135,7 +244,7 @@ export function localSmartAnalyze(prompt: string, events: Event[]): string {
     return report
   }
 
-  // 3. 支出與花費統計
+  // F. 支出與花費統計
   if (p.includes('花費') || p.includes('支出') || p.includes('金額') || p.includes('消費') || p.includes('記帳') || p.includes('總共花了')) {
     const amountEvents = events.filter((e) => e.amount && e.amount > 0)
     if (amountEvents.length === 0) {
@@ -165,31 +274,48 @@ export function localSmartAnalyze(prompt: string, events: Event[]): string {
     return report
   }
 
-  // 4. 一般關鍵字檢索與資料庫總覽
-  const matching = events.filter((e) => {
-    const text = `${e.title} ${e.detail} ${e.category} ${e.date} ${e.tags.join(' ')}`.toLowerCase()
-    return prompt.split(/\s+/).some((keyword) => keyword.length >= 2 && text.includes(keyword.toLowerCase()))
-  }).slice(0, 10)
-
-  if (matching.length > 0) {
-    let report = `### 🔍 為您檢索 EdenNote 資料庫結果\n\n針對您的提問「**${prompt}**」，找到以下相關紀錄：\n\n`
-    for (const e of matching) {
-      const amt = e.amount !== undefined ? `（${currency.format(e.amount)}）` : ''
-      report += `- **[${e.date || '無日期'}]**【${e.category}】**${e.title}** ${amt}\n`
-      if (e.detail) {
-        report += `  > ${e.detail.slice(0, 80)}\n`
+  // G. 紀念日相關
+  if (p.includes('紀念日') || p.includes('生日') || p.includes('週年')) {
+    const anniEvents = events.filter((e) => e.recordType === 'anniversary' || e.category === '紀念日')
+    if (anniEvents.length > 0) {
+      let report = `### 🎂 紀念日紀錄（共 ${anniEvents.length} 筆）\n\n`
+      for (const e of anniEvents.slice(0, 15)) {
+        report += `- **[${e.date || '無日期'}]**【${e.category}】**${e.title}**\n`
+        if (e.detail) report += `  > ${e.detail}\n`
       }
+      return report
     }
-    return report
+  }
+
+  // H. 一般關鍵字智慧檢索（支援中文子詞、多詞比對）
+  const searchKeywords = extractSearchKeywords(prompt)
+  if (searchKeywords.length > 0) {
+    const matching = events.filter((e) => {
+      const text = `${e.title} ${e.detail} ${e.category} ${e.date} ${e.tags.join(' ')}`.toLowerCase()
+      return searchKeywords.some((kw) => text.includes(kw.toLowerCase()))
+    }).slice(0, 15)
+
+    if (matching.length > 0) {
+      let report = `### 🔍 檢索結果\n\n針對您的提問「**${prompt}**」，在您的 EdenNote 資料庫中找到 **${matching.length} 筆** 相關紀錄：\n\n`
+      for (const e of matching) {
+        const amt = e.amount !== undefined ? `（${currency.format(e.amount)}）` : ''
+        report += `- **[${e.date || '無日期'}]**【${e.category}】**${e.title}** ${amt}\n`
+        if (e.detail) {
+          report += `  > ${e.detail.slice(0, 90)}\n`
+        }
+      }
+      return report
+    } else {
+      return `### 🔍 檢索說明\n\n您詢問了：「**${prompt}**」。\n\n在您目前的 **${total} 筆 EdenNote 本機紀錄** 中，未找到包含「**${searchKeywords.join('、')}**」的個人筆記。\n\n💡 **貼心建議**：\n1. 您可以嘗試簡化關鍵字或使用同義詞搜尋。\n2. 若這是需要記錄的新生活事件，可隨時在底部的 **Input** 頁面新增，日後即可由 AI 隨時為您分析與調閱！`
+    }
   }
 
   // 預設資料庫統計狀態
-  const total = events.length
   const dailyCount = events.filter((e) => !e.recordType || e.recordType === 'daily').length
   const noteCount = events.filter((e) => e.recordType === 'note').length
   const anniCount = events.filter((e) => e.recordType === 'anniversary').length
 
-  return `### 🤖 EdenNote AI 資料庫分析助理\n\n您詢問了：「**${prompt}**」。\n\n目前 EdenNote 資料庫共有 **${total} 筆紀錄**：\n- 📅 **Daily 日常紀錄**：${dailyCount} 筆\n- 📝 **Notes 備忘記事**：${noteCount} 筆\n- 🎂 **紀念日**：${anniCount} 筆\n\n您可以試著詢問我：\n1. 「**分析歷年加薪紀錄與加薪速率**」\n2. 「**統計工作與加班時數**」\n3. 「**計算累計花費與各分類支出**」\n4. 「**整理最近一個月的重點工作紀錄**」\n5. 「**比對外部軟體工程師平均薪資行情**」`
+  return `### 🤖 EdenNote AI 資料庫分析助理\n\n您詢問了：「**${prompt}**」。\n\n目前 EdenNote 資料庫共有 **${total} 筆紀錄**：\n- 📅 **Daily 日常紀錄**：${dailyCount} 筆\n- 📝 **Notes 備忘記事**：${noteCount} 筆\n- 🎂 **紀念日**：${anniCount} 筆\n\n您可以試著詢問我：\n1. 「**分析歷年加薪紀錄與加薪速率**」\n2. 「**統計工作與加班時數**」\n3. 「**計算累計花費與各分類支出**」\n4. 「**整理今天的重點紀錄**」\n5. 「**搜尋特定關鍵字筆記（例如：看牙、合約、旅遊）**」`
 }
 
 /**
