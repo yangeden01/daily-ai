@@ -13,7 +13,12 @@ COMMIT_MSG="${1:-Deploy EdenNote update from Google AI Studio}"
 git commit -m "$COMMIT_MSG" || echo "No changes to commit"
 
 echo "=== 4. Pushing to GitHub (origin master) ==="
-git push origin master
+if [ -f "/app/applet/.git-credentials" ]; then
+  git config credential.helper "store --file=/app/applet/.git-credentials"
+elif [ -f "$HOME/.git-credentials" ]; then
+  git config credential.helper "store --file=$HOME/.git-credentials"
+fi
+GIT_TERMINAL_PROMPT=0 git push origin master
 
 echo "=== 5. Monitoring GitHub Actions Workflow ==="
 sleep 4
