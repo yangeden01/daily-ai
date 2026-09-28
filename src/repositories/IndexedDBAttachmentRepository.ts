@@ -78,13 +78,21 @@ export class IndexedDBAttachmentRepository implements AttachmentRepository {
   private getDatabase(): Promise<IDBDatabase> {
     if (!this.databasePromise) {
       this.databasePromise = new Promise((resolve, reject) => {
-        const request = globalThis.indexedDB.open(this.databaseName, DATABASE_VERSION)
-        request.onupgradeneeded = () => {
-          const store = request.result.createObjectStore(STORE_NAME, { keyPath: 'id' })
-          store.createIndex('eventId', 'eventId')
+        try {
+          if (!globalThis.indexedDB) {
+            reject(new Error('This browser does not support IndexedDB'))
+            return
+          }
+          const request = globalThis.indexedDB.open(this.databaseName, DATABASE_VERSION)
+          request.onupgradeneeded = () => {
+            const store = request.result.createObjectStore(STORE_NAME, { keyPath: 'id' })
+            store.createIndex('eventId', 'eventId')
+          }
+          request.onsuccess = () => resolve(request.result)
+          request.onerror = () => reject(request.error ?? new Error('Unable to open attachment database'))
+        } catch (err) {
+          reject(err instanceof Error ? err : new Error('IndexedDB access is denied in this context'))
         }
-        request.onsuccess = () => resolve(request.result)
-        request.onerror = () => reject(request.error ?? new Error('Unable to open attachment database'))
       })
     }
     return this.databasePromise

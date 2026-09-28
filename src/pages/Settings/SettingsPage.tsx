@@ -1,6 +1,5 @@
-import { useRef, useState, useEffect, type ChangeEvent } from 'react'
-import { ArchiveRestore, Bot, Check, Cloud, CloudUpload, Copy, Database, Download, ExternalLink, FolderCheck, GitMerge, Globe, Images, Info, KeyRound, LoaderCircle, LogIn, LogOut, Palette, RefreshCw, Share2, Sparkles, Trash2, Type, X } from 'lucide-react'
-import type { User } from 'firebase/auth'
+import { useRef, useState, type ChangeEvent } from 'react'
+import { ArchiveRestore, Bot, Check, Cloud, CloudUpload, Copy, Database, Download, ExternalLink, FolderCheck, GitMerge, Globe, Images, Info, KeyRound, LoaderCircle, Palette, RefreshCw, Share2, Sparkles, Trash2, Type, X } from 'lucide-react'
 import { Capacitor } from '@capacitor/core'
 import { usePWA } from '../../contexts/PWAContext'
 import { useAppearance } from '../../contexts/AppearanceContext'
@@ -9,7 +8,6 @@ import { loadPhotoStorageMode, savePhotoStorageMode, type PhotoStorageMode } fro
 import { APP_VERSION } from '../../version'
 import { saveFile, shareExportedFile, type FileSaveOutcome } from '../../utils/fileSaver'
 import { getApiBaseUrl, checkAiServerHealth, getUserGeminiApiKey, setUserGeminiApiKey, testGeminiApiKey } from '../../services/aiService'
-import { initAuth, googleSignIn, logout } from '../../services/googleDriveAuth'
 import { uploadBackupToGoogleDrive } from '../../services/googleDriveService'
 
 type BackupStatus = 'idle' | 'working' | 'success' | 'error'
@@ -39,8 +37,6 @@ export default function SettingsPage() {
     isApiSuccess?: boolean
     apiResponseMsg?: string
   } | null>(null)
-  const [googleUser, setGoogleUser] = useState<User | null>(null)
-  const [isGoogleSigningIn, setIsGoogleSigningIn] = useState(false)
   const [copySuccess, setCopySuccess] = useState(false)
   const [photoStorageMode, setPhotoStorageMode] = useState<PhotoStorageMode>(loadPhotoStorageMode)
   const [updateCheckStatus, setUpdateCheckStatus] = useState<UpdateCheckStatus>('idle')
@@ -145,37 +141,6 @@ export default function SettingsPage() {
       : updateCheckStatus === 'offline' ? '離線時無法檢查'
         : updateCheckStatus === 'unsupported' ? '此瀏覽器不支援更新檢查'
           : updateCheckStatus === 'error' ? '更新檢查失敗' : null
-
-  useEffect(() => {
-    const unsubscribe = initAuth(
-      (user) => setGoogleUser(user),
-      () => setGoogleUser(null)
-    )
-    return () => unsubscribe()
-  }, [])
-
-  const handleGoogleSignIn = async () => {
-    setIsGoogleSigningIn(true)
-    setMessage(null)
-    try {
-      const res = await googleSignIn()
-      if (res?.user) {
-        setGoogleUser(res.user)
-        setMessage(`Google 帳號 (${res.user.email || ''}) 授權成功！`)
-      }
-    } catch (err: unknown) {
-      const e = err as Error
-      setMessage(`Google 帳號授權失敗：${e.message}`)
-    } finally {
-      setIsGoogleSigningIn(false)
-    }
-  }
-
-  const handleGoogleSignOut = async () => {
-    await logout()
-    setGoogleUser(null)
-    setMessage('已解除 Google 帳號授權')
-  }
 
   const handleCloudBackupUrlChange = (val: string) => {
     setCloudBackupUrl(val)
@@ -444,7 +409,13 @@ export default function SettingsPage() {
         <div className="flex items-center gap-2 text-stone-900 dark:text-stone-100"><Palette size={16} /><h2 className="text-sm font-bold">背景</h2></div>
         <div className="mt-2.5 grid grid-cols-4 gap-2">
           {backgroundOptions.map((option) => (
-            <button key={option.value} type="button" className={`appearance-option ${background === option.value ? 'appearance-option-active' : ''}`} aria-pressed={background === option.value} onClick={() => setBackground(option.value)}>
+            <button
+              key={option.value}
+              type="button"
+              className={`appearance-option ${background === option.value ? 'appearance-option-active' : ''}`}
+              aria-pressed={background === option.value}
+              onClick={() => setBackground(option.value)}
+            >
               <span className={`appearance-swatch ${option.swatch}`} aria-hidden="true" />
               <span>{option.label}</span>
             </button>
@@ -454,8 +425,15 @@ export default function SettingsPage() {
         <div className="mt-4 flex items-center gap-2 text-stone-900 dark:text-stone-100"><Type size={16} /><h2 className="text-sm font-bold">文字</h2></div>
         <div className="mt-2.5 grid grid-cols-2 gap-2">
           {textOptions.map((option) => (
-            <button key={option.value} type="button" className={`appearance-text-option ${text === option.value ? 'appearance-option-active' : ''} ${option.value === 'serif' ? 'font-serif' : 'font-sans'}`} aria-pressed={text === option.value} onClick={() => setText(option.value)}>
-              <strong>{option.sample}</strong><span>{option.label}</span>
+            <button
+              key={option.value}
+              type="button"
+              className={`appearance-text-option ${text === option.value ? 'appearance-option-active' : ''} ${option.value === 'serif' ? 'font-serif' : 'font-sans'}`}
+              aria-pressed={text === option.value}
+              onClick={() => setText(option.value)}
+            >
+              <strong>{option.sample}</strong>
+              <span>{option.label}</span>
             </button>
           ))}
         </div>
@@ -475,7 +453,10 @@ export default function SettingsPage() {
               aria-pressed={photoStorageMode === 'original'}
               onClick={() => selectPhotoStorageMode('original')}
             >
-              <span className="!text-xs"><strong className="!block !text-sm">原始畫質</strong>保留原始照片</span>
+              <span className="!text-xs">
+                <strong className="!block !text-sm">原始畫質</strong>
+                保留原始照片
+              </span>
             </button>
             <button
               type="button"
@@ -483,7 +464,10 @@ export default function SettingsPage() {
               aria-pressed={photoStorageMode === 'space'}
               onClick={() => selectPhotoStorageMode('space')}
             >
-              <span className="!text-xs"><strong className="!block !text-sm">節省空間</strong>1920px WebP</span>
+              <span className="!text-xs">
+                <strong className="!block !text-sm">節省空間</strong>
+                1920px WebP
+              </span>
             </button>
           </div>
           <p className="mt-2 text-xs leading-5 text-stone-400">只處理之後新增的照片；既有照片與一般附件不會改變。</p>
@@ -507,24 +491,16 @@ export default function SettingsPage() {
                 </p>
               </div>
             </div>
-            <div className="flex shrink-0 items-center gap-1.5">
+            <div className="flex shrink-0 items-center">
               <button
                 type="button"
-                className={`update-check-button !min-h-8 !px-2.5 !py-1 !text-xs ${updateAvailable || updateCheckStatus === 'available' ? 'update-check-button-ready' : ''}`}
-                onClick={() => void handleUpdateCheck()}
-                disabled={updateCheckStatus === 'checking' || updateCheckStatus === 'applying'}
-              >
-                <RefreshCw size={13} className={updateCheckStatus === 'checking' || updateCheckStatus === 'applying' ? 'animate-spin' : ''} />
-                <span className="whitespace-nowrap">{updateCheckLabel}</span>
-              </button>
-              <button
-                type="button"
-                className="inline-flex !min-h-8 items-center rounded-xl border border-stone-200 bg-stone-50 px-2.5 py-1 text-xs font-bold text-stone-600 transition hover:border-indigo-300 hover:text-indigo-600 disabled:cursor-wait disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.05] dark:text-stone-300 whitespace-nowrap"
+                className="inline-flex !min-h-8 items-center gap-1.5 rounded-xl border border-stone-200 bg-stone-50 px-3 py-1.5 text-xs font-bold text-stone-700 transition hover:border-indigo-300 hover:bg-stone-100 hover:text-indigo-600 disabled:cursor-wait disabled:opacity-60 dark:border-white/10 dark:bg-white/[0.05] dark:text-stone-200 dark:hover:bg-white/[0.08] whitespace-nowrap shadow-xs"
                 title="強制清除快取並重新載入最新版本"
                 disabled={isForceReloading}
                 onClick={() => void handleForceReload()}
               >
-                {isForceReloading ? '更新中...' : '強制更新'}
+                <RefreshCw size={13} className={isForceReloading ? 'animate-spin text-indigo-600 dark:text-indigo-400' : 'text-stone-400 dark:text-stone-500'} />
+                <span>{isForceReloading ? '更新中...' : '強制更新'}</span>
               </button>
             </div>
           </div>
@@ -548,138 +524,6 @@ export default function SettingsPage() {
         <h2 className="text-base font-semibold text-stone-900 dark:text-stone-100">Daily-AI-Backup-YYYY-MM-DD.zip</h2>
         <p className="mt-1 text-sm leading-6 text-stone-500 dark:text-stone-400">完整包含所有模式（日常記事、筆記、紀念日）之事件、照片與附件；單一檔案一次性匯出、合併或還原。</p>
       </section>
-
-      {/* 雲端資料庫目標設定 */}
-      <div className="mt-3.5 rounded-2xl border border-blue-200/90 bg-blue-50/60 p-3.5 sm:p-4 dark:border-blue-900/50 dark:bg-blue-950/30">
-        <div className="flex items-center justify-between">
-          <label htmlFor="cloud-backup-url-input" className="flex items-center gap-1.5 text-xs font-bold text-stone-800 dark:text-stone-200">
-            <Cloud size={15} className="text-blue-600 dark:text-blue-400" />
-            <span>指定雲端備份目標（Google Drive / 自訂雲端資料庫網址）</span>
-          </label>
-          {cloudBackupUrl !== DEFAULT_CLOUD_BACKUP_URL && (
-            <button
-              type="button"
-              onClick={handleResetCloudBackupUrl}
-              className="text-[11px] font-medium text-blue-600 hover:underline dark:text-blue-400"
-            >
-              恢復預設值
-            </button>
-          )}
-        </div>
-        <p className="mt-1 text-xs text-stone-500 dark:text-stone-400 leading-relaxed">
-          預設匯出至指定 Google Drive 資料夾，亦可輸入其他 Google Drive 資料夾或雲端備份 API 端點。
-        </p>
-        <div className="mt-2.5 flex items-center gap-2">
-          <input
-            id="cloud-backup-url-input"
-            type="url"
-            value={cloudBackupUrl}
-            onChange={(e) => handleCloudBackupUrlChange(e.target.value)}
-            placeholder="https://drive.google.com/drive/folders/..."
-            className="flex-1 rounded-xl border border-stone-300/80 bg-white px-3 py-2 text-xs font-mono text-stone-800 shadow-sm focus:border-blue-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200"
-          />
-          <button
-            type="button"
-            onClick={handleOpenCloudUrl}
-            className="inline-flex shrink-0 items-center gap-1 rounded-xl border border-stone-300 bg-white px-3 py-2 text-xs font-semibold text-stone-700 shadow-sm transition hover:bg-stone-50 active:scale-95 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200 dark:hover:bg-stone-750"
-            title="在瀏覽器開啟此雲端資料庫"
-          >
-            <ExternalLink size={13} className="text-blue-600 dark:text-blue-400" />
-            <span>開啟網址</span>
-          </button>
-        </div>
-
-        {/* Google Drive 官方帳號授權連線區塊 */}
-        {cloudBackupUrl.includes('drive.google.com') && (
-          <div className="mt-3 rounded-xl border border-blue-200/90 bg-white/80 p-3 shadow-xs dark:border-blue-800/50 dark:bg-stone-900/70">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5 text-xs font-semibold text-stone-800 dark:text-stone-200">
-                <svg className="h-4 w-4 shrink-0" viewBox="0 0 48 48">
-                  <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
-                  <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
-                  <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
-                  <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
-                </svg>
-                <span>Google Drive 雲端儲存通道</span>
-              </div>
-              {Capacitor.isNativePlatform() ? (
-                <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-                  <Check size={12} />
-                  Android 原生直通已就緒
-                </span>
-              ) : googleUser ? (
-                <button
-                  type="button"
-                  onClick={handleGoogleSignOut}
-                  className="inline-flex items-center gap-1 text-[11px] text-stone-500 transition hover:text-rose-600 dark:text-stone-400 dark:hover:text-rose-400"
-                >
-                  <LogOut size={12} />
-                  <span>登出</span>
-                </button>
-              ) : null}
-            </div>
-
-            {Capacitor.isNativePlatform() ? (
-              <div className="mt-2.5 rounded-lg border border-blue-200/70 bg-blue-50/80 p-2.5 text-xs text-blue-950 dark:border-blue-800/40 dark:bg-blue-950/30 dark:text-blue-200">
-                <p className="font-semibold flex items-center gap-1.5 text-blue-900 dark:text-blue-200">
-                  <span>📱 Android 手機一鍵直存 Google 雲端硬碟</span>
-                </p>
-                <p className="mt-1 text-[11px] text-blue-800 dark:text-blue-300 leading-relaxed">
-                  點擊下方藍色按鈕「<strong>匯出備份至指定雲端資料庫</strong>」，系統會封裝標準 <code>Daily-AI-Backup-YYYY-MM-DD.zip</code>，並<strong>直通叫起 Google 雲端硬碟 App 存檔介面</strong>（免繁雜外部瀏覽器授權，亦不會跳出 LINE 等雜項選單），點擊儲存即可入庫！
-                </p>
-              </div>
-            ) : googleUser ? (
-              <div className="mt-2.5 flex items-center justify-between rounded-lg bg-emerald-50/80 p-2.5 border border-emerald-200/80 dark:bg-emerald-950/30 dark:border-emerald-800/40">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  {googleUser.photoURL ? (
-                    <img src={googleUser.photoURL} alt="" className="h-7 w-7 shrink-0 rounded-full" />
-                  ) : (
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs text-white font-bold">
-                      {googleUser.email?.[0]?.toUpperCase() || 'G'}
-                    </div>
-                  )}
-                  <div className="min-w-0">
-                    <div className="truncate text-xs font-semibold text-stone-900 dark:text-stone-100">
-                      {googleUser.displayName || googleUser.email}
-                    </div>
-                    <div className="truncate text-[11px] text-stone-500 dark:text-stone-400">
-                      {googleUser.email}
-                    </div>
-                  </div>
-                </div>
-                <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-200/80 px-2 py-0.5 text-[10px] font-bold text-emerald-900 dark:bg-emerald-800/60 dark:text-emerald-200">
-                  <Check size={12} />
-                  已授權直接上傳
-                </span>
-              </div>
-            ) : (
-              <div className="mt-2">
-                <p className="text-[11px] text-stone-500 dark:text-stone-400 leading-relaxed mb-2">
-                  瀏覽器使用者可點擊下方授權 Google Drive，按下備份時即可由系統在背景直接將檔案送進此資料夾。
-                </p>
-                <button
-                  type="button"
-                  onClick={handleGoogleSignIn}
-                  disabled={isGoogleSigningIn}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-blue-300 bg-blue-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-700 active:scale-98 disabled:opacity-70 dark:border-blue-700"
-                >
-                  {isGoogleSigningIn ? (
-                    <>
-                      <LoaderCircle size={14} className="animate-spin text-white" />
-                      <span>正在授權連線 Google 帳號...</span>
-                    </>
-                  ) : (
-                    <>
-                      <LogIn size={14} />
-                      <span>登入 Google 帳號授權背景直接上傳</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
 
       <input ref={fullBackupInputRef} aria-label="選擇完整 ZIP 備份" type="file" accept=".zip,application/zip" className="sr-only" onChange={handleFullImport} />
       <input ref={fullMergeInputRef} aria-label="選擇要合併的完整 ZIP 備份" type="file" accept=".zip,application/zip" className="sr-only" onChange={handleFullMerge} />
@@ -1030,6 +874,49 @@ export default function SettingsPage() {
               <span>前往 Google AI Studio 獲取 Key</span>
               <ExternalLink size={11} />
             </a>
+          </div>
+        </div>
+
+        {/* 指定雲端備份目標 */}
+        <div className="mt-5 border-t border-stone-200/80 pt-4 dark:border-stone-800">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-stone-900 dark:text-stone-100">
+              <Cloud size={15} className="text-blue-600 dark:text-blue-400" />
+              <label htmlFor="cloud-backup-url-input" className="text-xs font-bold">
+                指定雲端備份目標（Google Drive / 自訂雲端資料庫網址）
+              </label>
+            </div>
+            {cloudBackupUrl !== DEFAULT_CLOUD_BACKUP_URL && (
+              <button
+                type="button"
+                onClick={handleResetCloudBackupUrl}
+                className="text-[11px] font-medium text-blue-600 hover:underline dark:text-blue-400"
+              >
+                恢復預設值
+              </button>
+            )}
+          </div>
+          <p className="mt-1 text-xs text-stone-500 dark:text-stone-400 leading-relaxed">
+            預設匯出至指定 Google Drive 資料夾，亦可輸入其他 Google Drive 資料夾或雲端備份 API 端點。
+          </p>
+          <div className="mt-2.5 flex items-center gap-2">
+            <input
+              id="cloud-backup-url-input"
+              type="url"
+              value={cloudBackupUrl}
+              onChange={(e) => handleCloudBackupUrlChange(e.target.value)}
+              placeholder="https://drive.google.com/drive/folders/..."
+              className="flex-1 rounded-xl border border-stone-200 bg-stone-50 px-3 py-1.5 text-xs font-mono text-stone-800 placeholder-stone-400 focus:border-indigo-500 focus:bg-white focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200"
+            />
+            <button
+              type="button"
+              onClick={handleOpenCloudUrl}
+              className="inline-flex shrink-0 items-center gap-1 rounded-xl border border-stone-300 bg-white px-3 py-1.5 text-xs font-medium text-stone-700 shadow-sm transition hover:bg-stone-50 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200 dark:hover:bg-stone-750"
+              title="在瀏覽器開啟此雲端資料庫"
+            >
+              <ExternalLink size={13} className="text-blue-600 dark:text-blue-400" />
+              <span>開啟網址</span>
+            </button>
           </div>
         </div>
       </section>

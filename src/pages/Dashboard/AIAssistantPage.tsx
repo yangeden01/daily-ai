@@ -11,7 +11,6 @@ import {
   TrendingUp,
   Clock,
   CircleDollarSign,
-  BarChart2,
   Database,
   ExternalLink,
   KeyRound,
@@ -20,15 +19,22 @@ import {
 import type { Event } from '../../models/Event'
 import { eventRepository } from '../../repositories'
 import { MarkdownMessage } from '../../components/AIChat/MarkdownMessage'
-import { sendChatMessage, getUserGeminiApiKey, setUserGeminiApiKey, testGeminiApiKey, type ChatMessage } from '../../services/aiService'
-
-interface Props {
-  onSwitchToClassicStats?: () => void
-}
+import { sendChatMessage, testGeminiApiKey, type ChatMessage } from '../../services/aiService'
+import { useAI } from '../../contexts/AIContext'
 
 const STORAGE_KEY = 'edennote_ai_chat_history_v1'
 
-export const AIAssistantPage: React.FC<Props> = ({ onSwitchToClassicStats }) => {
+export const AIAssistantPage: React.FC = () => {
+  const {
+    userApiKey,
+    setUserApiKey,
+    showKeyModal,
+    setShowKeyModal,
+    enableSearch,
+    isLocalMode,
+    setIsLocalMode,
+  } = useAI()
+
   const [events, setEvents] = useState<Event[]>([])
   const [loadingEvents, setLoadingEvents] = useState(true)
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
@@ -42,19 +48,21 @@ export const AIAssistantPage: React.FC<Props> = ({ onSwitchToClassicStats }) => 
   })
   const [input, setInput] = useState('')
   const [isSending, setIsSending] = useState(false)
-  const [enableSearch, setEnableSearch] = useState(true)
-  const [isLocalMode, setIsLocalMode] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
 
-  // User Gemini API Key modal
-  const [userApiKey, setUserApiKey] = useState(() => getUserGeminiApiKey())
-  const [showKeyModal, setShowKeyModal] = useState(false)
-  const [keyInput, setKeyInput] = useState(() => getUserGeminiApiKey())
+  // User Gemini API Key modal state
+  const [keyInput, setKeyInput] = useState(userApiKey)
   const [keyTestState, setKeyTestState] = useState<{ testing?: boolean; ok?: boolean; isDepleted?: boolean; msg?: string }>({})
+
+  useEffect(() => {
+    if (showKeyModal) {
+      setKeyInput(userApiKey)
+      setKeyTestState({})
+    }
+  }, [showKeyModal, userApiKey])
 
   const handleSaveModalKey = () => {
     setUserApiKey(keyInput.trim())
-    setUserGeminiApiKey(keyInput.trim())
     setShowKeyModal(false)
   }
 
@@ -64,7 +72,6 @@ export const AIAssistantPage: React.FC<Props> = ({ onSwitchToClassicStats }) => 
     setKeyTestState({ testing: false, ok: res.ok, isDepleted: res.isDepleted, msg: res.message })
     if (res.ok) {
       setUserApiKey(keyInput.trim())
-      setUserGeminiApiKey(keyInput.trim())
     }
   }
 
@@ -185,8 +192,8 @@ export const AIAssistantPage: React.FC<Props> = ({ onSwitchToClassicStats }) => 
 
   return (
     <div className="flex flex-col min-h-[calc(100dvh-135px)] pb-36 sm:pb-40">
-      {/* Top Bar: Database status, Search toggle, Classic stats */}
-      <section className="sticky top-14 z-10 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-stone-200/90 bg-white/95 px-3.5 py-2.5 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-stone-900/95">
+      {/* Top Bar: Database status and Clear button */}
+      <section className="sticky top-14 z-10 flex items-center justify-between gap-2 rounded-2xl border border-stone-200/90 bg-white/95 px-3.5 py-2.5 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-stone-900/95">
         <div className="flex items-center gap-2 text-xs font-semibold text-stone-700 dark:text-stone-300">
           <span className="relative flex h-2.5 w-2.5">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
@@ -203,77 +210,18 @@ export const AIAssistantPage: React.FC<Props> = ({ onSwitchToClassicStats }) => 
           </span>
         </div>
 
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          {/* Custom Gemini Key Button */}
+        {/* Clear chat history button */}
+        {messages.length > 0 && (
           <button
             type="button"
-            onClick={() => {
-              setKeyInput(getUserGeminiApiKey())
-              setKeyTestState({})
-              setShowKeyModal(true)
-            }}
-            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold transition ${
-              userApiKey
-                ? 'bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-950/60 dark:text-indigo-300 dark:border-indigo-800'
-                : 'bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800'
-            }`}
-            title="設定或變更自訂 Gemini API Key"
+            onClick={handleClear}
+            className="inline-flex items-center gap-1 rounded-full border border-stone-200 bg-stone-50 px-2.5 py-1 text-xs font-medium text-stone-600 hover:bg-stone-100 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300 transition"
+            title="清空對話"
           >
-            <KeyRound size={12} className={userApiKey ? 'text-indigo-600 dark:text-indigo-400' : 'text-amber-600 dark:text-amber-400'} />
-            <span>{userApiKey ? '✨ Gemini 3.8 Flash' : '🔑 設定 Key'}</span>
+            <RotateCcw size={12} />
+            <span>清空對話</span>
           </button>
-
-          {/* Engine Mode or Google Search grounding toggle */}
-          {isLocalMode ? (
-            <span
-              className="inline-flex items-center gap-1 rounded-full border border-amber-300/80 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/60 dark:text-amber-300"
-              title="目前由 EdenNote 本機深度分析引擎提供離線私密運算"
-            >
-              <Database size={12} />
-              <span>本機分析引擎</span>
-            </span>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setEnableSearch((prev) => !prev)}
-              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold transition ${
-                enableSearch
-                  ? 'bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800'
-                  : 'bg-stone-100 text-stone-400 border border-transparent dark:bg-stone-800 dark:text-stone-500'
-              }`}
-              title={enableSearch ? '已開啟 Google 聯網比對' : '已關閉 Google 聯網比對'}
-            >
-              <Globe size={12} />
-              <span>{enableSearch ? 'Google 聯網開' : '聯網關'}</span>
-            </button>
-          )}
-
-          {/* Clear button */}
-          {messages.length > 0 && (
-            <button
-              type="button"
-              onClick={handleClear}
-              className="inline-flex items-center gap-1 rounded-full border border-stone-200 bg-stone-50 px-2 py-1 text-xs font-medium text-stone-600 hover:bg-stone-100 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300"
-              title="清空對話"
-            >
-              <RotateCcw size={12} />
-              <span>清空</span>
-            </button>
-          )}
-
-          {/* Switch to classic stats */}
-          {onSwitchToClassicStats && (
-            <button
-              type="button"
-              onClick={onSwitchToClassicStats}
-              className="inline-flex items-center gap-1 rounded-full border border-stone-200 bg-stone-50 px-2 py-1 text-xs font-semibold text-stone-600 hover:bg-stone-100 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300"
-              title="查看傳統統計圖表"
-            >
-              <BarChart2 size={12} />
-              <span>傳統統計</span>
-            </button>
-          )}
-        </div>
+        )}
       </section>
 
       {/* Messages area */}
@@ -451,7 +399,7 @@ export const AIAssistantPage: React.FC<Props> = ({ onSwitchToClassicStats }) => 
                 e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`
               }}
               onKeyDown={handleKeyDown}
-              placeholder="詢問 EdenNote 資料庫（例如：分析加薪、加班統計…）"
+              placeholder="問問EdenNote AI"
               className="flex-1 max-h-32 resize-none bg-transparent px-3 py-2 text-sm leading-relaxed text-stone-900 placeholder:text-stone-400 focus:outline-none dark:text-white dark:placeholder:text-stone-500"
             />
 
@@ -570,7 +518,6 @@ export const AIAssistantPage: React.FC<Props> = ({ onSwitchToClassicStats }) => 
                 onClick={() => {
                   setKeyInput('')
                   setUserApiKey('')
-                  setUserGeminiApiKey('')
                   setShowKeyModal(false)
                 }}
                 className="rounded-xl px-3 py-1.5 text-xs font-medium text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-800"

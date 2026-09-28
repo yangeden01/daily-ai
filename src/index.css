@@ -24,16 +24,29 @@
     --app-bottom-margin: max(1.75rem, calc(var(--app-safe-bottom) + 0.75rem));
   }
 
-  html { color-scheme: light; }
+  html {
+    color-scheme: light;
+    height: 100%;
+    width: 100%;
+  }
 
   body {
     margin: 0;
+    padding: 0;
     min-width: 0;
+    width: 100%;
+    height: 100%;
+    min-height: 100%;
     min-height: 100dvh;
     background: #f4f4f5;
   }
 
-  #root { min-height: 100dvh; }
+  #root {
+    width: 100%;
+    height: 100%;
+    min-height: 100%;
+    min-height: 100dvh;
+  }
 
   button, input, select, textarea { font: inherit; }
   button { -webkit-tap-highlight-color: transparent; }
@@ -55,17 +68,17 @@
   }
 
   html[data-background="paper"] body {
-    color: #3f3528;
-    background-color: #f3ead7;
+    color: #36291a;
+    background-color: #dcd0b7;
     background-image:
-      radial-gradient(circle at 20% 10%, rgb(120 88 45 / 0.04) 0 1px, transparent 1.5px),
-      radial-gradient(circle at 70% 60%, rgb(120 88 45 / 0.03) 0 1px, transparent 1.5px);
+      radial-gradient(circle at 20% 10%, rgb(105 70 25 / 0.05) 0 1px, transparent 1.5px),
+      radial-gradient(circle at 70% 60%, rgb(105 70 25 / 0.04) 0 1px, transparent 1.5px);
     background-size: 18px 18px, 23px 23px;
   }
 
   html[data-background="paper"] {
-    --input-surface: #e7edf3;
-    --selection-surface: #fff8e9;
+    --input-surface: #cfbea0;
+    --selection-surface: #efe2ca;
   }
 }
 
@@ -894,32 +907,44 @@
   }
 
   .appearance-option {
-    @apply flex min-h-16 flex-col items-center justify-center gap-1 rounded-xl border border-stone-200 bg-stone-50 px-1 py-2 text-[10px] font-semibold text-stone-600 transition hover:border-indigo-300 focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-white/10 dark:bg-white/[0.04] dark:text-stone-300;
+    @apply relative flex min-h-16 flex-col items-center justify-center gap-1.5 rounded-xl border border-stone-200/90 bg-stone-50/70 px-1 py-2 text-[11px] font-semibold text-stone-500 transition hover:border-stone-300 focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-white/10 dark:bg-stone-900/60 dark:text-stone-400;
   }
 
   .appearance-option-active {
-    @apply border-indigo-500 bg-indigo-50 text-indigo-700 ring-2 ring-indigo-100 dark:border-indigo-400 dark:bg-indigo-500/15 dark:text-indigo-200 dark:ring-indigo-500/20;
+    @apply !border-2 !border-indigo-600 !bg-indigo-50/90 !text-indigo-800 font-bold ring-2 ring-indigo-500/30 shadow-sm dark:!border-2 dark:!border-indigo-400 dark:!bg-indigo-950/80 dark:!text-indigo-100 dark:ring-2 dark:ring-indigo-400/50 dark:shadow-[0_0_14px_rgba(129,140,248,0.35)];
   }
 
   .appearance-swatch {
-    @apply block h-7 w-7 rounded-full border border-stone-300 shadow-inner dark:border-white/20;
+    @apply block h-7 w-7 rounded-full border border-stone-300/80 shadow-inner dark:border-white/20 transition;
   }
 
   .appearance-system { background: linear-gradient(90deg, #fff 0 50%, #17181c 50% 100%); }
   .appearance-light { background: #fff; }
   .appearance-dark { background: #17181c; }
   .appearance-paper {
-    background-color: #efe2c6;
-    background-image: radial-gradient(circle, rgb(120 88 45 / 0.16) 0 1px, transparent 1.5px);
+    background-color: #dcd0b7;
+    background-image: radial-gradient(circle, rgb(105 70 25 / 0.18) 0 1px, transparent 1.5px);
     background-size: 8px 8px;
   }
 
   .appearance-text-option {
-    @apply flex min-h-14 items-center justify-between rounded-xl border border-stone-200 bg-stone-50 px-3 text-left text-stone-600 transition hover:border-indigo-300 focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-white/10 dark:bg-white/[0.04] dark:text-stone-300;
+    @apply relative flex min-h-14 items-center justify-between rounded-xl border border-stone-200/90 bg-stone-50/70 px-3.5 text-left text-stone-500 transition hover:border-stone-300 focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-white/10 dark:bg-stone-900/60 dark:text-stone-400;
   }
 
-  .appearance-text-option strong { @apply text-sm text-stone-900 dark:text-stone-100; }
-  .appearance-text-option span { @apply text-[10px] font-semibold; }
+  .appearance-text-option strong { @apply text-sm text-stone-800 dark:text-stone-200 transition-colors; }
+  .appearance-text-option span { @apply text-[11px] font-medium text-stone-400 dark:text-stone-500 transition-colors; }
+
+  .appearance-text-option.appearance-option-active {
+    @apply !border-2 !border-indigo-600 !bg-indigo-50/90 text-indigo-950 font-bold ring-2 ring-indigo-500/30 shadow-sm dark:!border-2 dark:!border-indigo-400 dark:!bg-indigo-950/80 dark:!text-indigo-100 dark:ring-2 dark:ring-indigo-400/50 dark:shadow-[0_0_14px_rgba(129,140,248,0.35)];
+  }
+
+  .appearance-text-option.appearance-option-active strong {
+    @apply !text-indigo-900 dark:!text-indigo-100 !font-bold;
+  }
+
+  .appearance-text-option.appearance-option-active span {
+    @apply !text-indigo-600 dark:!text-indigo-300 !font-semibold;
+  }
 
   .coming-soon {
     @apply rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-700 dark:bg-amber-400/10 dark:text-amber-300;
@@ -1368,7 +1393,8 @@
 
 html[data-background="paper"] .app-header,
 html[data-background="paper"] .bottom-nav {
-  background-color: rgb(250 244 231 / 0.94);
+  background-color: rgb(228 217 194 / 0.96);
+  border-color: #c7b697;
 }
 
 html[data-background="paper"] .ai-composer,
@@ -1377,26 +1403,44 @@ html[data-background="paper"] .event-list,
 html[data-background="paper"] .status-card,
 html[data-background="paper"] .detail-card,
 html[data-background="paper"] .dashboard-card {
-  border-color: #dfd1b5;
-  background-color: rgb(255 251 242 / 0.94);
+  border-color: #c7b697;
+  background-color: rgb(235 225 204 / 0.95);
+}
+
+html[data-background="paper"] .appearance-option,
+html[data-background="paper"] .appearance-text-option {
+  border-color: #c7b697;
+  background-color: rgb(226 215 192 / 0.7);
+  color: #453625;
+}
+
+html[data-background="paper"] .appearance-text-option strong {
+  color: #2b1f12;
+}
+
+html[data-background="paper"] .appearance-option-active {
+  border-color: #4f46e5 !important;
+  background-color: rgb(224 231 255 / 0.9) !important;
+  color: #312e81 !important;
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.25) !important;
 }
 
 html[data-background="paper"] .event-row-month-odd,
 html[data-background="paper"] .search-card-month-odd {
-  background-color: rgb(255 252 245 / 0.98);
+  background-color: rgb(240 231 210 / 0.98);
 }
 html[data-background="paper"] .event-row-month-odd:hover,
 html[data-background="paper"] .search-card-month-odd:hover {
-  background-color: rgb(249 243 232 / 0.98);
+  background-color: rgb(233 222 199 / 0.98);
 }
 
 html[data-background="paper"] .event-row-month-even,
 html[data-background="paper"] .search-card-month-even {
-  background-color: rgb(238 226 200 / 0.92);
+  background-color: rgb(225 213 189 / 0.94);
 }
 html[data-background="paper"] .event-row-month-even:hover,
 html[data-background="paper"] .search-card-month-even:hover {
-  background-color: rgb(230 216 186 / 0.95);
+  background-color: rgb(217 204 178 / 0.98);
 }
 
 html[data-background="paper"] .event-row-future,

@@ -116,28 +116,32 @@ export class IndexedDBRepository implements EventRepository {
 
   private openDatabase(): Promise<IDBDatabase> {
     return new Promise((resolve, reject) => {
-      if (!globalThis.indexedDB) {
-        reject(new Error('This browser does not support IndexedDB'))
-        return
-      }
+      try {
+        if (!globalThis.indexedDB) {
+          reject(new Error('This browser does not support IndexedDB'))
+          return
+        }
 
-      const request = globalThis.indexedDB.open(this.databaseName, DATABASE_VERSION)
+        const request = globalThis.indexedDB.open(this.databaseName, DATABASE_VERSION)
 
-      request.onupgradeneeded = () => {
-        const database = request.result
-        const store = database.createObjectStore(EVENT_STORE, { keyPath: 'id' })
-        store.createIndex('date', 'date')
-        store.createIndex('updatedAt', 'updatedAt')
-        this.seedEvents.forEach((event) => store.add(copyEvent(event)))
-      }
+        request.onupgradeneeded = () => {
+          const database = request.result
+          const store = database.createObjectStore(EVENT_STORE, { keyPath: 'id' })
+          store.createIndex('date', 'date')
+          store.createIndex('updatedAt', 'updatedAt')
+          this.seedEvents.forEach((event) => store.add(copyEvent(event)))
+        }
 
-      request.onsuccess = () => {
-        const database = request.result
-        database.onversionchange = () => database.close()
-        resolve(database)
+        request.onsuccess = () => {
+          const database = request.result
+          database.onversionchange = () => database.close()
+          resolve(database)
+        }
+        request.onerror = () => reject(request.error ?? new Error('Unable to open Daily AI database'))
+        request.onblocked = () => reject(new Error('Daily AI database upgrade is blocked by another tab'))
+      } catch (err) {
+        reject(err instanceof Error ? err : new Error('IndexedDB access is denied in this context'))
       }
-      request.onerror = () => reject(request.error ?? new Error('Unable to open Daily AI database'))
-      request.onblocked = () => reject(new Error('Daily AI database upgrade is blocked by another tab'))
     })
   }
 }

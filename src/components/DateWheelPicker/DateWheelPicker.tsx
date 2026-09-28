@@ -182,34 +182,34 @@ export default function DateWheelPicker({ id, value, onChange, required }: DateW
         }}
       >
         {/* 左側：直接秀當前選定/當天日期 */}
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 transition group-hover:scale-105 dark:bg-indigo-500/15 dark:text-indigo-400">
-            <CalendarDays size={22} aria-hidden="true" />
+        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 transition group-hover:scale-105 dark:bg-indigo-500/15 dark:text-indigo-400">
+            <CalendarDays size={18} aria-hidden="true" />
           </div>
           <div className="min-w-0">
-            <div className="text-base font-bold text-stone-900 dark:text-stone-100 sm:text-[17px] leading-tight">
+            <div className="text-[15px] sm:text-base font-bold text-stone-900 dark:text-stone-100 whitespace-nowrap tabular-nums leading-tight">
               {year}年{pad(month)}月{pad(day)}日
             </div>
             {weekday && (
-              <span className="inline-block mt-1 rounded-md bg-stone-200/70 px-2 py-0.5 text-xs font-semibold text-stone-700 dark:bg-white/10 dark:text-stone-300">
+              <span className="inline-block mt-0.5 rounded-md bg-stone-200/70 px-1.5 py-0.5 text-[11px] font-semibold text-stone-700 dark:bg-white/10 dark:text-stone-300">
                 {weekday}
               </span>
             )}
           </div>
         </div>
 
-        {/* 右側：修改日期按鈕 (文字改成「修改日期」，加大icon，單行不折行) */}
+        {/* 右側：修改日期按鈕 (縮小 icon 與按鈕尺寸，確保不擠壓左側日期) */}
         <button
           type="button"
           onClick={(e) => {
             e.stopPropagation()
             handleOpenCalendar()
           }}
-          className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-white shadow-sm transition hover:bg-indigo-700 active:scale-95 shrink-0 whitespace-nowrap dark:bg-indigo-500 dark:hover:bg-indigo-600 ml-2"
+          className="flex items-center gap-1 rounded-xl bg-indigo-600 px-2.5 py-1.5 text-white shadow-xs transition hover:bg-indigo-700 active:scale-95 shrink-0 whitespace-nowrap dark:bg-indigo-500 dark:hover:bg-indigo-600 ml-2"
           aria-label="修改日期"
         >
-          <CalendarIcon size={18} className="shrink-0" aria-hidden="true" />
-          <span className="text-sm font-bold tracking-wide">修改日期</span>
+          <CalendarIcon size={14} className="shrink-0" aria-hidden="true" />
+          <span className="text-xs font-semibold tracking-wide">修改日期</span>
         </button>
       </div>
 
