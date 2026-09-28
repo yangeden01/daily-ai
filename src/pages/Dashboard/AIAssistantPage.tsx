@@ -152,7 +152,7 @@ export const AIAssistantPage: React.FC<Props> = ({ onSwitchToClassicStats }) => 
       const errorMessage: ChatMessage = {
         id: `assistant-error-${Date.now()}`,
         role: 'assistant',
-        content: `⚠️ 回覆時發生問題：${error?.message || '未知錯誤'}。您可以點選下方快捷建議，或重新提問。`,
+        content: `⚠️ 回覆時發生問題：${error?.message || '未知錯誤'}。請重新提問或稍後再試。`,
         timestamp: new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }),
       }
       setMessages((prev) => [...prev, errorMessage])
@@ -438,23 +438,6 @@ export const AIAssistantPage: React.FC<Props> = ({ onSwitchToClassicStats }) => 
         style={{ bottom: 'calc(var(--app-bottom-margin, 1.75rem) + 4.75rem)' }}
       >
         <div className="pointer-events-auto">
-          {/* Suggestion prompt chips if has messages */}
-          {messages.length > 0 && (
-            <div className="mb-2 flex items-center gap-1.5 overflow-x-auto py-1 no-scrollbar">
-              {quickSuggestions.slice(0, 3).map((s, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  disabled={isSending}
-                  onClick={() => void handleSend(s.prompt)}
-                  className="shrink-0 rounded-full border border-stone-200/90 bg-white/95 px-3 py-1.5 text-xs font-semibold text-stone-700 shadow-sm backdrop-blur transition hover:border-indigo-300 hover:text-indigo-600 active:scale-95 disabled:opacity-50 dark:border-white/10 dark:bg-stone-900/95 dark:text-stone-300"
-                >
-                  {s.label}
-                </button>
-              ))}
-            </div>
-          )}
-
           <div className="relative flex items-end gap-2 rounded-3xl border-2 border-indigo-400/90 bg-white/95 p-1.5 sm:p-2 shadow-2xl shadow-indigo-950/15 backdrop-blur-md transition-all focus-within:border-indigo-600 focus-within:ring-4 focus-within:ring-indigo-500/20 dark:border-indigo-500/80 dark:bg-stone-900/95 dark:shadow-black/40">
             <textarea
               ref={textareaRef}
