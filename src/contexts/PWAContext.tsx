@@ -79,6 +79,17 @@ export function PWAProvider({ children }: { children: ReactNode }) {
       return
     }
 
+    // 在 AI Studio 預覽（iframe）或本機開發模式下，跳過註冊並主動清除任何殘留的舊 Service Worker，避免造成白畫面或快取攔截
+    if (isIframeEnvironment() || import.meta.env.DEV) {
+      setServiceWorkerStatus('ready')
+      navigator.serviceWorker.getRegistrations().then((registrations) => {
+        for (const reg of registrations) {
+          void reg.unregister()
+        }
+      }).catch(() => {})
+      return
+    }
+
     const boundRegistrations = new WeakSet<ServiceWorkerRegistration>()
 
     const checkRegistration = (registration: ServiceWorkerRegistration) => {

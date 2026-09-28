@@ -3,6 +3,20 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <script>
+      // 在預覽（iframe）或本機開發環境下，主動清除舊 Service Worker，防止攔截或快取導致白畫面
+      try {
+        if (window.self !== window.top || location.hostname === 'localhost' || location.hostname.includes('ais-dev-') || location.hostname.includes('run.app')) {
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function(regs) {
+              for (var i = 0; i < regs.length; i++) {
+                regs[i].unregister();
+              }
+            }).catch(function() {});
+          }
+        }
+      } catch (e) {}
+    </script>
     <meta name="theme-color" content="#4f46e5" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
