@@ -5,6 +5,7 @@ export interface SaveFileOptions {
   base64Data: string
   mimeType?: string
   shareAfterSave?: boolean
+  targetPackage?: string
 }
 
 export interface SaveFileResult {
@@ -18,6 +19,7 @@ export interface ShareFileOptions {
   fileName: string
   base64Data: string
   mimeType?: string
+  targetPackage?: string
 }
 
 export interface StartSaveOptions {
@@ -43,6 +45,7 @@ export interface AppendChunkResult {
 export interface FinishSaveOptions {
   transferId: string
   shareAfterSave?: boolean
+  targetPackage?: string
 }
 
 export interface FileBridgePlugin {

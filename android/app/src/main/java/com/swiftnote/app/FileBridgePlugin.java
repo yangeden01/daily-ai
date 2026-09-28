@@ -113,6 +113,7 @@ public class FileBridgePlugin extends Plugin {
     public void finishSaveFile(PluginCall call) {
         String transferId = call.getString("transferId");
         boolean shareAfterSave = Boolean.TRUE.equals(call.getBoolean("shareAfterSave", false));
+        String targetPackage = call.getString("targetPackage", null);
 
         if (transferId == null) {
             call.reject("transferId is required");
@@ -135,7 +136,7 @@ public class FileBridgePlugin extends Plugin {
                 String savedLocation = saveFileFromTemp(session.tempFile, session.fileName, session.mimeType);
 
                 if (shareAfterSave) {
-                    shareFileInternal(session.tempFile, session.fileName, session.mimeType);
+                    shareFileInternal(session.tempFile, session.fileName, session.mimeType, targetPackage);
                 } else {
                     try {
                         session.tempFile.delete();
@@ -182,6 +183,7 @@ public class FileBridgePlugin extends Plugin {
         String base64Data = call.getString("base64Data");
         String mimeType = call.getString("mimeType", "application/octet-stream");
         boolean shareAfterSave = Boolean.TRUE.equals(call.getBoolean("shareAfterSave", false));
+        String targetPackage = call.getString("targetPackage", null);
 
         if (fileName == null || base64Data == null) {
             call.reject("fileName and base64Data are required");
@@ -210,7 +212,7 @@ public class FileBridgePlugin extends Plugin {
                 String savedLocation = saveFileFromTemp(tempFile, fileName, mimeType);
 
                 if (shareAfterSave) {
-                    shareFileInternal(tempFile, fileName, mimeType);
+                    shareFileInternal(tempFile, fileName, mimeType, targetPackage);
                 } else {
                     try {
                         tempFile.delete();
@@ -240,6 +242,7 @@ public class FileBridgePlugin extends Plugin {
         String fileName = call.getString("fileName");
         String base64Data = call.getString("base64Data");
         String mimeType = call.getString("mimeType", "application/octet-stream");
+        String targetPackage = call.getString("targetPackage", null);
 
         if (fileName == null || base64Data == null) {
             call.reject("fileName and base64Data are required");
@@ -264,7 +267,7 @@ public class FileBridgePlugin extends Plugin {
                     fos.flush();
                 }
 
-                shareFileInternal(cacheFile, fileName, mimeType);
+                shareFileInternal(cacheFile, fileName, mimeType, targetPackage);
 
                 JSObject result = new JSObject();
                 result.put("success", true);
@@ -364,7 +367,7 @@ public class FileBridgePlugin extends Plugin {
         return savedLocation;
     }
 
-    private void shareFileInternal(File file, String fileName, String mimeType) {
+    private void shareFileInternal(File file, String fileName, String mimeType, String targetPackage) {
         try {
             File targetShareFile = file;
             if (fileName != null && !fileName.trim().isEmpty() && !file.getName().equals(fileName)) {
@@ -403,9 +406,23 @@ public class FileBridgePlugin extends Plugin {
             shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             shareIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
 
-            Intent chooser = Intent.createChooser(shareIntent, "選擇儲存或分享備份");
-            chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            getContext().startActivity(chooser);
+            boolean launchedDirect = false;
+            if (targetPackage != null && !targetPackage.trim().isEmpty()) {
+                try {
+                    Intent directIntent = new Intent(shareIntent);
+                    directIntent.setPackage(targetPackage.trim());
+                    getContext().startActivity(directIntent);
+                    launchedDirect = true;
+                } catch (Throwable directErr) {
+                    launchedDirect = false;
+                }
+            }
+
+            if (!launchedDirect) {
+                Intent chooser = Intent.createChooser(shareIntent, "選擇儲存至 Google 雲端硬碟或分享備份");
+                chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                getContext().startActivity(chooser);
+            }
         } catch (Throwable ignored) {}
     }
 }

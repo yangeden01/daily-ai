@@ -6,6 +6,7 @@ export interface SaveFileParams {
   data: Uint8Array | Blob | string
   mimeType?: string
   shareAfterSave?: boolean
+  targetPackage?: string
 }
 
 export interface FileSaveOutcome {
@@ -54,7 +55,7 @@ function blobSliceToBase64(slice: Blob): Promise<string> {
 }
 
 export async function saveFile(params: SaveFileParams): Promise<FileSaveOutcome> {
-  const { fileName, data, mimeType = 'application/octet-stream', shareAfterSave = false } = params
+  const { fileName, data, mimeType = 'application/octet-stream', shareAfterSave = false, targetPackage } = params
   const blob = normalizeToBlob(data, mimeType)
   const sizeText = formatBytes(blob.size)
 
@@ -86,6 +87,7 @@ export async function saveFile(params: SaveFileParams): Promise<FileSaveOutcome>
         const finishResult = await FileBridge.finishSaveFile({
           transferId,
           shareAfterSave,
+          targetPackage,
         })
 
         return {
@@ -115,6 +117,7 @@ export async function saveFile(params: SaveFileParams): Promise<FileSaveOutcome>
       base64Data,
       mimeType,
       shareAfterSave,
+      targetPackage,
     })
 
     return {
@@ -179,9 +182,9 @@ export async function saveFile(params: SaveFileParams): Promise<FileSaveOutcome>
   }
 }
 
-export async function shareExportedFile(fileName: string, base64Data: string, mimeType = 'application/octet-stream'): Promise<void> {
+export async function shareExportedFile(fileName: string, base64Data: string, mimeType = 'application/octet-stream', targetPackage?: string): Promise<void> {
   if (Capacitor.isNativePlatform()) {
-    await FileBridge.shareFile({ fileName, base64Data, mimeType })
+    await FileBridge.shareFile({ fileName, base64Data, mimeType, targetPackage })
   } else if (typeof navigator !== 'undefined' && 'share' in navigator) {
     try {
       const byteCharacters = atob(base64Data)

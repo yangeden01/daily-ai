@@ -1,6 +1,7 @@
 import { useRef, useState, useEffect, type ChangeEvent } from 'react'
 import { ArchiveRestore, Bot, Check, Cloud, CloudUpload, Copy, Database, Download, ExternalLink, FolderCheck, GitMerge, Globe, Images, Info, KeyRound, LoaderCircle, LogIn, LogOut, Palette, RefreshCw, Share2, Sparkles, Trash2, Type, X } from 'lucide-react'
 import type { User } from 'firebase/auth'
+import { Capacitor } from '@capacitor/core'
 import { usePWA } from '../../contexts/PWAContext'
 import { useAppearance } from '../../contexts/AppearanceContext'
 import type { BackgroundTheme, TextTheme } from '../../utils/appearance'
@@ -220,6 +221,31 @@ export default function SettingsPage() {
       })
 
       if (isGoogleDrive) {
+        if (outcome.isNative || Capacitor.isNativePlatform()) {
+          // Android 原生環境：
+          // Google 官方在原生 WebView 封鎖網頁彈跳視窗 OAuth（會導致外部 Chrome 報錯 "The requested action is invalid."）。
+          // Android 系統最高效、最安全、免打密碼的標準方式：直接喚起手機中的 Google 雲端硬碟原生 App (com.google.android.apps.docs)
+          // 檔名已鎖定為標準的 Daily-AI-Backup-YYYY-MM-DD.zip，直通 Drive 存檔介面
+          await saveFile({
+            fileName: filename,
+            data,
+            mimeType: 'application/zip',
+            shareAfterSave: true,
+            targetPackage: 'com.google.android.apps.docs',
+          })
+
+          setStatus('success')
+          setCloudExportNotice({
+            outcome,
+            destinationUrl: targetUrl,
+            isGoogleDrive: true,
+            isDirectDriveSuccess: true,
+            driveFileName: filename,
+          })
+          setMessage(`🎉 備份已安全封裝（${filename}），並已直接開啟手機「Google 雲端硬碟」存檔介面！`)
+          return
+        }
+
         let isDirectSuccess = false
         let driveFileLink = ''
         let uploadErrMsg = ''
@@ -574,9 +600,14 @@ export default function SettingsPage() {
                   <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
                   <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
                 </svg>
-                <span>Google Drive 帳號授權（方案二：背景直接上傳）</span>
+                <span>Google Drive 雲端儲存通道</span>
               </div>
-              {googleUser && (
+              {Capacitor.isNativePlatform() ? (
+                <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                  <Check size={12} />
+                  Android 原生直通已就緒
+                </span>
+              ) : googleUser ? (
                 <button
                   type="button"
                   onClick={handleGoogleSignOut}
@@ -585,10 +616,19 @@ export default function SettingsPage() {
                   <LogOut size={12} />
                   <span>登出</span>
                 </button>
-              )}
+              ) : null}
             </div>
 
-            {googleUser ? (
+            {Capacitor.isNativePlatform() ? (
+              <div className="mt-2.5 rounded-lg border border-blue-200/70 bg-blue-50/80 p-2.5 text-xs text-blue-950 dark:border-blue-800/40 dark:bg-blue-950/30 dark:text-blue-200">
+                <p className="font-semibold flex items-center gap-1.5 text-blue-900 dark:text-blue-200">
+                  <span>📱 Android 手機一鍵直存 Google 雲端硬碟</span>
+                </p>
+                <p className="mt-1 text-[11px] text-blue-800 dark:text-blue-300 leading-relaxed">
+                  點擊下方藍色按鈕「<strong>匯出備份至指定雲端資料庫</strong>」，系統會封裝標準 <code>Daily-AI-Backup-YYYY-MM-DD.zip</code>，並<strong>直通叫起 Google 雲端硬碟 App 存檔介面</strong>（免繁雜外部瀏覽器授權，亦不會跳出 LINE 等雜項選單），點擊儲存即可入庫！
+                </p>
+              </div>
+            ) : googleUser ? (
               <div className="mt-2.5 flex items-center justify-between rounded-lg bg-emerald-50/80 p-2.5 border border-emerald-200/80 dark:bg-emerald-950/30 dark:border-emerald-800/40">
                 <div className="flex items-center gap-2.5 min-w-0">
                   {googleUser.photoURL ? (
@@ -615,7 +655,7 @@ export default function SettingsPage() {
             ) : (
               <div className="mt-2">
                 <p className="text-[11px] text-stone-500 dark:text-stone-400 leading-relaxed mb-2">
-                  點擊下方登入並授權 Google Drive，按下備份時即可由系統在背景直接將檔案送進此資料夾，<strong>不跳出任何手機分享面板</strong>。
+                  瀏覽器使用者可點擊下方授權 Google Drive，按下備份時即可由系統在背景直接將檔案送進此資料夾。
                 </p>
                 <button
                   type="button"
