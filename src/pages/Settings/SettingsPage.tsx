@@ -1,5 +1,6 @@
 import { useRef, useState, useEffect, type ChangeEvent } from 'react'
-import { ArchiveRestore, Bot, Check, Cloud, CloudUpload, Copy, Database, Download, ExternalLink, FolderCheck, GitMerge, Globe, Images, Info, KeyRound, LoaderCircle, Palette, RefreshCw, Share2, Sparkles, Trash2, Type, X } from 'lucide-react'
+import { ArchiveRestore, Bot, Check, Cloud, CloudUpload, Copy, Database, Download, ExternalLink, FolderCheck, GitMerge, Globe, Images, Info, KeyRound, LoaderCircle, LogIn, LogOut, Palette, RefreshCw, Share2, Sparkles, Trash2, Type, X } from 'lucide-react'
+import type { User } from 'firebase/auth'
 import { usePWA } from '../../contexts/PWAContext'
 import { useAppearance } from '../../contexts/AppearanceContext'
 import type { BackgroundTheme, TextTheme } from '../../utils/appearance'
@@ -7,6 +8,8 @@ import { loadPhotoStorageMode, savePhotoStorageMode, type PhotoStorageMode } fro
 import { APP_VERSION } from '../../version'
 import { saveFile, shareExportedFile, type FileSaveOutcome } from '../../utils/fileSaver'
 import { getApiBaseUrl, checkAiServerHealth, getUserGeminiApiKey, setUserGeminiApiKey, testGeminiApiKey } from '../../services/aiService'
+import { initAuth, googleSignIn, logout } from '../../services/googleDriveAuth'
+import { uploadBackupToGoogleDrive } from '../../services/googleDriveService'
 
 type BackupStatus = 'idle' | 'working' | 'success' | 'error'
 type BackupAction = 'export' | 'cloud-export' | 'merge' | 'replace'
@@ -29,9 +32,14 @@ export default function SettingsPage() {
     outcome: FileSaveOutcome
     destinationUrl: string
     isGoogleDrive: boolean
+    isDirectDriveSuccess?: boolean
+    driveFileLink?: string
+    driveFileName?: string
     isApiSuccess?: boolean
     apiResponseMsg?: string
   } | null>(null)
+  const [googleUser, setGoogleUser] = useState<User | null>(null)
+  const [isGoogleSigningIn, setIsGoogleSigningIn] = useState(false)
   const [copySuccess, setCopySuccess] = useState(false)
   const [photoStorageMode, setPhotoStorageMode] = useState<PhotoStorageMode>(loadPhotoStorageMode)
   const [updateCheckStatus, setUpdateCheckStatus] = useState<UpdateCheckStatus>('idle')
@@ -137,6 +145,37 @@ export default function SettingsPage() {
         : updateCheckStatus === 'unsupported' ? '此瀏覽器不支援更新檢查'
           : updateCheckStatus === 'error' ? '更新檢查失敗' : null
 
+  useEffect(() => {
+    const unsubscribe = initAuth(
+      (user) => setGoogleUser(user),
+      () => setGoogleUser(null)
+    )
+    return () => unsubscribe()
+  }, [])
+
+  const handleGoogleSignIn = async () => {
+    setIsGoogleSigningIn(true)
+    setMessage(null)
+    try {
+      const res = await googleSignIn()
+      if (res?.user) {
+        setGoogleUser(res.user)
+        setMessage(`Google 帳號 (${res.user.email || ''}) 授權成功！`)
+      }
+    } catch (err: unknown) {
+      const e = err as Error
+      setMessage(`Google 帳號授權失敗：${e.message}`)
+    } finally {
+      setIsGoogleSigningIn(false)
+    }
+  }
+
+  const handleGoogleSignOut = async () => {
+    await logout()
+    setGoogleUser(null)
+    setMessage('已解除 Google 帳號授權')
+  }
+
   const handleCloudBackupUrlChange = (val: string) => {
     setCloudBackupUrl(val)
     if (val.trim() && val.trim() !== DEFAULT_CLOUD_BACKUP_URL) {
@@ -172,37 +211,56 @@ export default function SettingsPage() {
       const targetUrl = cloudBackupUrl.trim() || DEFAULT_CLOUD_BACKUP_URL
       const isGoogleDrive = targetUrl.includes('drive.google.com')
 
-      if (isGoogleDrive) {
-        const outcome = await saveFile({
-          fileName: filename,
-          data,
-          mimeType: 'application/zip',
-          shareAfterSave: true,
-        })
+      // 先於本機安全封裝並保存一份副本，避免任何意外情況遺失資料
+      const outcome = await saveFile({
+        fileName: filename,
+        data,
+        mimeType: 'application/zip',
+        shareAfterSave: false,
+      })
 
-        if (typeof window !== 'undefined' && !outcome.isNative) {
-          try {
-            window.open(targetUrl, '_blank', 'noopener,noreferrer')
-          } catch {
-            // Popup blocker fallback
-          }
+      if (isGoogleDrive) {
+        let isDirectSuccess = false
+        let driveFileLink = ''
+        let uploadErrMsg = ''
+
+        try {
+          setMessage('正在直接上傳備份檔案至 Google 雲端硬碟指定資料夾...')
+          const driveResult = await uploadBackupToGoogleDrive({
+            fileName: filename,
+            data,
+            destinationFolderUrlOrId: targetUrl,
+          })
+          isDirectSuccess = true
+          driveFileLink = driveResult.webViewLink || targetUrl
+        } catch (driveErr) {
+          uploadErrMsg = driveErr instanceof Error ? driveErr.message : 'Google Drive 上傳失敗'
         }
 
-        setStatus('success')
-        setCloudExportNotice({
-          outcome,
-          destinationUrl: targetUrl,
-          isGoogleDrive: true,
-        })
-        setMessage(`備份檔案已成功封裝，請在分享選單中選取「Google 雲端硬碟」或開啟下方目標資料夾！`)
+        if (isDirectSuccess) {
+          setStatus('success')
+          setCloudExportNotice({
+            outcome,
+            destinationUrl: targetUrl,
+            isGoogleDrive: true,
+            isDirectDriveSuccess: true,
+            driveFileLink,
+            driveFileName: filename,
+          })
+          setMessage(`🎉 備份已成功全自動直接上傳至 Google 雲端硬碟資料夾！`)
+        } else {
+          // 若直接上傳未完成（如尚未登入授權），顯示引導卡片
+          setStatus('success')
+          setCloudExportNotice({
+            outcome,
+            destinationUrl: targetUrl,
+            isGoogleDrive: true,
+            isDirectDriveSuccess: false,
+            apiResponseMsg: uploadErrMsg,
+          })
+          setMessage(`備份已妥善儲存至本機。Google Drive 背景上傳未完成（${uploadErrMsg}），您可以點選下方按鈕登入 Google 帳號授權，或使用手動分享存入雲端。`)
+        }
       } else {
-        const outcome = await saveFile({
-          fileName: filename,
-          data,
-          mimeType: 'application/zip',
-          shareAfterSave: false,
-        })
-
         let isApiSuccess = false
         let apiResponseMsg = ''
 
@@ -504,6 +562,83 @@ export default function SettingsPage() {
             <span>開啟網址</span>
           </button>
         </div>
+
+        {/* Google Drive 官方帳號授權連線區塊 */}
+        {cloudBackupUrl.includes('drive.google.com') && (
+          <div className="mt-3 rounded-xl border border-blue-200/90 bg-white/80 p-3 shadow-xs dark:border-blue-800/50 dark:bg-stone-900/70">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-stone-800 dark:text-stone-200">
+                <svg className="h-4 w-4 shrink-0" viewBox="0 0 48 48">
+                  <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+                  <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+                  <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
+                  <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
+                </svg>
+                <span>Google Drive 帳號授權（方案二：背景直接上傳）</span>
+              </div>
+              {googleUser && (
+                <button
+                  type="button"
+                  onClick={handleGoogleSignOut}
+                  className="inline-flex items-center gap-1 text-[11px] text-stone-500 transition hover:text-rose-600 dark:text-stone-400 dark:hover:text-rose-400"
+                >
+                  <LogOut size={12} />
+                  <span>登出</span>
+                </button>
+              )}
+            </div>
+
+            {googleUser ? (
+              <div className="mt-2.5 flex items-center justify-between rounded-lg bg-emerald-50/80 p-2.5 border border-emerald-200/80 dark:bg-emerald-950/30 dark:border-emerald-800/40">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  {googleUser.photoURL ? (
+                    <img src={googleUser.photoURL} alt="" className="h-7 w-7 shrink-0 rounded-full" />
+                  ) : (
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs text-white font-bold">
+                      {googleUser.email?.[0]?.toUpperCase() || 'G'}
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <div className="truncate text-xs font-semibold text-stone-900 dark:text-stone-100">
+                      {googleUser.displayName || googleUser.email}
+                    </div>
+                    <div className="truncate text-[11px] text-stone-500 dark:text-stone-400">
+                      {googleUser.email}
+                    </div>
+                  </div>
+                </div>
+                <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-200/80 px-2 py-0.5 text-[10px] font-bold text-emerald-900 dark:bg-emerald-800/60 dark:text-emerald-200">
+                  <Check size={12} />
+                  已授權直接上傳
+                </span>
+              </div>
+            ) : (
+              <div className="mt-2">
+                <p className="text-[11px] text-stone-500 dark:text-stone-400 leading-relaxed mb-2">
+                  點擊下方登入並授權 Google Drive，按下備份時即可由系統在背景直接將檔案送進此資料夾，<strong>不跳出任何手機分享面板</strong>。
+                </p>
+                <button
+                  type="button"
+                  onClick={handleGoogleSignIn}
+                  disabled={isGoogleSigningIn}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-blue-300 bg-blue-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-700 active:scale-98 disabled:opacity-70 dark:border-blue-700"
+                >
+                  {isGoogleSigningIn ? (
+                    <>
+                      <LoaderCircle size={14} className="animate-spin text-white" />
+                      <span>正在授權連線 Google 帳號...</span>
+                    </>
+                  ) : (
+                    <>
+                      <LogIn size={14} />
+                      <span>登入 Google 帳號授權背景直接上傳</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <input ref={fullBackupInputRef} aria-label="選擇完整 ZIP 備份" type="file" accept=".zip,application/zip" className="sr-only" onChange={handleFullImport} />
@@ -571,14 +706,20 @@ export default function SettingsPage() {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-semibold text-sm">
-                  {cloudExportNotice.isGoogleDrive ? '備份已封裝，準備存入 Google 雲端硬碟' : cloudExportNotice.isApiSuccess ? '備份已成功送達雲端伺服器！' : '備份檔已就緒，雲端 API 回報'}
+                  {cloudExportNotice.isDirectDriveSuccess
+                    ? '🎉 備份已全自動直接上傳至 Google 雲端硬碟！'
+                    : cloudExportNotice.isGoogleDrive
+                      ? '備份檔案已就緒，雲端上傳狀態回報'
+                      : cloudExportNotice.isApiSuccess
+                        ? '備份已成功送達雲端伺服器！'
+                        : '備份檔已就緒，雲端 API 回報'}
                 </span>
                 <span className="rounded-full bg-blue-200/80 px-2 py-0.5 text-xs font-semibold text-blue-900 dark:bg-blue-800/60 dark:text-blue-200">
                   {cloudExportNotice.outcome.fileSizeText}
                 </span>
               </div>
               <p className="mt-1 text-xs font-mono font-medium text-blue-800 dark:text-blue-300 break-all">
-                {cloudExportNotice.outcome.fileName}
+                {cloudExportNotice.driveFileName || cloudExportNotice.outcome.fileName}
               </p>
 
               <div className="mt-2.5 rounded-xl border border-blue-200/80 bg-white/95 p-3 text-xs text-stone-700 dark:border-blue-800/40 dark:bg-stone-900/90 dark:text-stone-300">
@@ -589,20 +730,19 @@ export default function SettingsPage() {
                   {cloudExportNotice.destinationUrl}
                 </div>
                 {cloudExportNotice.apiResponseMsg && (
-                  <p className="mt-1.5 text-[11px] text-stone-500 dark:text-stone-400">
+                  <p className="mt-1.5 text-[11px] text-amber-700 dark:text-amber-400">
                     狀態回報：{cloudExportNotice.apiResponseMsg}
                   </p>
                 )}
                 <p className="mt-2 text-xs text-stone-600 dark:text-stone-400 leading-relaxed">
-                  {cloudExportNotice.isGoogleDrive ? (
-                    <>
-                      💡 <strong>如何存入目標資料夾</strong>：
-                      {cloudExportNotice.outcome.isNative ? (
-                        <span>手機已自動開啟分享選單，直接點選「<strong>Google 雲端硬碟</strong>」即可選擇帳號與此資料夾儲存；亦可點擊下方按鈕直接開啟雲端資料夾。</span>
-                      ) : (
-                        <span>瀏覽器已自動下載備份檔案並開啟雲端資料夾，直接將下載的 ZIP 檔案拖曳至資料夾即可完成備份！</span>
-                      )}
-                    </>
+                  {cloudExportNotice.isDirectDriveSuccess ? (
+                    <span>
+                      ✅ <strong>背景直傳成功</strong>：檔案已由 App 經由您的 Google 帳號授權，直接寫入 Google Drive 目標資料夾，完全無須透過手機分享面板！同時本地也已妥善保存備份複本。
+                    </span>
+                  ) : cloudExportNotice.isGoogleDrive ? (
+                    <span>
+                      💡 <strong>提示</strong>：若您希望完全不跳分享面板全自動背景上傳，請先在上方點選「登入 Google 帳號授權背景直接上傳」；亦可透過下方按鈕手動開啟資料夾或分享存檔。
+                    </span>
                   ) : (
                     <span>備份檔案已同時妥善儲存至本機，您可點擊下方按鈕檢視自訂雲端端點。</span>
                   )}
@@ -610,16 +750,27 @@ export default function SettingsPage() {
               </div>
 
               <div className="mt-3 flex flex-wrap gap-2">
+                {cloudExportNotice.driveFileLink && (
+                  <a
+                    href={cloudExportNotice.driveFileLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-700 active:scale-95"
+                  >
+                    <ExternalLink size={14} />
+                    在 Google Drive 檢視檔案
+                  </a>
+                )}
                 <a
                   href={cloudExportNotice.destinationUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-700 active:scale-95"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-blue-300 bg-white px-3 py-1.5 text-xs font-semibold text-blue-900 shadow-sm transition hover:bg-blue-50 active:scale-95 dark:border-blue-700 dark:bg-stone-900 dark:text-blue-300 dark:hover:bg-stone-850"
                 >
                   <ExternalLink size={14} />
-                  前往雲端資料夾
+                  前往目標資料夾
                 </a>
-                {cloudExportNotice.outcome.base64Data && (
+                {cloudExportNotice.outcome.base64Data && !cloudExportNotice.isDirectDriveSuccess && (
                   <button
                     type="button"
                     className="inline-flex items-center gap-1.5 rounded-xl border border-blue-300 bg-white px-3 py-1.5 text-xs font-medium text-blue-800 shadow-sm transition hover:bg-blue-50 dark:border-blue-700 dark:bg-stone-900 dark:text-blue-300 dark:hover:bg-stone-800"
@@ -630,7 +781,7 @@ export default function SettingsPage() {
                     }}
                   >
                     <Share2 size={14} />
-                    分享 / 存至 Google 雲端硬碟
+                    手動分享至雲端硬碟
                   </button>
                 )}
                 <button

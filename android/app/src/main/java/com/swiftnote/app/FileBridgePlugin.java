@@ -366,16 +366,40 @@ public class FileBridgePlugin extends Plugin {
 
     private void shareFileInternal(File file, String fileName, String mimeType) {
         try {
+            File targetShareFile = file;
+            if (fileName != null && !fileName.trim().isEmpty() && !file.getName().equals(fileName)) {
+                try {
+                    File shareDir = new File(getContext().getCacheDir(), "shared_exports");
+                    if (!shareDir.exists()) {
+                        shareDir.mkdirs();
+                    }
+                    File namedFile = new File(shareDir, fileName);
+                    try (InputStream is = new FileInputStream(file);
+                         OutputStream os = new FileOutputStream(namedFile)) {
+                        byte[] buffer = new byte[65536];
+                        int len;
+                        while ((len = is.read(buffer)) > 0) {
+                            os.write(buffer, 0, len);
+                        }
+                        os.flush();
+                    }
+                    targetShareFile = namedFile;
+                } catch (Throwable copyErr) {
+                    targetShareFile = file;
+                }
+            }
+
             Uri contentUri = FileProvider.getUriForFile(
                 getContext(),
                 getContext().getPackageName() + ".fileprovider",
-                file
+                targetShareFile
             );
 
             Intent shareIntent = new Intent(Intent.ACTION_SEND);
             shareIntent.setType(mimeType);
             shareIntent.putExtra(Intent.EXTRA_STREAM, contentUri);
             shareIntent.putExtra(Intent.EXTRA_SUBJECT, fileName);
+            shareIntent.putExtra(Intent.EXTRA_TITLE, fileName);
             shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             shareIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
 
