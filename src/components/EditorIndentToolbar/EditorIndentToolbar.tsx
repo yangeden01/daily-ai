@@ -190,22 +190,28 @@ export const EditorIndentToolbar = ({ textareaRef, value, onChange, trailing }: 
   ]
 
   return (
-    <div className="text-indent-toolbar" aria-label="文字格式工具">
-      {tools.map(({ label, icon: Icon, action, disabled }) => (
-        <button
-          aria-label={label}
-          disabled={disabled}
-          key={label}
-          onClick={action}
-          onMouseDown={(event) => event.preventDefault()}
-          title={label}
-          type="button"
-        >
-          <Icon aria-hidden="true" />
-          <span className="sr-only">{label}</span>
-        </button>
-      ))}
-      {trailing}
+    <div className="editor-toolbar-wrapper" aria-label="編輯器工具列">
+      <div className="text-indent-toolbar" aria-label="文字格式工具">
+        {tools.map(({ label, icon: Icon, action, disabled }) => (
+          <button
+            aria-label={label}
+            disabled={disabled}
+            key={label}
+            onClick={action}
+            onMouseDown={(event) => event.preventDefault()}
+            title={label}
+            type="button"
+          >
+            <Icon aria-hidden="true" />
+            <span className="sr-only">{label}</span>
+          </button>
+        ))}
+      </div>
+      {trailing && (
+        <div className="editor-toolbar-trailing" aria-label="媒體與附件操作">
+          {trailing}
+        </div>
+      )}
     </div>
   )
 }

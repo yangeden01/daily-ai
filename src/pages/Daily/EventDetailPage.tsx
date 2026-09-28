@@ -81,6 +81,29 @@ export default function EventDetailPage() {
   const isAnniversary = event ? isAnniversaryEvent(event) : mode === 'anniversary'
 
   useEffect(() => {
+    const handleBackToList = () => {
+      if (activePhoto) {
+        setActivePhoto(null)
+        return
+      }
+      navigate(returnTo)
+    }
+
+    const handleDismissModal = () => {
+      if (activePhoto) {
+        setActivePhoto(null)
+      }
+    }
+
+    window.addEventListener('swiftnote:back-to-list', handleBackToList)
+    window.addEventListener('swiftnote:dismiss-modal', handleDismissModal)
+    return () => {
+      window.removeEventListener('swiftnote:back-to-list', handleBackToList)
+      window.removeEventListener('swiftnote:dismiss-modal', handleDismissModal)
+    }
+  }, [navigate, returnTo, activePhoto])
+
+  useEffect(() => {
     if (!eventId) return
     const todayLunar = getTodayLunarDate()
     Promise.all([eventRepository.getById(eventId), attachmentRepository.getByEventId(eventId), eventRepository.getAll()])
@@ -835,7 +858,7 @@ export default function EventDetailPage() {
             {isDeleting ? '刪除中' : isAnniversary ? '刪除紀念日' : isNote ? '刪除記事' : '刪除事件'}
           </button>
           {activePhoto && attachmentUrls[activePhoto.id] && (
-            <div className="photo-lightbox" role="dialog" aria-modal="true" aria-label={activePhoto.filename} onClick={() => setActivePhoto(null)}>
+            <div data-modal-open="true" className="photo-lightbox" role="dialog" aria-modal="true" aria-label={activePhoto.filename} onClick={() => setActivePhoto(null)}>
               <button type="button" onClick={() => setActivePhoto(null)} aria-label="關閉照片"><X size={22} /></button>
               <img src={attachmentUrls[activePhoto.id]} alt={activePhoto.filename} onClick={(clickEvent) => clickEvent.stopPropagation()} />
             </div>
