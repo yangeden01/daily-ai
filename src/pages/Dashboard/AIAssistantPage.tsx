@@ -464,7 +464,7 @@ export const AIAssistantPage: React.FC = () => {
                     value={keyInput}
                     onChange={(e) => setKeyInput(e.target.value)}
                     placeholder="貼上 AQ... 或 AIzaSy... 開頭的金鑰"
-                    className="flex-1 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-xs font-mono text-stone-800 focus:border-indigo-500 focus:bg-white focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200"
+                    className="flex-1 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-xs font-mono text-stone-800 focus:border-indigo-500 focus:bg-white dark:focus:bg-stone-800 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200"
                   />
                   <button
                     type="button"

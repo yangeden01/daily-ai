@@ -787,7 +787,7 @@ export default function SettingsPage() {
             <input
               id="ai-server-input"
               type="url"
-              className="flex-1 rounded-xl border border-stone-200 bg-stone-50 px-3 py-1.5 text-xs font-mono text-stone-800 placeholder-stone-400 focus:border-indigo-500 focus:bg-white focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200"
+              className="flex-1 rounded-xl border border-stone-200 bg-stone-50 px-3 py-1.5 text-xs font-mono text-stone-800 placeholder-stone-400 focus:border-indigo-500 focus:bg-white dark:focus:bg-stone-800 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200"
               placeholder="https://...run.app"
               value={aiServerUrl}
               onChange={(e) => handleSaveAiServerUrl(e.target.value)}
@@ -843,7 +843,7 @@ export default function SettingsPage() {
               id="gemini-key-input"
               type="password"
               autoComplete="off"
-              className="flex-1 rounded-xl border border-stone-200 bg-stone-50 px-3 py-1.5 text-xs font-mono text-stone-800 placeholder-stone-400 focus:border-indigo-500 focus:bg-white focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200"
+              className="flex-1 rounded-xl border border-stone-200 bg-stone-50 px-3 py-1.5 text-xs font-mono text-stone-800 placeholder-stone-400 focus:border-indigo-500 focus:bg-white dark:focus:bg-stone-800 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200"
               placeholder="貼上 AQ... 或 AIzaSy... 開頭的 Gemini API Key"
               value={geminiApiKey}
               onChange={(e) => handleSaveGeminiKey(e.target.value)}
@@ -906,7 +906,7 @@ export default function SettingsPage() {
               value={cloudBackupUrl}
               onChange={(e) => handleCloudBackupUrlChange(e.target.value)}
               placeholder="https://drive.google.com/drive/folders/..."
-              className="flex-1 rounded-xl border border-stone-200 bg-stone-50 px-3 py-1.5 text-xs font-mono text-stone-800 placeholder-stone-400 focus:border-indigo-500 focus:bg-white focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200"
+              className="flex-1 rounded-xl border border-stone-200 bg-stone-50 px-3 py-1.5 text-xs font-mono text-stone-800 placeholder-stone-400 focus:border-indigo-500 focus:bg-white dark:focus:bg-stone-800 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200"
             />
             <button
               type="button"

@@ -16,7 +16,7 @@ export default function MainLayout() {
   }, [mode])
 
   return (
-    <div className="min-h-[100dvh]" data-mode={mode}>
+    <div className="min-h-[100dvh] w-full bg-[#f4f4f5] dark:bg-[#101114]" data-mode={mode}>
       <Header />
       <div className="app-content mx-auto w-full max-w-2xl px-5 sm:px-8">
         <Outlet />
