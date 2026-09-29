@@ -64,32 +64,91 @@ export const updateListFormat = (
   const lines = source.split('\n')
   const nonEmptyLines = lines.filter((line) => line.trim())
 
-  const shouldRemove = nonEmptyLines.length > 0
-    && nonEmptyLines.every((line) => parseListLine(line)?.format === format)
+  let nextLines: string[]
 
-  let orderedIndex = 0
-
-  const transformed = lines.map((line) => {
-    const parsed = parseListLine(line)
-    const indent = parsed?.indent ?? line.match(/^\s*/u)?.[0] ?? ''
-    const content = parsed?.content ?? line.slice(indent.length)
-
-    if (!line.trim()) {
-      if (isCollapsed && lines.length === 1 && !shouldRemove) {
-        return prefixFor(format)
+  if (format === 'todo') {
+    if (nonEmptyLines.length === 0) {
+      // 游標處於空白行時的三段循環：
+      // 1. 空白行 -> 出現空白方框 '☐ '
+      // 2. 空白方框 '☐ ' -> 出現打勾方框 '☑ '
+      // 3. 打勾方框 '☑ ' -> 取消（還原為空白行）
+      const current = lines[0] ?? ''
+      const parsed = parseListLine(current)
+      if (!parsed || parsed.format !== 'todo') {
+        nextLines = ['☐ ']
+      } else if (!parsed.todoChecked) {
+        nextLines = ['☑ ']
+      } else {
+        nextLines = ['']
       }
-      return line
+    } else {
+      // 非空行時的三段循環：
+      // 1. 未全部具備 todo 標記 -> 全部轉為空白方框（第一段）
+      // 2. 全部已為 todo 但未全部打勾 -> 全部轉為打勾方框（第二段）
+      // 3. 全部已為打勾方框 -> 取消方框標記（第三段）
+      const allAreTodo = nonEmptyLines.every((line) => parseListLine(line)?.format === 'todo')
+      const allAreChecked = allAreTodo && nonEmptyLines.every((line) => parseListLine(line)?.todoChecked === true)
+
+      if (!allAreTodo) {
+        // 第一段：空白方框
+        nextLines = lines.map((line) => {
+          if (!line.trim()) return line
+          const parsed = parseListLine(line)
+          const indent = parsed?.indent ?? line.match(/^\s*/u)?.[0] ?? ''
+          const content = parsed?.content ?? line.slice(indent.length)
+          const marker = parsed?.todoMarker === 'markdown' ? '- [ ] ' : '☐ '
+          return `${indent}${marker}${content}`
+        })
+      } else if (!allAreChecked) {
+        // 第二段：打勾方框
+        nextLines = lines.map((line) => {
+          if (!line.trim()) return line
+          const parsed = parseListLine(line)
+          const indent = parsed?.indent ?? line.match(/^\s*/u)?.[0] ?? ''
+          const content = parsed?.content ?? line.slice(indent.length)
+          const marker = parsed?.todoMarker === 'markdown' ? '- [x] ' : '☑ '
+          return `${indent}${marker}${content}`
+        })
+      } else {
+        // 第三段：取消
+        nextLines = lines.map((line) => {
+          if (!line.trim()) return line
+          const parsed = parseListLine(line)
+          const indent = parsed?.indent ?? line.match(/^\s*/u)?.[0] ?? ''
+          const content = parsed?.content ?? line.slice(indent.length)
+          return `${indent}${content}`
+        })
+      }
     }
+  } else {
+    const shouldRemove = nonEmptyLines.length > 0
+      && nonEmptyLines.every((line) => parseListLine(line)?.format === format)
 
-    if (shouldRemove) {
-      return `${indent}${content}`
-    }
+    let orderedIndex = 0
 
-    const prefix = prefixFor(format, orderedIndex)
-    if (format === 'ordered') orderedIndex += 1
-    return `${indent}${prefix}${content}`
-  }).join('\n')
+    nextLines = lines.map((line) => {
+      const parsed = parseListLine(line)
+      const indent = parsed?.indent ?? line.match(/^\s*/u)?.[0] ?? ''
+      const content = parsed?.content ?? line.slice(indent.length)
 
+      if (!line.trim()) {
+        if (isCollapsed && lines.length === 1 && !shouldRemove) {
+          return prefixFor(format)
+        }
+        return line
+      }
+
+      if (shouldRemove) {
+        return `${indent}${content}`
+      }
+
+      const prefix = prefixFor(format, orderedIndex)
+      if (format === 'ordered') orderedIndex += 1
+      return `${indent}${prefix}${content}`
+    })
+  }
+
+  const transformed = nextLines.join('\n')
   const nextValue = `${value.slice(0, lineStart)}${transformed}${value.slice(lineEnd)}`
   const delta = transformed.length - source.length
 

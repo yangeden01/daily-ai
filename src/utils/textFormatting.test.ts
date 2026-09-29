@@ -8,10 +8,21 @@ describe('OneNote-style text list formatting', () => {
     expect(updateListFormat('one', 0, 0, 'todo').value).toBe('☐ one')
   })
 
-  it('clicking the active list format removes it instead of checking a todo', () => {
+  it('cycles todo list format in 3 stages: blank box -> checked box -> cancel', () => {
+    // 第一段：空白方框
+    expect(updateListFormat('one', 0, 0, 'todo').value).toBe('☐ one')
+    // 第二段：打勾方框
+    expect(updateListFormat('☐ one', 5, 5, 'todo').value).toBe('☑ one')
+    // 第三段：取消
+    expect(updateListFormat('☑ one', 5, 5, 'todo').value).toBe('one')
+
+    // 空白行三段循環
+    expect(updateListFormat('', 0, 0, 'todo').value).toBe('☐ ')
+    expect(updateListFormat('☐ ', 2, 2, 'todo').value).toBe('☑ ')
+    expect(updateListFormat('☑ ', 2, 2, 'todo').value).toBe('')
+
+    // 項目符號清單維持雙態切換
     expect(updateListFormat('• one', 5, 5, 'bullet').value).toBe('one')
-    expect(updateListFormat('☐ one', 5, 5, 'todo').value).toBe('one')
-    expect(updateListFormat('☑ done', 6, 6, 'todo').value).toBe('done')
   })
 
   it('continues numbered, bullet, and todo lists', () => {
