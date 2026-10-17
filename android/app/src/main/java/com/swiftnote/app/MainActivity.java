@@ -1,13 +1,19 @@
 package com.swiftnote.app;
 
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
+
+    public static volatile String sPendingRoute = null;
+    private final Handler mHandler = new Handler(Looper.getMainLooper());
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -59,11 +65,59 @@ public class MainActivity extends BridgeActivity {
         handleRouteIntent(intent);
     }
 
+    @Override
+    protected void onResume() {
+        super.onResume();
+        String route = extractRoute(getIntent());
+        if (route == null || route.isEmpty()) {
+            route = sPendingRoute;
+        }
+        if (route == null || route.isEmpty()) {
+            route = WidgetStorage.getPendingRoute(this);
+        }
+        if (route != null && !route.isEmpty()) {
+            scheduleRouteDispatch(route);
+        }
+    }
+
+    private String extractRoute(Intent intent) {
+        if (intent == null) return null;
+        String route = intent.getStringExtra("route");
+        if (route != null && !route.isEmpty()) {
+            return route;
+        }
+        Uri data = intent.getData();
+        if (data != null) {
+            String path = data.getPath();
+            String query = data.getQuery();
+            if (path != null && !path.isEmpty()) {
+                if (query != null && !query.isEmpty()) {
+                    return path + "?" + query;
+                }
+                return path;
+            }
+        }
+        return null;
+    }
+
     private void handleRouteIntent(Intent intent) {
-        if (intent == null) return;
-        final String route = intent.getStringExtra("route");
+        final String route = extractRoute(intent);
         if (route == null || route.isEmpty()) return;
 
+        sPendingRoute = route;
+        WidgetStorage.savePendingRoute(this, route);
+        scheduleRouteDispatch(route);
+    }
+
+    private void scheduleRouteDispatch(final String route) {
+        // Dispatch immediately and at staggered intervals to guarantee delivery across cold & warm starts
+        long[] delays = {50, 300, 800, 1500};
+        for (long delay : delays) {
+            mHandler.postDelayed(() -> dispatchRouteToWebView(route), delay);
+        }
+    }
+
+    private void dispatchRouteToWebView(final String route) {
         if (getBridge() != null && getBridge().getWebView() != null) {
             getBridge().getWebView().post(() -> {
                 try {

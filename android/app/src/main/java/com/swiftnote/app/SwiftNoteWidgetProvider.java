@@ -85,6 +85,16 @@ public class SwiftNoteWidgetProvider extends AppWidgetProvider {
         // 4. Handle opening item from list
         if (ACTION_OPEN_ITEM.equals(action)) {
             String route = intent.getStringExtra(EXTRA_ROUTE);
+            if (route == null || route.isEmpty()) {
+                Uri data = intent.getData();
+                if (data != null) {
+                    String path = data.getPath();
+                    String query = data.getQuery();
+                    if (path != null && !path.isEmpty()) {
+                        route = (query != null && !query.isEmpty()) ? (path + "?" + query) : path;
+                    }
+                }
+            }
             if (route != null && !route.isEmpty()) {
                 openAppWithRoute(context, route);
             }
@@ -108,9 +118,15 @@ public class SwiftNoteWidgetProvider extends AppWidgetProvider {
     }
 
     private static void openAppWithRoute(Context context, String route) {
+        // Persist route so cold-start and warm-start can both reliably consume it
+        WidgetStorage.savePendingRoute(context, route);
+        MainActivity.sPendingRoute = route;
+
         Intent appIntent = new Intent(context, MainActivity.class);
+        appIntent.setAction(Intent.ACTION_VIEW);
         appIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         appIntent.putExtra(EXTRA_ROUTE, route);
+        appIntent.setData(Uri.parse("swiftnote://open" + (route.startsWith("/") ? route : "/" + route)));
         context.startActivity(appIntent);
     }
 

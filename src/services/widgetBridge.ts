@@ -5,9 +5,28 @@ import { createWidgetSnapshot, type WidgetSnapshot } from './widgetSnapshot'
 export interface WidgetBridgePlugin {
   updateSnapshot(options: { snapshotJson: string }): Promise<{ success: boolean }>
   getSnapshot(): Promise<{ snapshotJson: string }>
+  getLaunchRoute(): Promise<{ route: string }>
 }
 
 export const WidgetBridge = registerPlugin<WidgetBridgePlugin>('WidgetBridge')
+
+/**
+ * Actively query the native Android plugin for any pending launch route from widget clicks.
+ * Guarantees reliable deep linking on cold start even when JS events fired before React mounted.
+ */
+export const getPendingWidgetRoute = async (): Promise<string | null> => {
+  try {
+    if (Capacitor.isNativePlatform()) {
+      const res = await WidgetBridge.getLaunchRoute()
+      if (res && res.route && res.route.trim()) {
+        return res.route.trim()
+      }
+    }
+  } catch (error) {
+    console.warn('[WidgetBridge] Failed to get launch route:', error)
+  }
+  return null
+}
 
 const WIDGET_SNAPSHOT_LOCAL_KEY = 'swiftnote_widget_snapshot'
 

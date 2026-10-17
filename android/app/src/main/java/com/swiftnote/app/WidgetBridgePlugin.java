@@ -39,4 +39,20 @@ public class WidgetBridgePlugin extends Plugin {
         result.put("snapshotJson", snapshotJson != null ? snapshotJson : "{}");
         call.resolve(result);
     }
+
+    @PluginMethod
+    public void getLaunchRoute(PluginCall call) {
+        String route = MainActivity.sPendingRoute;
+        if (route == null || route.isEmpty()) {
+            route = WidgetStorage.getPendingRoute(getContext());
+        }
+
+        // Consume it so it only launches once
+        MainActivity.sPendingRoute = null;
+        WidgetStorage.clearPendingRoute(getContext());
+
+        JSObject result = new JSObject();
+        result.put("route", route != null ? route : "");
+        call.resolve(result);
+    }
 }

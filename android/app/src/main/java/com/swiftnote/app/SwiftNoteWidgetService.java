@@ -339,6 +339,9 @@ public class SwiftNoteWidgetService extends RemoteViewsService {
                     Intent fillInIntent = new Intent();
                     fillInIntent.setAction(SwiftNoteWidgetProvider.ACTION_OPEN_ITEM);
                     fillInIntent.putExtra(SwiftNoteWidgetProvider.EXTRA_ROUTE, item.route);
+                    if (item.route != null && !item.route.isEmpty()) {
+                        fillInIntent.setData(android.net.Uri.parse("swiftnote://open" + (item.route.startsWith("/") ? item.route : "/" + item.route)));
+                    }
                     views.setOnClickFillInIntent(R.id.todo_item_root, fillInIntent);
                     return views;
                 }
@@ -361,6 +364,9 @@ public class SwiftNoteWidgetService extends RemoteViewsService {
                     Intent fillInIntent = new Intent();
                     fillInIntent.setAction(SwiftNoteWidgetProvider.ACTION_OPEN_ITEM);
                     fillInIntent.putExtra(SwiftNoteWidgetProvider.EXTRA_ROUTE, item.route);
+                    if (item.route != null && !item.route.isEmpty()) {
+                        fillInIntent.setData(android.net.Uri.parse("swiftnote://open" + (item.route.startsWith("/") ? item.route : "/" + item.route)));
+                    }
                     views.setOnClickFillInIntent(R.id.daily_item_root, fillInIntent);
                     return views;
                 }
@@ -383,6 +389,9 @@ public class SwiftNoteWidgetService extends RemoteViewsService {
                     Intent fillInIntent = new Intent();
                     fillInIntent.setAction(SwiftNoteWidgetProvider.ACTION_OPEN_ITEM);
                     fillInIntent.putExtra(SwiftNoteWidgetProvider.EXTRA_ROUTE, item.route);
+                    if (item.route != null && !item.route.isEmpty()) {
+                        fillInIntent.setData(android.net.Uri.parse("swiftnote://open" + (item.route.startsWith("/") ? item.route : "/" + item.route)));
+                    }
                     views.setOnClickFillInIntent(R.id.anniversary_item_root, fillInIntent);
                     return views;
                 }

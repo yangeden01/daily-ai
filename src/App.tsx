@@ -9,7 +9,7 @@ import AIPage from './pages/AI/AIPage'
 import SettingsPage from './pages/Settings/SettingsPage'
 import DashboardPage from './pages/Dashboard/DashboardPage'
 import { eventRepository } from './repositories'
-import { syncWidgetSnapshot } from './services/widgetBridge'
+import { getPendingWidgetRoute, syncWidgetSnapshot } from './services/widgetBridge'
 
 export default function App() {
   const navigate = useNavigate()
@@ -29,11 +29,51 @@ export default function App() {
     }
     window.addEventListener('swiftnote:navigate', handleWidgetNavigate as EventListener)
 
-    // 3. Handle pending route if opened directly from widget
+    // 3. Handle pending route from window property (immediate JS dispatch)
     const pendingRoute = (window as unknown as { __SWIFTNOTE_PENDING_ROUTE__?: string }).__SWIFTNOTE_PENDING_ROUTE__
     if (pendingRoute) {
       delete (window as unknown as { __SWIFTNOTE_PENDING_ROUTE__?: string }).__SWIFTNOTE_PENDING_ROUTE__
       navigate(pendingRoute)
+    }
+
+    // 4. Actively fetch pending launch route from native Android WidgetBridge plugin (solves cold start race condition)
+    void getPendingWidgetRoute().then((nativeRoute) => {
+      if (nativeRoute) {
+        navigate(nativeRoute)
+      }
+    })
+
+    // Also double-check after a brief tick in case native initialization finished right after mount
+    const timer = setTimeout(() => {
+      void getPendingWidgetRoute().then((nativeRoute) => {
+        if (nativeRoute) {
+          navigate(nativeRoute)
+        }
+      })
+    }, 400)
+
+    // 5. Capacitor native appUrlOpen listener for deep links (e.g. swiftnote://open/daily/:id?mode=notes)
+    let appUrlOpenHandle: { remove: () => void } | null = null
+    if (Capacitor.isNativePlatform()) {
+      void CapApp.addListener('appUrlOpen', ({ url }) => {
+        try {
+          const parsed = new URL(url)
+          let target = parsed.pathname + parsed.search
+          if (parsed.host && parsed.host !== 'open') {
+            target = '/' + parsed.host + target
+          }
+          if (target && target !== '/' && target !== '') {
+            navigate(target)
+          }
+        } catch {
+          const idx = url.indexOf('/daily')
+          if (idx !== -1) {
+            navigate(url.slice(idx))
+          }
+        }
+      }).then((handle) => {
+        appUrlOpenHandle = handle
+      })
     }
 
     // 4. Android 原生系統返回鍵（置底回車鍵 <）監聽與導航分派
@@ -72,9 +112,13 @@ export default function App() {
     }
 
     return () => {
+      clearTimeout(timer)
       window.removeEventListener('swiftnote:navigate', handleWidgetNavigate as EventListener)
       if (backButtonHandle) {
         backButtonHandle.remove()
+      }
+      if (appUrlOpenHandle) {
+        appUrlOpenHandle.remove()
       }
     }
   }, [navigate])

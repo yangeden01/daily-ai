@@ -28,6 +28,20 @@ public class WidgetStorage {
         return getPrefs(context).getString(KEY_LAST_UPDATE_TIME, null);
     }
 
+    private static final String KEY_PENDING_ROUTE = "pending_route";
+
+    public static void savePendingRoute(Context context, String route) {
+        getPrefs(context).edit().putString(KEY_PENDING_ROUTE, route).apply();
+    }
+
+    public static String getPendingRoute(Context context) {
+        return getPrefs(context).getString(KEY_PENDING_ROUTE, null);
+    }
+
+    public static void clearPendingRoute(Context context) {
+        getPrefs(context).edit().remove(KEY_PENDING_ROUTE).apply();
+    }
+
     private static final String KEY_COLLAPSED_PREFIX = "section_collapsed_";
 
     public static boolean isSectionCollapsed(Context context, int sectionType) {
