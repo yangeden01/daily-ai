@@ -9,6 +9,7 @@ import { APP_VERSION } from '../../version'
 import { saveFile, shareExportedFile, type FileSaveOutcome } from '../../utils/fileSaver'
 import { getApiBaseUrl, checkAiServerHealth, getUserGeminiApiKey, setUserGeminiApiKey, testGeminiApiKey } from '../../services/aiService'
 import { uploadBackupToGoogleDrive } from '../../services/googleDriveService'
+import { eventRepository } from '../../repositories'
 
 type BackupStatus = 'idle' | 'working' | 'success' | 'error'
 type BackupAction = 'export' | 'cloud-export' | 'merge' | 'replace'
@@ -16,6 +17,11 @@ type UpdateCheckStatus = 'idle' | 'checking' | 'applying' | 'current' | 'availab
 
 const DEFAULT_CLOUD_BACKUP_URL = 'https://drive.google.com/drive/folders/11VDqe3k2hkw7H84CWcXDoksBnEb40Wvw'
 const CLOUD_BACKUP_URL_KEY = 'eden_cloud_backup_destination_url'
+
+const GPT_BRIDGE_URL_KEY = 'edennote_gpt_bridge_url'
+const GPT_SECRET_KEY_KEY = 'edennote_gpt_secret_key'
+const DEFAULT_GPT_BRIDGE_URL = 'https://script.google.com/macros/s/AKfycbw9VzMUGW9ASUgms7_xb6r_iPfX-cD7uHbHoFavkmIbJSntOCpNM-kHajKyimXwXngf/exec'
+const DEFAULT_GPT_SECRET_KEY = 'eden_secret_888'
 
 export default function SettingsPage() {
   const fullBackupInputRef = useRef<HTMLInputElement>(null)
@@ -39,6 +45,90 @@ export default function SettingsPage() {
   } | null>(null)
   const [copySuccess, setCopySuccess] = useState(false)
   const [photoStorageMode, setPhotoStorageMode] = useState<PhotoStorageMode>(loadPhotoStorageMode)
+  const [gptBridgeUrl, setGptBridgeUrl] = useState<string>(() => {
+    return localStorage.getItem(GPT_BRIDGE_URL_KEY) || DEFAULT_GPT_BRIDGE_URL
+  })
+  const [gptSecretKey, setGptSecretKey] = useState<string>(() => {
+    return localStorage.getItem(GPT_SECRET_KEY_KEY) || DEFAULT_GPT_SECRET_KEY
+  })
+  const [gptSyncStatus, setGptSyncStatus] = useState<'idle' | 'working' | 'success' | 'error'>('idle')
+  const [gptSyncMessage, setGptSyncMessage] = useState<string | null>(null)
+
+  const handleGptBridgeUrlChange = (value: string) => {
+    setGptBridgeUrl(value)
+    if (value.trim()) {
+      localStorage.setItem(GPT_BRIDGE_URL_KEY, value.trim())
+    } else {
+      localStorage.removeItem(GPT_BRIDGE_URL_KEY)
+    }
+  }
+
+  const handleGptSecretKeyChange = (value: string) => {
+    setGptSecretKey(value)
+    if (value.trim()) {
+      localStorage.setItem(GPT_SECRET_KEY_KEY, value.trim())
+    } else {
+      localStorage.removeItem(GPT_SECRET_KEY_KEY)
+    }
+  }
+
+  const handleResetGptBridge = () => {
+    setGptBridgeUrl(DEFAULT_GPT_BRIDGE_URL)
+    setGptSecretKey(DEFAULT_GPT_SECRET_KEY)
+    localStorage.removeItem(GPT_BRIDGE_URL_KEY)
+    localStorage.removeItem(GPT_SECRET_KEY_KEY)
+    setGptSyncMessage(null)
+  }
+
+  const handleGptSync = async () => {
+    const url = gptBridgeUrl.trim()
+    const key = gptSecretKey.trim()
+    if (!url) {
+      setGptSyncStatus('error')
+      setGptSyncMessage('請先填寫 Google Apps Script 部署網址')
+      return
+    }
+
+    setGptSyncStatus('working')
+    setGptSyncMessage(null)
+
+    try {
+      const allEvents = await eventRepository.getAll()
+      const simplifiedEvents = allEvents.map((evt) => ({
+        id: evt.id,
+        date: evt.date || '',
+        title: evt.title || '',
+        detail: evt.detail || '',
+        category: evt.category || '',
+        recordType: evt.recordType || 'daily',
+        tags: evt.tags || [],
+        calendarType: evt.calendarType,
+        lunarMonth: evt.lunarMonth,
+        lunarDay: evt.lunarDay,
+        updatedAt: evt.updatedAt || evt.lastEditedAt || '',
+      }))
+
+      const targetEndpoint = `${url}${url.includes('?') ? '&' : '?'}key=${encodeURIComponent(key)}`
+
+      await fetch(targetEndpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/plain;charset=utf-8',
+        },
+        body: JSON.stringify({
+          events: simplifiedEvents,
+          syncedAt: new Date().toISOString(),
+        }),
+      })
+
+      setGptSyncStatus('success')
+      setGptSyncMessage(`🎉 已成功同步 ${simplifiedEvents.length} 筆記事至 Google 雲端硬碟 (edennote_data.json)！現在可以在 ChatGPT 隨時向「EdenNote 生活秘書」提問或用語音聊天了。`)
+    } catch (err: unknown) {
+      console.error('GPT Sync error:', err)
+      setGptSyncStatus('error')
+      setGptSyncMessage(`同步發生問題：${err instanceof Error ? err.message : String(err)}。請確認手機網路與 Script 網址是否正確。`)
+    }
+  }
   const [updateCheckStatus, setUpdateCheckStatus] = useState<UpdateCheckStatus>('idle')
   const [isForceReloading, setIsForceReloading] = useState(false)
   const { updateAvailable, applyUpdate, checkForUpdate } = usePWA()
@@ -918,6 +1008,87 @@ export default function SettingsPage() {
               <span>開啟網址</span>
             </button>
           </div>
+        </div>
+      </section>
+
+      {/* ChatGPT 專屬生活秘書連線 */}
+      <p className="section-label mt-8">ChatGPT 雲端生活秘書</p>
+      <section className="settings-card space-y-4" aria-label="ChatGPT 專屬生活秘書連線設定">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-2 text-stone-900 dark:text-stone-100">
+            <Bot size={20} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+            <div>
+              <h2 className="text-base font-semibold">ChatGPT 生活秘書雲端同步</h2>
+              <p className="text-xs text-stone-500 dark:text-stone-400">
+                將最新記事安全推送到個人 Google Drive，供官方 ChatGPT App 與 Custom GPT 即時查詢、語音對話或慢箋推算。
+              </p>
+            </div>
+          </div>
+          {(gptBridgeUrl !== DEFAULT_GPT_BRIDGE_URL || gptSecretKey !== DEFAULT_GPT_SECRET_KEY) && (
+            <button
+              type="button"
+              onClick={handleResetGptBridge}
+              className="text-[11px] font-medium text-blue-600 hover:underline dark:text-blue-400 shrink-0"
+            >
+              恢復預設
+            </button>
+          )}
+        </div>
+
+        <div className="space-y-3 pt-2">
+          <div>
+            <label htmlFor="gpt-bridge-url" className="text-xs font-semibold text-stone-700 dark:text-stone-300">
+              Google Apps Script 雲端端點網址 (Web App URL)
+            </label>
+            <input
+              id="gpt-bridge-url"
+              type="url"
+              value={gptBridgeUrl}
+              onChange={(e) => handleGptBridgeUrlChange(e.target.value)}
+              placeholder="https://script.google.com/macros/s/.../exec"
+              className="mt-1 w-full rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-xs font-mono text-stone-800 placeholder-stone-400 focus:border-emerald-500 focus:bg-white dark:focus:bg-stone-800 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="gpt-secret-key" className="text-xs font-semibold text-stone-700 dark:text-stone-300">
+              存取密鑰 (Secret Key)
+            </label>
+            <input
+              id="gpt-secret-key"
+              type="text"
+              value={gptSecretKey}
+              onChange={(e) => handleGptSecretKeyChange(e.target.value)}
+              placeholder="eden_secret_888"
+              className="mt-1 w-full rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-xs font-mono text-stone-800 placeholder-stone-400 focus:border-emerald-500 focus:bg-white dark:focus:bg-stone-800 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200"
+            />
+          </div>
+
+          <button
+            type="button"
+            className="backup-button w-full border border-emerald-600/30 bg-emerald-600 text-white hover:bg-emerald-700 focus-visible:ring-emerald-500 dark:bg-emerald-600 dark:hover:bg-emerald-700 shadow-sm transition"
+            onClick={() => void handleGptSync()}
+            disabled={gptSyncStatus === 'working'}
+          >
+            {gptSyncStatus === 'working' ? (
+              <LoaderCircle size={18} className="animate-spin" />
+            ) : (
+              <Sparkles size={18} />
+            )}
+            <span>立即同步最新記事至 ChatGPT (Google Drive)</span>
+          </button>
+
+          {gptSyncMessage && (
+            <div
+              className={`rounded-xl p-3 text-xs leading-relaxed ${
+                gptSyncStatus === 'success'
+                  ? 'border border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-300'
+                  : 'border border-red-200 bg-red-50 text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300'
+              }`}
+            >
+              {gptSyncMessage}
+            </div>
+          )}
         </div>
       </section>
 
