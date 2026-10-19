@@ -732,6 +732,7 @@ paths:
   /exec:
     get:
       operationId: getEvents
+      x-openai-isConsequential: false
       summary: 查詢所有記事（亦可傳入 action=delete 進行快速刪除）
       parameters:
         - name: key
@@ -791,6 +792,7 @@ paths:
                     type: string
     post:
       operationId: manageEvents
+      x-openai-isConsequential: false
       summary: 自動新增記事 (add_event)、修改/勾選待辦 (update_event)、或刪除記事 (delete_event)
       parameters:
         - name: key
