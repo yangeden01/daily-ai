@@ -529,6 +529,57 @@ function doGet(e) {
       })).setMimeType(ContentService.MimeType.JSON);
     }
 
+    // 支援 ChatGPT 透過 GET 快速修改記事或更新日期
+    if (action === "update" || action === "update_event") {
+      const file = getOrCreateStorageFile();
+      const content = file.getBlob().getDataAsString();
+      let db = { events: [], deletedIds: [] };
+      try { db = JSON.parse(content); } catch (err) {}
+      if (!Array.isArray(db.events)) db.events = [];
+
+      const targetId = e.parameter.id;
+      const targetTitle = (e.parameter.title || "").trim();
+      const searchDate = (e.parameter.oldDate || e.parameter.searchDate || "").trim();
+
+      var updated = null;
+      for (var i = 0; i < db.events.length; i++) {
+        var evt = db.events[i];
+        var match = false;
+        if (targetId && evt.id === targetId) {
+          match = true;
+        } else if (targetTitle && evt.title && (evt.title.indexOf(targetTitle) !== -1 || targetTitle.indexOf(evt.title) !== -1)) {
+          if (!searchDate || evt.date === searchDate) {
+            match = true;
+          }
+        }
+        if (match) {
+          if (e.parameter.newDate) evt.date = e.parameter.newDate;
+          else if (e.parameter.date) evt.date = e.parameter.date;
+          if (e.parameter.newTitle) evt.title = e.parameter.newTitle;
+          if (e.parameter.detail !== undefined) evt.detail = e.parameter.detail;
+          if (e.parameter.category) evt.category = e.parameter.category;
+          evt.updatedAt = new Date().toISOString();
+          updated = evt;
+          break;
+        }
+      }
+
+      if (updated) {
+        db.updatedAt = new Date().toISOString();
+        file.setContent(JSON.stringify(db));
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "ok",
+          message: "記事已成功更新！",
+          event: updated
+        })).setMimeType(ContentService.MimeType.JSON);
+      } else {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "error",
+          message: "找不到欲更新的記事"
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
     // 預設：讀取所有記事
     const file = getOrCreateStorageFile();
     const content = file.getBlob().getDataAsString();
@@ -549,7 +600,7 @@ function doGet(e) {
   }
 }
 
-// 處理 POST 請求：支援 EdenNote 全量同步、ChatGPT 新增單筆、或 ChatGPT 刪除單筆
+// 處理 POST 請求：支援 EdenNote 全量同步、ChatGPT 新增單筆、修改單筆、或刪除單筆
 function doPost(e) {
   try {
     const key = e && e.parameter && e.parameter.key;
@@ -609,7 +660,7 @@ function doPost(e) {
       })).setMimeType(ContentService.MimeType.JSON);
     }
 
-    // 情況 B：ChatGPT 更新既有記事或待辦事項（修改文字、勾選完成待辦）
+    // 情況 B：ChatGPT 更新既有記事或待辦事項（修改日期 date、標題、文字、勾選完成待辦）
     if (payload.action === "update_event" || payload.action === "update") {
       const content = file.getBlob().getDataAsString();
       let db = { events: [], deletedIds: [] };
@@ -619,7 +670,8 @@ function doPost(e) {
       const target = payload.event || payload;
       const targetId = target.id;
       const targetTitle = (target.title || "").trim();
-      const targetDate = (target.date || "").trim();
+      // 若明確傳入 oldDate 或 searchDate 則用來比對舊日期；若只傳入 date 則視為更新後的新日期
+      const searchDate = (target.oldDate || target.searchDate || "").trim();
 
       var updated = null;
       for (var i = 0; i < db.events.length; i++) {
@@ -628,14 +680,26 @@ function doPost(e) {
         if (targetId && evt.id === targetId) {
           match = true;
         } else if (targetTitle && evt.title && (evt.title.indexOf(targetTitle) !== -1 || targetTitle.indexOf(evt.title) !== -1)) {
-          if (!targetDate || evt.date === targetDate) {
+          if (!searchDate || evt.date === searchDate) {
             match = true;
           }
         }
         if (match) {
+          // 支援修改日期（可傳入 target.date 或 target.newDate）
+          if (target.newDate !== undefined && target.newDate !== "") {
+            evt.date = target.newDate;
+          } else if (target.date !== undefined && target.date !== "") {
+            evt.date = target.date;
+          }
+          if (target.newTitle !== undefined && target.newTitle !== "") {
+            evt.title = target.newTitle;
+          }
           if (target.detail !== undefined) evt.detail = target.detail;
-          if (target.newTitle !== undefined) evt.title = target.newTitle;
           if (target.category !== undefined) evt.category = target.category;
+          if (target.recordType !== undefined) evt.recordType = target.recordType;
+          if (target.calendarType !== undefined) evt.calendarType = target.calendarType;
+          if (target.lunarMonth !== undefined) evt.lunarMonth = target.lunarMonth;
+          if (target.lunarDay !== undefined) evt.lunarDay = target.lunarDay;
           if (target.tags !== undefined) evt.tags = Array.isArray(target.tags) ? target.tags : [target.tags];
           evt.updatedAt = new Date().toISOString();
           updated = evt;
@@ -829,7 +893,13 @@ paths:
                       description: 修改後的標題（選填）
                     date:
                       type: string
-                      description: 日常記事填 YYYY-MM-DD；紀念日填 MM-DD（例如 10-25）
+                      description: 記事日期 YYYY-MM-DD（新增時填入；更新修改日期時亦可直接填入新日期）
+                    newDate:
+                      type: string
+                      description: 修改日期時亦可明確填入此欄位 YYYY-MM-DD（選填）
+                    oldDate:
+                      type: string
+                      description: 若以標題比對修改時欲指定的原本舊日期 YYYY-MM-DD（選填）
                     recordType:
                       type: string
                       description: 記事類型：日常紀錄填 daily、隨手記/待辦填 note、紀念日填 anniversary
@@ -892,9 +962,13 @@ export const CHATGPT_INSTRUCTIONS_PROMPT = `你是 Eden 的專屬「EdenNote 生
    - 【新增紀念日】：使用者說「記下結婚紀念日是 10 月 25 日」或「媽媽生日是農曆八月十五」，設定 recordType='anniversary', date='10-25', calendarType='solar' 或 'lunar'（農曆請帶 lunarMonth 與 lunarDay）。
    - 【新增隨手記 / 待辦事項】：使用者說「新增待辦：繳電費」，請先查詢是否有標題為「待辦清單」的 Note；若有則追加一行「☐ 繳電費」呼叫 update_event；若無則新增 recordType='note', title='待辦事項', detail='☐ 繳電費'。
 
-3. 修改與勾選待辦事項（manageEvents action='update_event'）：
-   - 當使用者說「我電費繳完了，幫我把電費打勾」或「修改某個待辦」：
-     先透過 getEvents 查出該 Note，將裡面的「☐ 繳電費」換成「☑ 繳電費」，呼叫 update_event 更新 detail！
+3. 修改記事、更新日期與勾選待辦（manageEvents action='update_event'）：
+   - 【修改日期】：當使用者說「把跟 Perer 與 Fuzzy 吃飯 改成 10/22」或「把某筆記事的日期改到下週二」：
+     先透過 getEvents 查出該記事的 id，將日期換算為標準格式 YYYY-MM-DD（例如 2026-10-22），呼叫 update_event，傳入 event: { id: "...", date: "2026-10-22" } 即可直接更新日期！
+     回覆：「已為您將【跟 Perer 與 Fuzzy 吃飯】的日期更新為 2026-10-22 囉！📅」
+   - 【修改標題或內容】：傳入 event: { id: "...", newTitle: "新標題", detail: "新內容" }。
+   - 【勾選待辦事項】：當使用者說「我電費繳完了，幫我把電費打勾」：
+     先查出該 Note，將裡面的「☐ 繳電費」換成「☑ 繳電費」，呼叫 update_event 更新 detail！
      回覆：「已為您將【繳電費】標記為完成囉！☑️」
 
 4. 刪除記事或待辦（manageEvents action='delete_event'）：
