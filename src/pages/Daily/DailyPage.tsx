@@ -554,7 +554,7 @@ export default function DailyPage() {
                         </div>
                       )}
                     </div>
-                    <h3 className={isTodo ? "event-title event-title-todo" : isFuture ? "event-title event-title-future" : "event-title"}><LinkifiedText text={event.title} /></h3>
+                    <h3 className={isTodo ? "event-title event-title-todo" : isFuture ? "event-title event-title-future" : "event-title"}><LinkifiedText text={event.title} disableLinks /></h3>
                   </div>
 
                   <span className="flex items-center gap-2">

@@ -189,12 +189,16 @@ describe('gptBridgeService', () => {
         localDb.push(evt)
         return evt
       }),
-      update: vi.fn().mockImplementation(async (evt: Event) => {
+      update: vi.fn().mockImplementation(async (_id: string, evt: Event) => {
         const idx = localDb.findIndex((e) => e.id === evt.id)
         if (idx !== -1) localDb[idx] = evt
         return evt
       }),
-      remove: vi.fn().mockResolvedValue(),
+      delete: vi.fn().mockResolvedValue(undefined),
+      replaceAll: vi.fn().mockImplementation(async (events: Event[]) => {
+        localDb.length = 0
+        localDb.push(...events)
+      }),
     }
 
     const pullResult = await pullGptCloudEvents(mockRepo)
@@ -256,14 +260,18 @@ describe('gptBridgeService', () => {
         localDb.push(evt)
         return evt
       }),
-      update: vi.fn().mockImplementation(async (evt: Event) => {
+      update: vi.fn().mockImplementation(async (_id: string, evt: Event) => {
         const idx = localDb.findIndex((e) => e.id === evt.id)
         if (idx !== -1) localDb[idx] = evt
         return evt
       }),
-      remove: vi.fn().mockImplementation(async (id: string) => {
+      delete: vi.fn().mockImplementation(async (id: string) => {
         const idx = localDb.findIndex((e) => e.id === id)
         if (idx !== -1) localDb.splice(idx, 1)
+      }),
+      replaceAll: vi.fn().mockImplementation(async (events: Event[]) => {
+        localDb.length = 0
+        localDb.push(...events)
       }),
     }
 

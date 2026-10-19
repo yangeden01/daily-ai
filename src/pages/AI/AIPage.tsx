@@ -618,8 +618,8 @@ export default function AIPage() {
                               {isFuture && <span className="event-future-badge">未來</span>}
                             </div>
                           )}
-                          <h4 className={`mt-1 truncate font-semibold ${isTodo ? 'text-rose-950 dark:text-rose-100 font-bold' : isFuture ? 'text-amber-950 dark:text-amber-100' : 'text-stone-950 dark:text-white'}`}><LinkifiedText text={event.title} /></h4>
-                          <p className="mt-1 line-clamp-2 text-sm leading-5 text-stone-600 dark:text-stone-300"><LinkifiedText text={event.detail} /></p>
+                          <h4 className={`mt-1 truncate font-semibold ${isTodo ? 'text-rose-950 dark:text-rose-100 font-bold' : isFuture ? 'text-amber-950 dark:text-amber-100' : 'text-stone-950 dark:text-white'}`}><LinkifiedText text={event.title} disableLinks /></h4>
+                          <p className="mt-1 line-clamp-2 text-sm leading-5 text-stone-600 dark:text-stone-300"><LinkifiedText text={event.detail} disableLinks /></p>
                         </div>
                         <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${
                           isTodo

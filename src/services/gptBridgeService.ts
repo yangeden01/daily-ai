@@ -289,7 +289,7 @@ export const pullGptCloudEvents = async (
     // 1. Delete events that were marked as deleted in cloud by ChatGPT assistant
     for (const delId of deletedIds) {
       if (delId && localMap.has(delId)) {
-        await repo.remove(delId)
+        await repo.delete(delId)
         localMap.delete(delId)
         deletedCount++
       }
@@ -325,7 +325,7 @@ export const pullGptCloudEvents = async (
             lunarDay: ce.lunarDay !== undefined ? ce.lunarDay : existingById.lunarDay,
             updatedAt: ce.updatedAt || new Date().toISOString(),
           }
-          await repo.update(updatedEvent)
+          await repo.update(existingById.id, updatedEvent)
           localMap.set(existingById.id, updatedEvent)
           updatedCount++
         }
