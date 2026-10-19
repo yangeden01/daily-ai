@@ -267,7 +267,7 @@ export const pullGptCloudEvents = async (
 
   try {
     const sep = url.includes('?') ? '&' : '?'
-    const targetEndpoint = `${url}${sep}key=${encodeURIComponent(key)}&_t=${Date.now()}`
+    const targetEndpoint = `${url}${sep}key=${encodeURIComponent(key)}&_t=${Date.now()}&all=true`
     const response = await fetch(targetEndpoint)
 
     if (!response.ok) {
@@ -460,7 +460,40 @@ function getOrCreateStorageFile() {
   return DriveApp.createFile(FILE_NAME, JSON.stringify({ events: [], deletedIds: [], updatedAt: new Date().toISOString() }), MimeType.PLAIN_TEXT);
 }
 
-// 處理 GET 請求：支援讀取所有記事、透過 GET 新增記事、或透過 GET 刪除記事
+// 輔助函式：計算事件日期距離今天的天數 (支援跨年判斷)
+function getDaysUntil(eventDateStr, daysAhead) {
+  if (!eventDateStr) return -1;
+  var parts = eventDateStr.split("-");
+  var m, d;
+  if (parts.length === 3) {
+    m = parseInt(parts[1], 10);
+    d = parseInt(parts[2], 10);
+  } else if (parts.length === 2) {
+    m = parseInt(parts[0], 10);
+    d = parseInt(parts[1], 10);
+  } else {
+    return -1;
+  }
+  if (isNaN(m) || isNaN(d)) return -1;
+
+  var now = new Date();
+  var tzString = Utilities.formatDate(now, "Asia/Taipei", "yyyy-MM-dd");
+  var todayParts = tzString.split("-");
+  var ty = parseInt(todayParts[0], 10);
+  var tm = parseInt(todayParts[1], 10);
+  var td = parseInt(todayParts[2], 10);
+  var todayDate = new Date(ty, tm - 1, td);
+
+  for (var i = 0; i <= daysAhead; i++) {
+    var check = new Date(todayDate.getTime() + i * 86400000);
+    if ((check.getMonth() + 1) === m && check.getDate() === d) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+// 處理 GET 請求：支援分頁檢索、EdenNote App 全量同步、快速新增與刪除
 function doGet(e) {
   try {
     const key = e && e.parameter && e.parameter.key;
@@ -471,7 +504,7 @@ function doGet(e) {
 
     const action = e && e.parameter && e.parameter.action;
 
-    // 支援 ChatGPT 刪除記事
+    // 支援 ChatGPT 透過 GET 刪除記事
     if (action === "delete" || action === "delete_event") {
       const file = getOrCreateStorageFile();
       const content = file.getBlob().getDataAsString();
@@ -535,6 +568,9 @@ function doGet(e) {
         detail: e.parameter.detail || "",
         category: e.parameter.category || "生活",
         recordType: e.parameter.recordType || "daily",
+        calendarType: e.parameter.calendarType || "solar",
+        lunarMonth: e.parameter.lunarMonth ? parseInt(e.parameter.lunarMonth, 10) : undefined,
+        lunarDay: e.parameter.lunarDay ? parseInt(e.parameter.lunarDay, 10) : undefined,
         tags: e.parameter.tags ? e.parameter.tags.split(",") : ["ChatGPT生活秘書"],
         updatedAt: new Date().toISOString()
       };
@@ -580,6 +616,8 @@ function doGet(e) {
           if (e.parameter.newTitle) evt.title = e.parameter.newTitle;
           if (e.parameter.detail !== undefined) evt.detail = e.parameter.detail;
           if (e.parameter.category) evt.category = e.parameter.category;
+          if (e.parameter.recordType) evt.recordType = e.parameter.recordType;
+          if (e.parameter.calendarType) evt.calendarType = e.parameter.calendarType;
           evt.updatedAt = new Date().toISOString();
           updated = evt;
           break;
@@ -602,18 +640,183 @@ function doGet(e) {
       }
     }
 
-    // 預設：讀取所有記事
+    // 讀取資料庫
     const file = getOrCreateStorageFile();
     const content = file.getBlob().getDataAsString();
     let db = { events: [], deletedIds: [] };
     try { db = JSON.parse(content); } catch (err) {}
+    if (!Array.isArray(db.events)) db.events = [];
+    if (!Array.isArray(db.deletedIds)) db.deletedIds = [];
+
+    // 若為 EdenNote App 的全量雙向同步 (all=true 或 source=app)
+    if (e.parameter.all === "true" || e.parameter.source === "app") {
+      return ContentService.createTextOutput(JSON.stringify({
+        status: "ok",
+        count: db.events.length,
+        updatedAt: db.updatedAt || "",
+        events: db.events,
+        deletedIds: db.deletedIds
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // 伺服器端智能搜尋與分頁檢索 (專為 ChatGPT 設計，避免 ResponseTooLargeError)
+    const keyword = (e.parameter.keyword || e.parameter.query || e.parameter.q || "").trim().toLowerCase();
+    const filterTitle = (e.parameter.title || "").trim().toLowerCase();
+    const filterCategory = (e.parameter.category || "").trim().toLowerCase();
+    const filterDate = (e.parameter.date || "").trim();
+    const startDate = (e.parameter.startDate || "").trim();
+    const endDate = (e.parameter.endDate || "").trim();
+    const recordType = (e.parameter.recordType || "").trim().toLowerCase();
+    const calendarType = (e.parameter.calendarType || "").trim().toLowerCase();
+    const isTodoOnly = (e.parameter.isTodo === "true" || e.parameter.onlyTodo === "true" || e.parameter.status === "uncompleted");
+    const upcomingDays = parseInt(e.parameter.upcomingDays || "0", 10);
+    const sort = (e.parameter.sort || "date_desc").toLowerCase();
+    const page = Math.max(1, parseInt(e.parameter.page || "1", 10));
+    const limit = Math.min(100, Math.max(1, parseInt(e.parameter.limit || "20", 10)));
+
+    const filtered = [];
+
+    for (var j = 0; j < db.events.length; j++) {
+      var item = db.events[j];
+      if (!item) continue;
+
+      // 1. 記事類型篩選
+      if (recordType && (item.recordType || "daily").toLowerCase() !== recordType) {
+        continue;
+      }
+
+      // 2. 曆制篩選 (solar / lunar)
+      if (calendarType && (item.calendarType || "solar").toLowerCase() !== calendarType) {
+        continue;
+      }
+
+      // 3. 指定日期比對 (支援 YYYY-MM-DD 或 MM-DD)
+      if (filterDate) {
+        var itemDate = item.date || "";
+        if (itemDate !== filterDate && !itemDate.endsWith(filterDate)) {
+          continue;
+        }
+      }
+
+      // 4. 日期區間比對
+      if (startDate && (item.date || "") < startDate) {
+        continue;
+      }
+      if (endDate && (item.date || "") > endDate) {
+        continue;
+      }
+
+      // 5. 分類比對
+      if (filterCategory && (item.category || "").toLowerCase().indexOf(filterCategory) === -1) {
+        continue;
+      }
+
+      // 6. 標題比對
+      if (filterTitle && (item.title || "").toLowerCase().indexOf(filterTitle) === -1) {
+        continue;
+      }
+
+      // 7. 全文關鍵字比對 (同時搜尋標題、詳細內容、分類與標籤)
+      if (keyword) {
+        var words = keyword.split(/[\s,]+/);
+        var tagsStr = Array.isArray(item.tags) ? item.tags.join(" ") : (item.tags || "");
+        var fullText = ((item.title || "") + " " + (item.detail || "") + " " + (item.category || "") + " " + tagsStr).toLowerCase();
+        var allMatched = true;
+        for (var wi = 0; wi < words.length; wi++) {
+          var w = words[wi].trim();
+          if (w && fullText.indexOf(w) === -1) {
+            allMatched = false;
+            break;
+          }
+        }
+        if (!allMatched) continue;
+      }
+
+      // 8. 待辦事項抽取出與未完成篩選 (辨識 ☐ 與 ☑)
+      var itemDetail = item.detail || "";
+      var detailLines = itemDetail.split(/\r?\n/);
+      var uncompletedTodos = [];
+      var completedTodos = [];
+
+      for (var li = 0; li < detailLines.length; li++) {
+        var line = detailLines[li].trim();
+        if (line.indexOf("☐") !== -1 || line.indexOf("- [ ]") === 0) {
+          uncompletedTodos.push(line);
+        } else if (line.indexOf("☑") !== -1 || line.indexOf("- [x]") === 0 || line.indexOf("- [X]") === 0) {
+          completedTodos.push(line);
+        }
+      }
+
+      var isTodoCat = (item.category || "").indexOf("待做") !== -1 || (item.category || "").indexOf("待辦") !== -1;
+      var isTodoTitle = (item.title || "").indexOf("待辦") !== -1;
+
+      if (isTodoOnly) {
+        var hasUncompleted = uncompletedTodos.length > 0 || isTodoCat || isTodoTitle;
+        if (!hasUncompleted) continue;
+      }
+
+      // 9. 未來 N 天內生日與紀念日計算
+      var daysUntil = -1;
+      if (upcomingDays > 0) {
+        daysUntil = getDaysUntil(item.date || "", upcomingDays);
+        if (daysUntil === -1) continue;
+        var isAnnivOrBirthday = item.recordType === "anniversary" || (item.title || "").indexOf("生日") !== -1 || (item.title || "").indexOf("紀念日") !== -1;
+        if (!isAnnivOrBirthday) continue;
+      }
+
+      // 建立簡潔回傳物件，避免過長欄位消耗 Token
+      var resultItem = {
+        id: item.id,
+        date: item.date || "",
+        title: item.title || "",
+        detail: item.detail || "",
+        category: item.category || "",
+        recordType: item.recordType || "daily"
+      };
+
+      if (item.calendarType) resultItem.calendarType = item.calendarType;
+      if (item.lunarMonth) resultItem.lunarMonth = item.lunarMonth;
+      if (item.lunarDay) resultItem.lunarDay = item.lunarDay;
+      if (item.updatedAt) resultItem.updatedAt = item.updatedAt;
+      if (uncompletedTodos.length > 0) resultItem.uncompletedTodos = uncompletedTodos;
+      if (completedTodos.length > 0) resultItem.completedTodos = completedTodos;
+      if (daysUntil >= 0) resultItem.daysUntil = daysUntil;
+
+      filtered.push(resultItem);
+    }
+
+    // 10. 排序
+    if (upcomingDays > 0) {
+      filtered.sort(function(a, b) {
+        return (a.daysUntil || 0) - (b.daysUntil || 0);
+      });
+    } else if (sort === "date_asc") {
+      filtered.sort(function(a, b) {
+        return (a.date || "").localeCompare(b.date || "");
+      });
+    } else if (sort === "updated_desc") {
+      filtered.sort(function(a, b) {
+        return (b.updatedAt || "").localeCompare(a.updatedAt || "");
+      });
+    } else {
+      // 預設 date_desc (最新日期優先，加薪、看診皆能第一筆取得最新紀錄)
+      filtered.sort(function(a, b) {
+        return (b.date || "").localeCompare(a.date || "");
+      });
+    }
+
+    // 11. 分頁切片
+    const offset = (page - 1) * limit;
+    const pagedEvents = filtered.slice(offset, offset + limit);
 
     return ContentService.createTextOutput(JSON.stringify({
       status: "ok",
-      count: db.events ? db.events.length : 0,
-      updatedAt: db.updatedAt || "",
-      events: db.events || [],
-      deletedIds: db.deletedIds || []
+      totalMatched: filtered.length,
+      page: page,
+      pageSize: limit,
+      totalPages: Math.ceil(filtered.length / limit),
+      hasMore: (offset + limit) < filtered.length,
+      events: pagedEvents
     })).setMimeType(ContentService.MimeType.JSON);
 
   } catch (err) {
@@ -847,8 +1050,8 @@ function doPost(e) {
 export const CHATGPT_ACTIONS_SCHEMA = `openapi: 3.1.0
 info:
   title: EdenNote 生活秘書雲端 API
-  description: 供 ChatGPT 生活秘書即時讀取、自動新增、修改或刪除 EdenNote 個人記事、隨手記、待辦事項與紀念日
-  version: 2.2.0
+  description: 供 ChatGPT 生活秘書即時全文檢索、查詢未完成待辦、未來生日、自動新增、修改或刪除 EdenNote 記事、隨手記與紀念日
+  version: 2.3.0
 servers:
   - url: https://script.google.com/macros/s/AKfycbw9VzMUGW9ASUgms7_xb6r_iPfX-cD7uHbHoFavkmIbJSntOCpNM-kHajKyimXwXngf
 paths:
@@ -856,7 +1059,7 @@ paths:
     get:
       operationId: getEvents
       x-openai-isConsequential: false
-      summary: 查詢所有記事（亦可傳入 action=delete 進行快速刪除）
+      summary: 查詢記事、待辦清單與紀念日（支援關鍵字全文檢索、未完成待辦抽取出、未來生日計算，預設每次回傳20筆避免過大）
       parameters:
         - name: key
           in: query
@@ -864,43 +1067,83 @@ paths:
           schema:
             type: string
             default: eden_secret_888
-        - name: action
+        - name: keyword
           in: query
-          description: 操作模式：查詢填 get，刪除填 delete
+          description: 全文搜尋關鍵字，同時比對標題、內容、分類與標籤（例如：加薪、六竹、慢箋、星巴克）
           required: false
           schema:
             type: string
-            enum: [get, add, delete]
+        - name: isTodo
+          in: query
+          description: 是否只查詢未完成的待辦事項（系統會自動辨識包含 ☐ 待辦清單或待做事項，並抽出 uncompletedTodos 清單）
+          required: false
+          schema:
+            type: boolean
+        - name: upcomingDays
+          in: query
+          description: 查詢未來 N 天內即將到來的生日或紀念日（例如填 10 查詢未來 10 天內生日的親友）
+          required: false
+          schema:
+            type: integer
+        - name: recordType
+          in: query
+          description: 記事類型篩選：日常紀錄 daily、隨手記/待辦 note、紀念日 anniversary
+          required: false
+          schema:
+            type: string
+            enum: [daily, note, anniversary]
         - name: title
           in: query
-          description: 記事標題或關鍵字（例如：待辦事項、老婆感冒）
-          required: false
-          schema:
-            type: string
-        - name: date
-          in: query
-          description: 日期 YYYY-MM-DD（例如：2026-10-18）
-          required: false
-          schema:
-            type: string
-        - name: id
-          in: query
-          description: 記事 ID（若知道 ID 請提供）
+          description: 依標題關鍵字篩選
           required: false
           schema:
             type: string
         - name: category
           in: query
-          description: 分類
+          description: 依分類篩選（例如：生活、待辦、紀念日、工作、健康）
           required: false
           schema:
             type: string
-        - name: detail
+        - name: date
           in: query
-          description: 詳細內容或備註
+          description: 指定日期 YYYY-MM-DD 或 MM-DD
           required: false
           schema:
             type: string
+        - name: startDate
+          in: query
+          description: 起始日期 YYYY-MM-DD
+          required: false
+          schema:
+            type: string
+        - name: endDate
+          in: query
+          description: 結束日期 YYYY-MM-DD
+          required: false
+          schema:
+            type: string
+        - name: sort
+          in: query
+          description: 排序方式：最新優先 date_desc、最舊優先 date_asc、最近修改 updated_desc
+          required: false
+          schema:
+            type: string
+            enum: [date_desc, date_asc, updated_desc]
+            default: date_desc
+        - name: page
+          in: query
+          description: 分頁頁碼（預設第 1 頁）
+          required: false
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          description: 每頁回傳筆數（預設 20 筆，上限 100 筆，避免資料量過大造成 ResponseTooLargeError）
+          required: false
+          schema:
+            type: integer
+            default: 20
       responses:
         '200':
           description: 成功回應
@@ -911,8 +1154,20 @@ paths:
                 properties:
                   status:
                     type: string
-                  message:
-                    type: string
+                  totalMatched:
+                    type: integer
+                  page:
+                    type: integer
+                  pageSize:
+                    type: integer
+                  totalPages:
+                    type: integer
+                  hasMore:
+                    type: boolean
+                  events:
+                    type: array
+                    items:
+                      type: object
     post:
       operationId: manageEvents
       x-openai-isConsequential: false
@@ -952,7 +1207,7 @@ paths:
                       description: 修改後的標題（選填）
                     date:
                       type: string
-                      description: 記事日期 YYYY-MM-DD（新增時填入；更新修改日期時亦可直接填入新日期）
+                      description: 記事日期 YYYY-MM-DD 或 MM-DD（新增時填入；更新修改日期時亦可直接填入新日期）
                     newDate:
                       type: string
                       description: 修改日期時亦可明確填入此欄位 YYYY-MM-DD（選填）
@@ -1013,8 +1268,13 @@ export const CHATGPT_INSTRUCTIONS_PROMPT = `你是 Eden 的專屬「EdenNote 生
 你的任務是協助 Eden 管理生活回憶、日常生活紀錄、Note隨手記、待辦清單與紀念日。
 
 【核心四大任務】：
-1. 查詢記事（getEvents）：
-   - 當 Eden 詢問過去發生的事、查待辦、慢箋領藥或紀念日時，呼叫 getEvents(action='get') 取得最新紀錄，親切且有條理地回答。
+1. 查詢記事、待辦與紀念日（getEvents）：
+   - 【關鍵字搜尋】：當 Eden 詢問特定關鍵字（例如「上一次加薪多少」、「六竹回診」），呼叫 getEvents(keyword='加薪', sort='date_desc') 或 getEvents(keyword='六竹')。
+     * 加薪查詢：依日期由新到舊排序，回傳的第一筆即為最近一次加薪紀錄！清楚說明日期、金額與調幅。
+     * 醫院/回診查詢：搜尋醫院或診所名稱（如六竹、杏蒔），檢視最新排定日期與慢性處方籤資訊。
+   - 【查詢未完成待辦事項】：當 Eden 詢問「我的待辦事項有哪些」或「有哪些事還沒做」，呼叫 getEvents(isTodo=true)。系統會直接回傳包含 ☐ 的未完成項目清單（uncompletedTodos），請條列清楚回覆。
+   - 【查詢即將到來的生日與紀念日】：當 Eden 詢問「未來十天有誰生日」或「最近有什麼紀念日」，呼叫 getEvents(upcomingDays=10)。系統會自動計算剩餘天數（daysUntil）並排序，請親切列出何時是誰的生日或紀念日。
+   - 【分頁查詢】：每次預設回傳 20 筆。若 hasMore=true 且 Eden 想看更多，可傳入 page=2 繼續查詢。
 
 2. 新增記事、隨手記與紀念日（manageEvents action='add_event'）：
    - 【日常日記】：使用者說「記下昨天跟老婆看電影」，分析相對時間（昨天換算為 YYYY-MM-DD），recordType='daily'，呼叫寫入。
@@ -1034,4 +1294,5 @@ export const CHATGPT_INSTRUCTIONS_PROMPT = `你是 Eden 的專屬「EdenNote 生
    - 當使用者說「幫我刪除昨天老婆感冒的紀錄」，呼叫 action='delete_event', deleteTarget={title: '老婆感冒', date: '2026-10-18'} 刪除！
    - 若是要求刪除 Note 裡的某一行待辦，則取出該 Note 內容將該行移除後呼叫 update_event 儲存。
    - 回覆：「已為您完成刪除囉！🗑️」`
+
 
