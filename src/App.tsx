@@ -16,11 +16,10 @@ export default function App() {
   const navigate = useNavigate()
 
   useEffect(() => {
-    // 1. Two-way sync: Pull from cloud first (incorporating any ChatGPT additions), then update widget & cloud
+    // 1. Two-way sync: Pull latest events from cloud (incorporating any ChatGPT additions), then update widget
     void pullGptCloudEvents(eventRepository).finally(() => {
       void eventRepository.getAll().then((events) => {
         void syncWidgetSnapshot(events)
-        void syncGptCloudSnapshot(events)
       })
     })
 
@@ -115,7 +114,7 @@ export default function App() {
       })
     }
 
-    // 5. Capacitor native app state change listener to auto-sync when app resumes to foreground
+    // 5. Capacitor native app state change listener to auto-pull when app resumes to foreground
     let appStateHandle: { remove: () => void } | null = null
     if (Capacitor.isNativePlatform()) {
       void CapApp.addListener('appStateChange', ({ isActive }) => {
@@ -123,7 +122,6 @@ export default function App() {
           void pullGptCloudEvents(eventRepository).finally(() => {
             void eventRepository.getAll().then((events) => {
               void syncWidgetSnapshot(events)
-              void syncGptCloudSnapshot(events)
             })
           })
         }
@@ -137,7 +135,7 @@ export default function App() {
       if (document.visibilityState === 'visible') {
         void pullGptCloudEvents(eventRepository).finally(() => {
           void eventRepository.getAll().then((events) => {
-            void syncGptCloudSnapshot(events)
+            void syncWidgetSnapshot(events)
           })
         })
       }

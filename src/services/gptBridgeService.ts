@@ -266,9 +266,15 @@ export const pullGptCloudEvents = async (
   }
 
   try {
-    const targetEndpoint = `${url}${url.includes('?') ? '&' : '?'}key=${encodeURIComponent(key)}`
+    const sep = url.includes('?') ? '&' : '?'
+    const targetEndpoint = `${url}${sep}key=${encodeURIComponent(key)}&_t=${Date.now()}`
     const response = await fetch(targetEndpoint, {
       method: 'GET',
+      cache: 'no-store',
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        Pragma: 'no-cache',
+      },
     })
 
     if (!response.ok) {
@@ -781,20 +787,57 @@ function doPost(e) {
       })).setMimeType(ContentService.MimeType.JSON);
     }
 
-    // 情況 D：EdenNote App 全量推播同步
+    // 情況 D：EdenNote App 全量推播同步（智能雙向合併：若雲端記事有 ChatGPT 較新的修改，予以保留不被舊客戶端覆蓋）
     if (payload.events && Array.isArray(payload.events)) {
       const content = file.getBlob().getDataAsString();
       let db = { events: [], deletedIds: [] };
       try { db = JSON.parse(content); } catch (err) {}
+      if (!Array.isArray(db.events)) db.events = [];
+      if (!Array.isArray(db.deletedIds)) db.deletedIds = [];
+
+      var cloudMap = {};
+      for (var ci = 0; ci < db.events.length; ci++) {
+        var ce = db.events[ci];
+        if (ce && ce.id) cloudMap[ce.id] = ce;
+      }
+
+      var mergedEvents = [];
+      var seenIds = {};
+
+      for (var pi = 0; pi < payload.events.length; pi++) {
+        var pe = payload.events[pi];
+        if (!pe || !pe.id) continue;
+        seenIds[pe.id] = true;
+        var existingCloud = cloudMap[pe.id];
+        if (existingCloud) {
+          var cloudTime = existingCloud.updatedAt ? new Date(existingCloud.updatedAt).getTime() : 0;
+          var payloadTime = pe.updatedAt ? new Date(pe.updatedAt).getTime() : 0;
+          if (cloudTime > payloadTime) {
+            // 保留雲端較新的修改（例如 ChatGPT 秘書剛改過的日期或內容）
+            mergedEvents.push(existingCloud);
+            continue;
+          }
+        }
+        mergedEvents.push(pe);
+      }
+
+      // 補上雲端有但 payload 尚未拉取的新增記事（且未被標記刪除者）
+      for (var ci2 = 0; ci2 < db.events.length; ci2++) {
+        var ce2 = db.events[ci2];
+        if (ce2 && ce2.id && !seenIds[ce2.id] && db.deletedIds.indexOf(ce2.id) === -1) {
+          mergedEvents.push(ce2);
+        }
+      }
+
       file.setContent(JSON.stringify({
-        events: payload.events,
+        events: mergedEvents,
         deletedIds: db.deletedIds || [],
         updatedAt: new Date().toISOString()
       }));
       return ContentService.createTextOutput(JSON.stringify({
         status: "ok",
-        message: "EdenNote 全量同步成功",
-        count: payload.events.length
+        message: "EdenNote 智慧合併同步成功",
+        count: mergedEvents.length
       })).setMimeType(ContentService.MimeType.JSON);
     }
 
