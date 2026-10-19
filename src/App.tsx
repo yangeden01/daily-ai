@@ -143,8 +143,20 @@ export default function App() {
     document.addEventListener('visibilitychange', handleVisibilityChange)
     window.addEventListener('focus', handleVisibilityChange)
 
+    // 7. Periodic background pull (every 5 minutes while app is active)
+    const periodicPullTimer = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        void pullGptCloudEvents(eventRepository).finally(() => {
+          void eventRepository.getAll().then((events) => {
+            void syncWidgetSnapshot(events)
+          })
+        })
+      }
+    }, 5 * 60 * 1000)
+
     return () => {
       clearTimeout(timer)
+      clearInterval(periodicPullTimer)
       window.removeEventListener('swiftnote:navigate', handleWidgetNavigate as EventListener)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       window.removeEventListener('focus', handleVisibilityChange)
