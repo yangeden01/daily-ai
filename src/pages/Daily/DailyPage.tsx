@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from 'react'
-import { CalendarHeart, Check, ChevronRight, Clock, Inbox, LoaderCircle, Moon, NotebookPen, Sparkles, Sun, Undo2, X } from 'lucide-react'
+import { CalendarHeart, Check, ChevronRight, Clock, Inbox, LoaderCircle, Moon, NotebookPen, RotateCw, Sparkles, Sun, Undo2, X } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
 import type { Event, CalendarType } from '../../models/Event'
 import { attachmentRepository, eventRepository } from '../../repositories'
@@ -52,6 +52,7 @@ export default function DailyPage() {
   const [isLeapMonth, setIsLeapMonth] = useState<boolean>(() => initialDraft.current?.isLeapMonth ?? getTodayLunarDate().isLeap)
   const [lastClearedTitle, setLastClearedTitle] = useState<string | null>(null)
   const [lastClearedDetail, setLastClearedDetail] = useState<string | null>(null)
+  const [isPulling, setIsPulling] = useState<boolean>(false)
 
   const handleClearTitle = () => {
     if (!eventTitle) return
@@ -101,6 +102,16 @@ export default function DailyPage() {
     setIsLoadingEvents(false)
   }, [isAnniversaryMode, isNotesMode, noteSort])
 
+  const handleManualRefresh = useCallback(async () => {
+    setIsPulling(true)
+    try {
+      await pullGptCloudEvents(eventRepository)
+    } finally {
+      setIsPulling(false)
+      void loadEvents()
+    }
+  }, [loadEvents])
+
   useEffect(() => {
     void loadEvents().catch((error) => {
       setErrorMessage(error instanceof Error ? error.message : '事件載入失敗')
@@ -113,9 +124,20 @@ export default function DailyPage() {
     const handleEventsUpdated = () => {
       void loadEvents()
     }
+    const handlePullStarted = () => {
+      setIsPulling(true)
+    }
+    const handlePullCompleted = () => {
+      setIsPulling(false)
+      void loadEvents()
+    }
     window.addEventListener('edennote:events-updated', handleEventsUpdated)
+    window.addEventListener('edennote:gpt-pull-started', handlePullStarted)
+    window.addEventListener('edennote:gpt-pull-completed', handlePullCompleted)
     return () => {
       window.removeEventListener('edennote:events-updated', handleEventsUpdated)
+      window.removeEventListener('edennote:gpt-pull-started', handlePullStarted)
+      window.removeEventListener('edennote:gpt-pull-completed', handlePullCompleted)
     }
   }, [loadEvents])
 
@@ -486,9 +508,21 @@ export default function DailyPage() {
           <h2 id="timeline-title" className="section-label !mb-0">
             {isAnniversaryMode ? '紀念日列表' : isNotesMode ? '記事列表' : 'Timeline'}
           </h2>
-          <span className="text-xs tabular-nums text-stone-400">
-            {events.length} {isAnniversaryMode ? '個紀念日' : isNotesMode ? 'notes' : 'events'}
-          </span>
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => void handleManualRefresh()}
+              disabled={isPulling}
+              className="inline-flex items-center gap-1 rounded-full border border-stone-200 bg-stone-50/80 px-2 py-0.5 text-[11px] font-medium text-stone-600 shadow-sm transition hover:bg-stone-100 hover:text-stone-900 active:scale-95 disabled:opacity-70 dark:border-stone-700 dark:bg-stone-800/80 dark:text-stone-300 dark:hover:bg-stone-700 dark:hover:text-stone-100"
+              title="立即與生活秘書雲端同步"
+            >
+              <RotateCw size={11} className={isPulling ? 'animate-spin text-indigo-600 dark:text-indigo-400' : ''} />
+              <span>{isPulling ? '同步中…' : '雲端同步'}</span>
+            </button>
+            <span className="text-xs tabular-nums text-stone-400">
+              {events.length} {isAnniversaryMode ? '個紀念日' : isNotesMode ? 'notes' : 'events'}
+            </span>
+          </div>
         </div>
         {isNotesMode && (
           <div className="note-sort-switch" role="group" aria-label="記事排序">
