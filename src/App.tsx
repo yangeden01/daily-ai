@@ -9,17 +9,19 @@ import AIPage from './pages/AI/AIPage'
 import SettingsPage from './pages/Settings/SettingsPage'
 import DashboardPage from './pages/Dashboard/DashboardPage'
 import { eventRepository } from './repositories'
-import { syncGptCloudSnapshot } from './services/gptBridgeService'
+import { pullGptCloudEvents, syncGptCloudSnapshot } from './services/gptBridgeService'
 import { getPendingWidgetRoute, syncWidgetSnapshot } from './services/widgetBridge'
 
 export default function App() {
   const navigate = useNavigate()
 
   useEffect(() => {
-    // 1. Synchronize snapshot and auto-sync to cloud on app startup
-    void eventRepository.getAll().then((events) => {
-      void syncWidgetSnapshot(events)
-      void syncGptCloudSnapshot(events)
+    // 1. Two-way sync: Pull from cloud first (incorporating any ChatGPT additions), then update widget & cloud
+    void pullGptCloudEvents(eventRepository).finally(() => {
+      void eventRepository.getAll().then((events) => {
+        void syncWidgetSnapshot(events)
+        void syncGptCloudSnapshot(events)
+      })
     })
 
     // 2. Listen for widget deep link navigation events
@@ -118,9 +120,11 @@ export default function App() {
     if (Capacitor.isNativePlatform()) {
       void CapApp.addListener('appStateChange', ({ isActive }) => {
         if (isActive) {
-          void eventRepository.getAll().then((events) => {
-            void syncWidgetSnapshot(events)
-            void syncGptCloudSnapshot(events)
+          void pullGptCloudEvents(eventRepository).finally(() => {
+            void eventRepository.getAll().then((events) => {
+              void syncWidgetSnapshot(events)
+              void syncGptCloudSnapshot(events)
+            })
           })
         }
       }).then((handle) => {
@@ -131,8 +135,10 @@ export default function App() {
     // 6. Web / PWA visibility change listener
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        void eventRepository.getAll().then((events) => {
-          void syncGptCloudSnapshot(events)
+        void pullGptCloudEvents(eventRepository).finally(() => {
+          void eventRepository.getAll().then((events) => {
+            void syncGptCloudSnapshot(events)
+          })
         })
       }
     }

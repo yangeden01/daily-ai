@@ -1,5 +1,35 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react'
-import { ArchiveRestore, Bot, Check, CheckCircle2, Cloud, CloudUpload, Copy, Database, Download, ExternalLink, FolderCheck, GitMerge, Globe, Images, Info, KeyRound, LoaderCircle, Palette, RefreshCw, Share2, Sparkles, Trash2, Type, X } from 'lucide-react'
+import {
+  ArchiveRestore,
+  ArrowDownCircle,
+  ArrowUpCircle,
+  Bot,
+  Check,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  Cloud,
+  CloudUpload,
+  Copy,
+  Database,
+  Download,
+  ExternalLink,
+  FileCode,
+  FolderCheck,
+  GitMerge,
+  Globe,
+  Images,
+  Info,
+  KeyRound,
+  LoaderCircle,
+  Palette,
+  RefreshCw,
+  Share2,
+  Sparkles,
+  Trash2,
+  Type,
+  X,
+} from 'lucide-react'
 import { Capacitor } from '@capacitor/core'
 import { usePWA } from '../../contexts/PWAContext'
 import { useAppearance } from '../../contexts/AppearanceContext'
@@ -11,13 +41,19 @@ import { getApiBaseUrl, checkAiServerHealth, getUserGeminiApiKey, setUserGeminiA
 import { uploadBackupToGoogleDrive } from '../../services/googleDriveService'
 import { eventRepository } from '../../repositories'
 import {
+  CHATGPT_ACTIONS_SCHEMA,
+  CHATGPT_INSTRUCTIONS_PROMPT,
   DEFAULT_GPT_BRIDGE_URL,
   DEFAULT_GPT_SECRET_KEY,
+  GAS_CODE_TEMPLATE,
   getGptBridgeUrl,
+  getLastGptPullInfo,
   getLastGptSyncInfo,
   getGptSecretKey,
   isGptAutoSyncEnabled,
+  isGptPulling,
   isGptSyncing,
+  pullGptCloudEvents,
   setGptAutoSyncEnabled,
   setGptBridgeUrl,
   setGptSecretKey,
@@ -57,9 +93,15 @@ export default function SettingsPage() {
   const [gptSecretKey, setGptSecretKeyState] = useState<string>(getGptSecretKey)
   const [autoSyncEnabled, setAutoSyncEnabled] = useState<boolean>(isGptAutoSyncEnabled)
   const [isSyncing, setIsSyncing] = useState<boolean>(isGptSyncing)
+  const [isPulling, setIsPulling] = useState<boolean>(isGptPulling)
   const [lastSyncInfo, setLastSyncInfo] = useState(getLastGptSyncInfo)
+  const [lastPullInfo, setLastPullInfo] = useState(getLastGptPullInfo)
   const [gptSyncStatus, setGptSyncStatus] = useState<'idle' | 'working' | 'success' | 'error'>('idle')
   const [gptSyncMessage, setGptSyncMessage] = useState<string | null>(null)
+  const [gptPullStatus, setGptPullStatus] = useState<'idle' | 'working' | 'success' | 'error'>('idle')
+  const [gptPullMessage, setGptPullMessage] = useState<string | null>(null)
+  const [showSetupGuide, setShowSetupGuide] = useState(false)
+  const [copiedSnippetType, setCopiedSnippetType] = useState<string | null>(null)
 
   useEffect(() => {
     const onSyncStarted = () => setIsSyncing(true)
@@ -67,11 +109,20 @@ export default function SettingsPage() {
       setIsSyncing(false)
       setLastSyncInfo(getLastGptSyncInfo())
     }
+    const onPullStarted = () => setIsPulling(true)
+    const onPullCompleted = () => {
+      setIsPulling(false)
+      setLastPullInfo(getLastGptPullInfo())
+    }
     window.addEventListener('edennote:gpt-sync-started', onSyncStarted)
     window.addEventListener('edennote:gpt-sync-completed', onSyncCompleted)
+    window.addEventListener('edennote:gpt-pull-started', onPullStarted)
+    window.addEventListener('edennote:gpt-pull-completed', onPullCompleted)
     return () => {
       window.removeEventListener('edennote:gpt-sync-started', onSyncStarted)
       window.removeEventListener('edennote:gpt-sync-completed', onSyncCompleted)
+      window.removeEventListener('edennote:gpt-pull-started', onPullStarted)
+      window.removeEventListener('edennote:gpt-pull-completed', onPullCompleted)
     }
   }, [])
 
@@ -96,6 +147,38 @@ export default function SettingsPage() {
     setGptBridgeUrl(DEFAULT_GPT_BRIDGE_URL)
     setGptSecretKey(DEFAULT_GPT_SECRET_KEY)
     setGptSyncMessage(null)
+    setGptPullMessage(null)
+  }
+
+  const handleCopySnippet = async (text: string, type: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopiedSnippetType(type)
+      setTimeout(() => setCopiedSnippetType(null), 2500)
+    } catch {
+      // fallback
+    }
+  }
+
+  const handleGptPull = async () => {
+    setGptPullStatus('working')
+    setGptPullMessage(null)
+
+    try {
+      const result = await pullGptCloudEvents(eventRepository)
+      if (result.success) {
+        setGptPullStatus('success')
+        setGptPullMessage(`📥 雲端拉取成功！雲端現有 ${result.pulledCount} 筆，本次新增 ${result.addedCount} 筆，更新 ${result.updatedCount} 筆。`)
+        setLastPullInfo(getLastGptPullInfo())
+      } else {
+        setGptPullStatus('error')
+        setGptPullMessage(`拉取失敗：${result.error || '請確認網路與 Script 網址'}`)
+      }
+    } catch (err: unknown) {
+      console.error('GPT Pull error:', err)
+      setGptPullStatus('error')
+      setGptPullMessage(`拉取發生錯誤：${err instanceof Error ? err.message : String(err)}`)
+    }
   }
 
   const handleGptSync = async () => {
@@ -107,7 +190,7 @@ export default function SettingsPage() {
       const result = await syncGptCloudSnapshot(allEvents, { force: true })
       if (result.success) {
         setGptSyncStatus('success')
-        setGptSyncMessage(`🎉 已成功同步 ${result.count} 筆記事至 Google 雲端硬碟 (edennote_data.json)！現在可以在 ChatGPT 隨時向「EdenNote 生活秘書」提問或用語音聊天了。`)
+        setGptSyncMessage(`🎉 已成功推播 ${result.count} 筆記事至 Google 雲端硬碟 (edennote_data.json)！`)
         setLastSyncInfo(getLastGptSyncInfo())
       } else {
         setGptSyncStatus('error')
@@ -1002,15 +1085,15 @@ export default function SettingsPage() {
       </section>
 
       {/* ChatGPT 專屬生活秘書連線 */}
-      <p className="section-label mt-8">ChatGPT 雲端生活秘書</p>
+      <p className="section-label mt-8">ChatGPT 雲端生活秘書（雙向同步）</p>
       <section className="settings-card space-y-4" aria-label="ChatGPT 專屬生活秘書連線設定">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2 text-stone-900 dark:text-stone-100">
             <Bot size={20} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
             <div>
-              <h2 className="text-base font-semibold">ChatGPT 生活秘書雲端同步</h2>
+              <h2 className="text-base font-semibold">ChatGPT 生活秘書雙向智慧同步</h2>
               <p className="text-xs text-stone-500 dark:text-stone-400">
-                將最新記事安全推送到個人 Google Drive，供官方 ChatGPT App 與 Custom GPT 即時查詢、語音對話或慢箋推算。
+                對手機 ChatGPT 說「幫我記錄昨天跟老婆看電影」，小秘書即刻存入雲端，打開 EdenNote 自動無感拉取！
               </p>
             </div>
           </div>
@@ -1026,15 +1109,15 @@ export default function SettingsPage() {
         </div>
 
         <div className="space-y-3 pt-2">
-          {/* 全自動背景同步開關 */}
+          {/* 全自動背景雙向同步開關 */}
           <label className="flex items-center justify-between gap-3 p-3.5 rounded-xl border border-stone-200/80 bg-stone-50/80 dark:border-stone-800 dark:bg-stone-850 cursor-pointer transition hover:bg-stone-100/70 dark:hover:bg-stone-800">
             <div>
               <div className="flex items-center gap-2 text-xs font-semibold text-stone-900 dark:text-stone-100">
-                <span>全自動背景同步 (Auto-Sync)</span>
+                <span>全自動背景雙向同步 (Auto-Sync)</span>
                 {autoSyncEnabled ? (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    已啟用
+                    雙向自動啟用中
                   </span>
                 ) : (
                   <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-stone-200 text-stone-600 dark:bg-stone-800 dark:text-stone-400">
@@ -1043,7 +1126,7 @@ export default function SettingsPage() {
                 )}
               </div>
               <div className="text-[11px] text-stone-500 dark:text-stone-400 mt-1">
-                每次新增、編輯、勾選待辦或刪除記事時，自動在背景同步至 Google 雲端
+                開 App 或切回前景時自動拉取 ChatGPT 記錄的新事件；App 編輯或打勾時自動同步回雲端
               </div>
             </div>
             <input
@@ -1054,17 +1137,38 @@ export default function SettingsPage() {
             />
           </label>
 
-          {isSyncing ? (
-            <div className="flex items-center gap-2 text-[11px] text-emerald-600 dark:text-emerald-400 px-1 font-medium">
-              <LoaderCircle size={13} className="animate-spin shrink-0" />
-              <span>雲端背景同步中...</span>
+          {/* 同步狀態指示 */}
+          <div className="space-y-1 px-1">
+            {isPulling ? (
+              <div className="flex items-center gap-2 text-[11px] text-blue-600 dark:text-blue-400 font-medium">
+                <LoaderCircle size={13} className="animate-spin shrink-0" />
+                <span>正在從雲端檢查 ChatGPT 新增記事...</span>
+              </div>
+            ) : isSyncing ? (
+              <div className="flex items-center gap-2 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
+                <LoaderCircle size={13} className="animate-spin shrink-0" />
+                <span>雲端背景推播同步中...</span>
+              </div>
+            ) : null}
+
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-stone-500 dark:text-stone-400">
+              {lastPullInfo.time && (
+                <span className="flex items-center gap-1">
+                  <CheckCircle2 size={12} className="text-blue-500 shrink-0" />
+                  上次雲端拉取：{lastPullInfo.time}
+                  {lastPullInfo.addedCount !== null && lastPullInfo.addedCount > 0 ? (
+                    <span className="text-emerald-600 font-medium">（新增 {lastPullInfo.addedCount} 筆）</span>
+                  ) : null}
+                </span>
+              )}
+              {lastSyncInfo.time && (
+                <span className="flex items-center gap-1">
+                  <CheckCircle2 size={12} className="text-emerald-500 shrink-0" />
+                  上次推播備份：{lastSyncInfo.time} {lastSyncInfo.count !== null ? `(${lastSyncInfo.count} 筆)` : ''}
+                </span>
+              )}
             </div>
-          ) : lastSyncInfo.time ? (
-            <div className="flex items-center gap-1.5 text-[11px] text-stone-500 dark:text-stone-400 px-1">
-              <CheckCircle2 size={13} className="text-emerald-500 shrink-0" />
-              <span>上次自動同步：{lastSyncInfo.time} {lastSyncInfo.count !== null ? `(${lastSyncInfo.count} 筆)` : ''}</span>
-            </div>
-          ) : null}
+          </div>
 
           <div>
             <label htmlFor="gpt-bridge-url" className="text-xs font-semibold text-stone-700 dark:text-stone-300">
@@ -1094,19 +1198,48 @@ export default function SettingsPage() {
             />
           </div>
 
-          <button
-            type="button"
-            className="backup-button w-full border border-emerald-600/30 bg-emerald-600 text-white hover:bg-emerald-700 focus-visible:ring-emerald-500 dark:bg-emerald-600 dark:hover:bg-emerald-700 shadow-sm transition"
-            onClick={() => void handleGptSync()}
-            disabled={gptSyncStatus === 'working'}
-          >
-            {gptSyncStatus === 'working' ? (
-              <LoaderCircle size={18} className="animate-spin" />
-            ) : (
-              <Sparkles size={18} />
-            )}
-            <span>手動立即同步至 ChatGPT (Google Drive)</span>
-          </button>
+          {/* 雙向操作按鈕組 */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+            <button
+              type="button"
+              className="backup-button w-full border border-blue-600/30 bg-blue-600 text-white hover:bg-blue-700 focus-visible:ring-blue-500 dark:bg-blue-600 dark:hover:bg-blue-700 shadow-sm transition"
+              onClick={() => void handleGptPull()}
+              disabled={gptPullStatus === 'working'}
+            >
+              {gptPullStatus === 'working' ? (
+                <LoaderCircle size={17} className="animate-spin shrink-0" />
+              ) : (
+                <ArrowDownCircle size={17} className="shrink-0" />
+              )}
+              <span>立即從雲端拉取 (Pull)</span>
+            </button>
+
+            <button
+              type="button"
+              className="backup-button w-full border border-emerald-600/30 bg-emerald-600 text-white hover:bg-emerald-700 focus-visible:ring-emerald-500 dark:bg-emerald-600 dark:hover:bg-emerald-700 shadow-sm transition"
+              onClick={() => void handleGptSync()}
+              disabled={gptSyncStatus === 'working'}
+            >
+              {gptSyncStatus === 'working' ? (
+                <LoaderCircle size={17} className="animate-spin shrink-0" />
+              ) : (
+                <ArrowUpCircle size={17} className="shrink-0" />
+              )}
+              <span>手動推播至雲端 (Push)</span>
+            </button>
+          </div>
+
+          {gptPullMessage && (
+            <div
+              className={`rounded-xl p-3 text-xs leading-relaxed ${
+                gptPullStatus === 'success'
+                  ? 'border border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-900/50 dark:bg-blue-950/40 dark:text-blue-300'
+                  : 'border border-red-200 bg-red-50 text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300'
+              }`}
+            >
+              {gptPullMessage}
+            </div>
+          )}
 
           {gptSyncMessage && (
             <div
@@ -1119,6 +1252,92 @@ export default function SettingsPage() {
               {gptSyncMessage}
             </div>
           )}
+
+          {/* 摺疊設定教學 */}
+          <div className="pt-2 border-t border-stone-200/80 dark:border-stone-800">
+            <button
+              type="button"
+              onClick={() => setShowSetupGuide((prev) => !prev)}
+              className="w-full flex items-center justify-between p-2.5 rounded-xl bg-stone-100 hover:bg-stone-200/70 dark:bg-stone-800 dark:hover:bg-stone-750 text-xs font-semibold text-stone-800 dark:text-stone-200 transition"
+            >
+              <div className="flex items-center gap-2">
+                <FileCode size={15} className="text-emerald-600 dark:text-emerald-400" />
+                <span>🤖 如何對 ChatGPT 說「幫我記錄...」自動輸入 EdenNote？（設定步驟與代碼）</span>
+              </div>
+              {showSetupGuide ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </button>
+
+            {showSetupGuide && (
+              <div className="mt-3 space-y-4 p-3.5 rounded-xl border border-stone-200/80 bg-stone-50 dark:border-stone-800 dark:bg-stone-850/60 text-xs">
+                {/* 說明示範 */}
+                <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/50 text-emerald-900 dark:text-emerald-200">
+                  <div className="font-bold flex items-center gap-1.5">
+                    <Sparkles size={14} className="text-emerald-600 dark:text-emerald-400" />
+                    日常使用方式範例：
+                  </div>
+                  <div className="mt-1 leading-relaxed text-[11px]">
+                    在手機 ChatGPT App 對「EdenNote 生活秘書」說：<br />
+                    <span className="font-semibold text-emerald-800 dark:text-emerald-300">「請幫我記錄昨天跟老婆看電影」</span><br />
+                    ChatGPT 就會自動換算昨天日期（如 2026-10-18）、分類為生活、並呼叫寫入動作；當你開啟 EdenNote App，記事立即自動同步至手機！
+                  </div>
+                </div>
+
+                {/* 步驟 1 */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between font-semibold text-stone-800 dark:text-stone-200">
+                    <span>步驟 1：更新 Google Apps Script（支援 ChatGPT 寫入）</span>
+                    <button
+                      type="button"
+                      onClick={() => void handleCopySnippet(GAS_CODE_TEMPLATE, 'gas')}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-stone-300 bg-white dark:border-stone-700 dark:bg-stone-800 text-[11px] font-medium text-stone-700 dark:text-stone-200 hover:bg-stone-50"
+                    >
+                      {copiedSnippetType === 'gas' ? <Check size={12} className="text-emerald-600" /> : <Copy size={12} />}
+                      <span>{copiedSnippetType === 'gas' ? '已複製！' : '複製 GAS 程式碼'}</span>
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-stone-500 dark:text-stone-400 leading-relaxed">
+                    前往你的 Google Apps Script 專案，將原本的程式碼全選替換為此程式碼，點擊「儲存」後，點右上角「部署」&gt;「管理部署作業」&gt;「編輯（鉛筆）」&gt; 版本選擇「新版本」&gt;「部署」。
+                  </p>
+                </div>
+
+                {/* 步驟 2 */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between font-semibold text-stone-800 dark:text-stone-200">
+                    <span>步驟 2：更新 Custom GPT Actions（OpenAPI Schema）</span>
+                    <button
+                      type="button"
+                      onClick={() => void handleCopySnippet(CHATGPT_ACTIONS_SCHEMA, 'schema')}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-stone-300 bg-white dark:border-stone-700 dark:bg-stone-800 text-[11px] font-medium text-stone-700 dark:text-stone-200 hover:bg-stone-50"
+                    >
+                      {copiedSnippetType === 'schema' ? <Check size={12} className="text-emerald-600" /> : <Copy size={12} />}
+                      <span>{copiedSnippetType === 'schema' ? '已複製！' : '複製 Actions Schema'}</span>
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-stone-500 dark:text-stone-400 leading-relaxed">
+                    在 ChatGPT 的「Explore GPTs」&gt; 編輯你的「EdenNote 生活秘書」&gt;「Configure」&gt; 找到底下的「Actions」&gt; 將此 Schema 貼入即可。
+                  </p>
+                </div>
+
+                {/* 步驟 3 */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between font-semibold text-stone-800 dark:text-stone-200">
+                    <span>步驟 3：更新 Custom GPT Instructions（生活秘書提示詞）</span>
+                    <button
+                      type="button"
+                      onClick={() => void handleCopySnippet(CHATGPT_INSTRUCTIONS_PROMPT, 'prompt')}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-stone-300 bg-white dark:border-stone-700 dark:bg-stone-800 text-[11px] font-medium text-stone-700 dark:text-stone-200 hover:bg-stone-50"
+                    >
+                      {copiedSnippetType === 'prompt' ? <Check size={12} className="text-emerald-600" /> : <Copy size={12} />}
+                      <span>{copiedSnippetType === 'prompt' ? '已複製！' : '複製 Instructions 提示詞'}</span>
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-stone-500 dark:text-stone-400 leading-relaxed">
+                    在 Custom GPT 的「Instructions」欄位貼上此段提示詞，小秘書便會精確識別「昨天」、「明天」或生活記事並自動寫入！
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </section>
 

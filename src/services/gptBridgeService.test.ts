@@ -1,13 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Event } from '../models/Event'
+import type { EventRepository } from '../repositories/EventRepository'
 import {
   DEFAULT_GPT_BRIDGE_URL,
   DEFAULT_GPT_SECRET_KEY,
   getGptBridgeUrl,
+  getLastGptPullInfo,
   getLastGptSyncInfo,
   getGptSecretKey,
   isGptAutoSyncEnabled,
+  isGptPulling,
   isGptSyncing,
+  pullGptCloudEvents,
   setGptAutoSyncEnabled,
   setGptBridgeUrl,
   setGptSecretKey,
@@ -23,6 +27,8 @@ const mockEvents: Event[] = [
     category: '工作',
     recordType: 'daily',
     tags: ['重要'],
+    attachmentIds: [],
+    createdAt: '2026-10-18T10:00:00Z',
     updatedAt: '2026-10-18T10:00:00Z',
   },
 ]
@@ -35,10 +41,16 @@ describe('gptBridgeService', () => {
     const storage: Storage = {
       getItem: (key: string) => values.get(key) ?? null,
       setItem: (key: string, value: string) => values.set(key, value),
-      removeItem: (key: string) => { values.delete(key) },
-      clear: () => { values.clear() },
+      removeItem: (key: string) => {
+        values.delete(key)
+      },
+      clear: () => {
+        values.clear()
+      },
       key: (index: number) => [...values.keys()][index] ?? null,
-      get length() { return values.size },
+      get length() {
+        return values.size
+      },
     }
 
     vi.stubGlobal('localStorage', storage)
@@ -58,26 +70,26 @@ describe('gptBridgeService', () => {
     vi.unstubAllGlobals()
   })
 
-  it('provides default URL and Secret Key when none is saved', () => {
+  it('provides default URL and Secret Key when unset', () => {
     expect(getGptBridgeUrl()).toBe(DEFAULT_GPT_BRIDGE_URL)
     expect(getGptSecretKey()).toBe(DEFAULT_GPT_SECRET_KEY)
   })
 
-  it('saves and clears custom URL and Secret Key', () => {
-    setGptBridgeUrl('https://example.com/exec')
-    expect(getGptBridgeUrl()).toBe('https://example.com/exec')
+  it('allows updating and clearing custom URL and Secret Key', () => {
+    setGptBridgeUrl('https://script.google.com/macros/s/custom/exec')
+    setGptSecretKey('my_secret_key')
+
+    expect(getGptBridgeUrl()).toBe('https://script.google.com/macros/s/custom/exec')
+    expect(getGptSecretKey()).toBe('my_secret_key')
 
     setGptBridgeUrl('')
-    expect(getGptBridgeUrl()).toBe(DEFAULT_GPT_BRIDGE_URL)
-
-    setGptSecretKey('custom_secret_123')
-    expect(getGptSecretKey()).toBe('custom_secret_123')
-
     setGptSecretKey('')
+
+    expect(getGptBridgeUrl()).toBe(DEFAULT_GPT_BRIDGE_URL)
     expect(getGptSecretKey()).toBe(DEFAULT_GPT_SECRET_KEY)
   })
 
-  it('defaults auto-sync to enabled and allows toggling', () => {
+  it('toggles auto-sync flag in localStorage', () => {
     expect(isGptAutoSyncEnabled()).toBe(true)
 
     setGptAutoSyncEnabled(false)
@@ -87,15 +99,14 @@ describe('gptBridgeService', () => {
     expect(isGptAutoSyncEnabled()).toBe(true)
   })
 
-  it('performs forced immediate sync and updates last sync info', async () => {
+  it('executes push sync immediately with force: true and updates status', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    const promise = syncGptCloudSnapshot(mockEvents, { force: true })
-    const result = await promise
+    const result = await syncGptCloudSnapshot(mockEvents, { force: true })
 
     expect(result.success).toBe(true)
     expect(result.count).toBe(1)
@@ -147,5 +158,57 @@ describe('gptBridgeService', () => {
 
     const syncInfo = getLastGptSyncInfo()
     expect(syncInfo.status).toContain('error')
+  })
+
+  it('pulls and merges new events from cloud correctly', async () => {
+    const cloudEvents = [
+      {
+        id: 'gpt-evt-1',
+        date: '2026-10-18',
+        title: '跟老婆看電影',
+        detail: '在信義威秀看院線新片',
+        category: '生活',
+        tags: ['ChatGPT生活秘書'],
+        updatedAt: '2026-10-18T12:00:00Z',
+      },
+    ]
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ events: cloudEvents }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const localDb: Event[] = []
+    const mockRepo: EventRepository = {
+      getAll: vi.fn().mockImplementation(async () => [...localDb]),
+      getById: vi.fn().mockImplementation(async (id: string) => localDb.find((e) => e.id === id)),
+      search: vi.fn().mockResolvedValue([]),
+      add: vi.fn().mockImplementation(async (evt: Event) => {
+        localDb.push(evt)
+        return evt
+      }),
+      update: vi.fn().mockImplementation(async (evt: Event) => {
+        const idx = localDb.findIndex((e) => e.id === evt.id)
+        if (idx !== -1) localDb[idx] = evt
+        return evt
+      }),
+      remove: vi.fn().mockResolvedValue(),
+    }
+
+    const pullResult = await pullGptCloudEvents(mockRepo)
+
+    expect(pullResult.success).toBe(true)
+    expect(pullResult.pulledCount).toBe(1)
+    expect(pullResult.addedCount).toBe(1)
+    expect(localDb).toHaveLength(1)
+    expect(localDb[0].title).toBe('跟老婆看電影')
+    expect(localDb[0].date).toBe('2026-10-18')
+
+    const pullInfo = getLastGptPullInfo()
+    expect(pullInfo.status).toBe('success')
+    expect(pullInfo.addedCount).toBe(1)
+    expect(isGptPulling()).toBe(false)
   })
 })

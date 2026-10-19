@@ -108,6 +108,16 @@ export default function DailyPage() {
   }, [loadEvents])
 
   useEffect(() => {
+    const handleEventsUpdated = () => {
+      void loadEvents()
+    }
+    window.addEventListener('edennote:events-updated', handleEventsUpdated)
+    return () => {
+      window.removeEventListener('edennote:events-updated', handleEventsUpdated)
+    }
+  }, [loadEvents])
+
+  useEffect(() => {
     const draft = getCreateEventDraft(mode)
     setEventTitle(draft?.title ?? '')
     setEventDetail(draft?.detail ?? '')
