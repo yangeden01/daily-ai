@@ -303,11 +303,14 @@ export const pullGptCloudEvents = async (
       const existingById = ceId ? localMap.get(ceId) : undefined
 
       if (existingById) {
-        // Compare updatedAt timestamp
+        // Compare updatedAt timestamp or detect content/date changes
         const cloudTime = ce.updatedAt ? new Date(ce.updatedAt).getTime() : 0
         const localTime = existingById.updatedAt ? new Date(existingById.updatedAt).getTime() : 0
+        const hasDateChanged = ce.date !== undefined && ce.date !== existingById.date
+        const hasTitleChanged = ce.title !== undefined && ce.title !== existingById.title
+        const hasDetailChanged = ce.detail !== undefined && ce.detail !== existingById.detail
 
-        if (cloudTime > localTime) {
+        if (cloudTime > localTime || hasDateChanged || hasTitleChanged || hasDetailChanged) {
           const updatedEvent: Event = {
             ...existingById,
             title: ce.title !== undefined ? ce.title : existingById.title,
@@ -330,50 +333,70 @@ export const pullGptCloudEvents = async (
           updatedCount++
         }
       } else {
-        // Check for duplicate title + date + detail
+        // Check if there is an existing event by Title (to handle date changes or ID mismatches)
         const trimmedTitle = (ce.title || '').trim()
         const trimmedDate = (ce.date || '').trim()
         const trimmedDetail = (ce.detail || '').trim()
 
-        const duplicate = localEvents.find(
-          (evt) =>
-            (evt.date || '').trim() === trimmedDate &&
-            (evt.title || '').trim() === trimmedTitle &&
-            (evt.detail || '').trim() === trimmedDetail
-        )
+        const existingByTitle = trimmedTitle
+          ? localEvents.find((evt) => (evt.title || '').trim() === trimmedTitle)
+          : undefined
 
-        if (!duplicate) {
-          const generatedId =
-            ceId ||
-            (typeof crypto !== 'undefined' && crypto.randomUUID
-              ? crypto.randomUUID()
-              : `gpt-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`)
-
-          const tagsArray = Array.isArray(ce.tags)
-            ? ce.tags
-            : typeof ce.tags === 'string'
-            ? ce.tags.split(',').map((t) => t.trim()).filter(Boolean)
-            : ['ChatGPT生活秘書']
-
-          const newEvent: Event = {
-            id: generatedId,
-            date: trimmedDate || new Date().toISOString().slice(0, 10),
-            title: trimmedTitle || '語音記事',
-            detail: trimmedDetail,
-            category: (ce.category || '').trim() || '生活',
-            recordType: ce.recordType || 'daily',
-            tags: tagsArray.length > 0 ? tagsArray : ['ChatGPT生活秘書'],
-            attachmentIds: [],
-            createdAt: ce.createdAt || ce.updatedAt || new Date().toISOString(),
+        if (existingByTitle) {
+          const updatedEvent: Event = {
+            ...existingByTitle,
+            date: trimmedDate || existingByTitle.date,
+            detail: ce.detail !== undefined ? ce.detail : existingByTitle.detail,
+            category: ce.category !== undefined ? ce.category : existingByTitle.category,
+            recordType: ce.recordType || existingByTitle.recordType,
+            calendarType: ce.calendarType || existingByTitle.calendarType,
             updatedAt: ce.updatedAt || new Date().toISOString(),
-            calendarType: ce.calendarType,
-            lunarMonth: ce.lunarMonth,
-            lunarDay: ce.lunarDay,
           }
+          await repo.update(existingByTitle.id, updatedEvent)
+          localMap.set(existingByTitle.id, updatedEvent)
+          updatedCount++
+        } else {
+          // Check for exact duplicate title + date + detail
+          const duplicate = localEvents.find(
+            (evt) =>
+              (evt.date || '').trim() === trimmedDate &&
+              (evt.title || '').trim() === trimmedTitle &&
+              (evt.detail || '').trim() === trimmedDetail
+          )
 
-          await repo.add(newEvent)
-          localMap.set(newEvent.id, newEvent)
-          addedCount++
+          if (!duplicate) {
+            const generatedId =
+              ceId ||
+              (typeof crypto !== 'undefined' && crypto.randomUUID
+                ? crypto.randomUUID()
+                : `gpt-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`)
+
+            const tagsArray = Array.isArray(ce.tags)
+              ? ce.tags
+              : typeof ce.tags === 'string'
+              ? ce.tags.split(',').map((t) => t.trim()).filter(Boolean)
+              : ['ChatGPT生活秘書']
+
+            const newEvent: Event = {
+              id: generatedId,
+              date: trimmedDate || new Date().toISOString().slice(0, 10),
+              title: trimmedTitle || '語音記事',
+              detail: trimmedDetail,
+              category: (ce.category || '').trim() || '生活',
+              recordType: ce.recordType || 'daily',
+              tags: tagsArray.length > 0 ? tagsArray : ['ChatGPT生活秘書'],
+              attachmentIds: [],
+              createdAt: ce.createdAt || ce.updatedAt || new Date().toISOString(),
+              updatedAt: ce.updatedAt || new Date().toISOString(),
+              calendarType: ce.calendarType,
+              lunarMonth: ce.lunarMonth,
+              lunarDay: ce.lunarDay,
+            }
+
+            await repo.add(newEvent)
+            localMap.set(newEvent.id, newEvent)
+            addedCount++
+          }
         }
       }
     }

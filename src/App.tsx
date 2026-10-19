@@ -132,7 +132,7 @@ export default function App() {
       })
     }
 
-    // 6. Web / PWA visibility change listener
+    // 6. Web / PWA visibility change and window focus listeners
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         void pullGptCloudEvents(eventRepository).finally(() => {
@@ -143,11 +143,13 @@ export default function App() {
       }
     }
     document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('focus', handleVisibilityChange)
 
     return () => {
       clearTimeout(timer)
       window.removeEventListener('swiftnote:navigate', handleWidgetNavigate as EventListener)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('focus', handleVisibilityChange)
       if (backButtonHandle) {
         backButtonHandle.remove()
       }

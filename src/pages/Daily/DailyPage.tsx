@@ -3,6 +3,7 @@ import { CalendarHeart, Check, ChevronRight, Clock, Inbox, LoaderCircle, Moon, N
 import { Link, useLocation } from 'react-router-dom'
 import type { Event, CalendarType } from '../../models/Event'
 import { attachmentRepository, eventRepository } from '../../repositories'
+import { pullGptCloudEvents } from '../../services/gptBridgeService'
 import { filesToAttachments, formatFileSize } from '../../utils/attachments'
 import { toLocalDateInputValue } from '../../utils/localDate'
 import { normalizeTags } from '../../utils/normalizeTags'
@@ -105,6 +106,7 @@ export default function DailyPage() {
       setErrorMessage(error instanceof Error ? error.message : '事件載入失敗')
       setIsLoadingEvents(false)
     })
+    void pullGptCloudEvents(eventRepository).catch(() => {})
   }, [loadEvents])
 
   useEffect(() => {
