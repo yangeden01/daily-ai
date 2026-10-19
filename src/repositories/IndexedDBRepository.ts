@@ -3,6 +3,7 @@ import type { EventSearchCriteria } from '../models/EventSearchCriteria'
 import { filterEvents } from '../utils/filterEvents'
 import type { EventRepository } from './EventRepository'
 import { syncWidgetSnapshot } from '../services/widgetBridge'
+import { syncGptCloudSnapshot } from '../services/gptBridgeService'
 
 const DATABASE_NAME = 'daily-ai'
 const DATABASE_VERSION = 1
@@ -98,12 +99,14 @@ export class IndexedDBRepository implements EventRepository {
     events.forEach((event) => store.add(copyEvent(event)))
     await transactionToPromise(transaction)
     void syncWidgetSnapshot(events)
+    void syncGptCloudSnapshot(events)
   }
 
   private async triggerWidgetSync(): Promise<void> {
     try {
       const all = await this.getAll()
       await syncWidgetSnapshot(all)
+      void syncGptCloudSnapshot(all)
     } catch {
       // Widget sync failure must never disrupt database operations
     }

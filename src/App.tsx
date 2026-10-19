@@ -9,15 +9,17 @@ import AIPage from './pages/AI/AIPage'
 import SettingsPage from './pages/Settings/SettingsPage'
 import DashboardPage from './pages/Dashboard/DashboardPage'
 import { eventRepository } from './repositories'
+import { syncGptCloudSnapshot } from './services/gptBridgeService'
 import { getPendingWidgetRoute, syncWidgetSnapshot } from './services/widgetBridge'
 
 export default function App() {
   const navigate = useNavigate()
 
   useEffect(() => {
-    // 1. Synchronize snapshot on app startup
+    // 1. Synchronize snapshot and auto-sync to cloud on app startup
     void eventRepository.getAll().then((events) => {
       void syncWidgetSnapshot(events)
+      void syncGptCloudSnapshot(events)
     })
 
     // 2. Listen for widget deep link navigation events
@@ -111,14 +113,43 @@ export default function App() {
       })
     }
 
+    // 5. Capacitor native app state change listener to auto-sync when app resumes to foreground
+    let appStateHandle: { remove: () => void } | null = null
+    if (Capacitor.isNativePlatform()) {
+      void CapApp.addListener('appStateChange', ({ isActive }) => {
+        if (isActive) {
+          void eventRepository.getAll().then((events) => {
+            void syncWidgetSnapshot(events)
+            void syncGptCloudSnapshot(events)
+          })
+        }
+      }).then((handle) => {
+        appStateHandle = handle
+      })
+    }
+
+    // 6. Web / PWA visibility change listener
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void eventRepository.getAll().then((events) => {
+          void syncGptCloudSnapshot(events)
+        })
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
     return () => {
       clearTimeout(timer)
       window.removeEventListener('swiftnote:navigate', handleWidgetNavigate as EventListener)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
       if (backButtonHandle) {
         backButtonHandle.remove()
       }
       if (appUrlOpenHandle) {
         appUrlOpenHandle.remove()
+      }
+      if (appStateHandle) {
+        appStateHandle.remove()
       }
     }
   }, [navigate])

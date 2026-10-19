@@ -1,5 +1,5 @@
-import { useRef, useState, type ChangeEvent } from 'react'
-import { ArchiveRestore, Bot, Check, Cloud, CloudUpload, Copy, Database, Download, ExternalLink, FolderCheck, GitMerge, Globe, Images, Info, KeyRound, LoaderCircle, Palette, RefreshCw, Share2, Sparkles, Trash2, Type, X } from 'lucide-react'
+import { useEffect, useRef, useState, type ChangeEvent } from 'react'
+import { ArchiveRestore, Bot, Check, CheckCircle2, Cloud, CloudUpload, Copy, Database, Download, ExternalLink, FolderCheck, GitMerge, Globe, Images, Info, KeyRound, LoaderCircle, Palette, RefreshCw, Share2, Sparkles, Trash2, Type, X } from 'lucide-react'
 import { Capacitor } from '@capacitor/core'
 import { usePWA } from '../../contexts/PWAContext'
 import { useAppearance } from '../../contexts/AppearanceContext'
@@ -10,6 +10,19 @@ import { saveFile, shareExportedFile, type FileSaveOutcome } from '../../utils/f
 import { getApiBaseUrl, checkAiServerHealth, getUserGeminiApiKey, setUserGeminiApiKey, testGeminiApiKey } from '../../services/aiService'
 import { uploadBackupToGoogleDrive } from '../../services/googleDriveService'
 import { eventRepository } from '../../repositories'
+import {
+  DEFAULT_GPT_BRIDGE_URL,
+  DEFAULT_GPT_SECRET_KEY,
+  getGptBridgeUrl,
+  getLastGptSyncInfo,
+  getGptSecretKey,
+  isGptAutoSyncEnabled,
+  isGptSyncing,
+  setGptAutoSyncEnabled,
+  setGptBridgeUrl,
+  setGptSecretKey,
+  syncGptCloudSnapshot,
+} from '../../services/gptBridgeService'
 
 type BackupStatus = 'idle' | 'working' | 'success' | 'error'
 type BackupAction = 'export' | 'cloud-export' | 'merge' | 'replace'
@@ -17,11 +30,6 @@ type UpdateCheckStatus = 'idle' | 'checking' | 'applying' | 'current' | 'availab
 
 const DEFAULT_CLOUD_BACKUP_URL = 'https://drive.google.com/drive/folders/11VDqe3k2hkw7H84CWcXDoksBnEb40Wvw'
 const CLOUD_BACKUP_URL_KEY = 'eden_cloud_backup_destination_url'
-
-const GPT_BRIDGE_URL_KEY = 'edennote_gpt_bridge_url'
-const GPT_SECRET_KEY_KEY = 'edennote_gpt_secret_key'
-const DEFAULT_GPT_BRIDGE_URL = 'https://script.google.com/macros/s/AKfycbw9VzMUGW9ASUgms7_xb6r_iPfX-cD7uHbHoFavkmIbJSntOCpNM-kHajKyimXwXngf/exec'
-const DEFAULT_GPT_SECRET_KEY = 'eden_secret_888'
 
 export default function SettingsPage() {
   const fullBackupInputRef = useRef<HTMLInputElement>(null)
@@ -45,88 +53,70 @@ export default function SettingsPage() {
   } | null>(null)
   const [copySuccess, setCopySuccess] = useState(false)
   const [photoStorageMode, setPhotoStorageMode] = useState<PhotoStorageMode>(loadPhotoStorageMode)
-  const [gptBridgeUrl, setGptBridgeUrl] = useState<string>(() => {
-    return localStorage.getItem(GPT_BRIDGE_URL_KEY) || DEFAULT_GPT_BRIDGE_URL
-  })
-  const [gptSecretKey, setGptSecretKey] = useState<string>(() => {
-    return localStorage.getItem(GPT_SECRET_KEY_KEY) || DEFAULT_GPT_SECRET_KEY
-  })
+  const [gptBridgeUrl, setGptBridgeUrlState] = useState<string>(getGptBridgeUrl)
+  const [gptSecretKey, setGptSecretKeyState] = useState<string>(getGptSecretKey)
+  const [autoSyncEnabled, setAutoSyncEnabled] = useState<boolean>(isGptAutoSyncEnabled)
+  const [isSyncing, setIsSyncing] = useState<boolean>(isGptSyncing)
+  const [lastSyncInfo, setLastSyncInfo] = useState(getLastGptSyncInfo)
   const [gptSyncStatus, setGptSyncStatus] = useState<'idle' | 'working' | 'success' | 'error'>('idle')
   const [gptSyncMessage, setGptSyncMessage] = useState<string | null>(null)
 
-  const handleGptBridgeUrlChange = (value: string) => {
-    setGptBridgeUrl(value)
-    if (value.trim()) {
-      localStorage.setItem(GPT_BRIDGE_URL_KEY, value.trim())
-    } else {
-      localStorage.removeItem(GPT_BRIDGE_URL_KEY)
+  useEffect(() => {
+    const onSyncStarted = () => setIsSyncing(true)
+    const onSyncCompleted = () => {
+      setIsSyncing(false)
+      setLastSyncInfo(getLastGptSyncInfo())
     }
+    window.addEventListener('edennote:gpt-sync-started', onSyncStarted)
+    window.addEventListener('edennote:gpt-sync-completed', onSyncCompleted)
+    return () => {
+      window.removeEventListener('edennote:gpt-sync-started', onSyncStarted)
+      window.removeEventListener('edennote:gpt-sync-completed', onSyncCompleted)
+    }
+  }, [])
+
+  const handleGptBridgeUrlChange = (value: string) => {
+    setGptBridgeUrlState(value)
+    setGptBridgeUrl(value)
   }
 
   const handleGptSecretKeyChange = (value: string) => {
+    setGptSecretKeyState(value)
     setGptSecretKey(value)
-    if (value.trim()) {
-      localStorage.setItem(GPT_SECRET_KEY_KEY, value.trim())
-    } else {
-      localStorage.removeItem(GPT_SECRET_KEY_KEY)
-    }
+  }
+
+  const handleAutoSyncToggle = (enabled: boolean) => {
+    setAutoSyncEnabled(enabled)
+    setGptAutoSyncEnabled(enabled)
   }
 
   const handleResetGptBridge = () => {
+    setGptBridgeUrlState(DEFAULT_GPT_BRIDGE_URL)
+    setGptSecretKeyState(DEFAULT_GPT_SECRET_KEY)
     setGptBridgeUrl(DEFAULT_GPT_BRIDGE_URL)
     setGptSecretKey(DEFAULT_GPT_SECRET_KEY)
-    localStorage.removeItem(GPT_BRIDGE_URL_KEY)
-    localStorage.removeItem(GPT_SECRET_KEY_KEY)
     setGptSyncMessage(null)
   }
 
   const handleGptSync = async () => {
-    const url = gptBridgeUrl.trim()
-    const key = gptSecretKey.trim()
-    if (!url) {
-      setGptSyncStatus('error')
-      setGptSyncMessage('請先填寫 Google Apps Script 部署網址')
-      return
-    }
-
     setGptSyncStatus('working')
     setGptSyncMessage(null)
 
     try {
       const allEvents = await eventRepository.getAll()
-      const simplifiedEvents = allEvents.map((evt) => ({
-        id: evt.id,
-        date: evt.date || '',
-        title: evt.title || '',
-        detail: evt.detail || '',
-        category: evt.category || '',
-        recordType: evt.recordType || 'daily',
-        tags: evt.tags || [],
-        calendarType: evt.calendarType,
-        lunarMonth: evt.lunarMonth,
-        lunarDay: evt.lunarDay,
-        updatedAt: evt.updatedAt || evt.lastEditedAt || '',
-      }))
-
-      const targetEndpoint = `${url}${url.includes('?') ? '&' : '?'}key=${encodeURIComponent(key)}`
-
-      await fetch(targetEndpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'text/plain;charset=utf-8',
-        },
-        body: JSON.stringify({
-          events: simplifiedEvents,
-          syncedAt: new Date().toISOString(),
-        }),
-      })
-
-      setGptSyncStatus('success')
-      setGptSyncMessage(`🎉 已成功同步 ${simplifiedEvents.length} 筆記事至 Google 雲端硬碟 (edennote_data.json)！現在可以在 ChatGPT 隨時向「EdenNote 生活秘書」提問或用語音聊天了。`)
+      const result = await syncGptCloudSnapshot(allEvents, { force: true })
+      if (result.success) {
+        setGptSyncStatus('success')
+        setGptSyncMessage(`🎉 已成功同步 ${result.count} 筆記事至 Google 雲端硬碟 (edennote_data.json)！現在可以在 ChatGPT 隨時向「EdenNote 生活秘書」提問或用語音聊天了。`)
+        setLastSyncInfo(getLastGptSyncInfo())
+      } else {
+        setGptSyncStatus('error')
+        setGptSyncMessage(`同步失敗：${result.error || '請確認 Script 網址與密鑰正確'}`)
+      }
     } catch (err: unknown) {
       console.error('GPT Sync error:', err)
       setGptSyncStatus('error')
-      setGptSyncMessage(`同步發生問題：${err instanceof Error ? err.message : String(err)}。請確認手機網路與 Script 網址是否正確。`)
+      setGptSyncMessage(`同步發生問題：${err instanceof Error ? err.message : String(err)}。`)
     }
   }
   const [updateCheckStatus, setUpdateCheckStatus] = useState<UpdateCheckStatus>('idle')
@@ -1036,6 +1026,46 @@ export default function SettingsPage() {
         </div>
 
         <div className="space-y-3 pt-2">
+          {/* 全自動背景同步開關 */}
+          <label className="flex items-center justify-between gap-3 p-3.5 rounded-xl border border-stone-200/80 bg-stone-50/80 dark:border-stone-800 dark:bg-stone-850 cursor-pointer transition hover:bg-stone-100/70 dark:hover:bg-stone-800">
+            <div>
+              <div className="flex items-center gap-2 text-xs font-semibold text-stone-900 dark:text-stone-100">
+                <span>全自動背景同步 (Auto-Sync)</span>
+                {autoSyncEnabled ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    已啟用
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-stone-200 text-stone-600 dark:bg-stone-800 dark:text-stone-400">
+                    已關閉
+                  </span>
+                )}
+              </div>
+              <div className="text-[11px] text-stone-500 dark:text-stone-400 mt-1">
+                每次新增、編輯、勾選待辦或刪除記事時，自動在背景同步至 Google 雲端
+              </div>
+            </div>
+            <input
+              type="checkbox"
+              checked={autoSyncEnabled}
+              onChange={(e) => handleAutoSyncToggle(e.target.checked)}
+              className="h-4 w-4 rounded accent-emerald-600 focus:ring-emerald-500"
+            />
+          </label>
+
+          {isSyncing ? (
+            <div className="flex items-center gap-2 text-[11px] text-emerald-600 dark:text-emerald-400 px-1 font-medium">
+              <LoaderCircle size={13} className="animate-spin shrink-0" />
+              <span>雲端背景同步中...</span>
+            </div>
+          ) : lastSyncInfo.time ? (
+            <div className="flex items-center gap-1.5 text-[11px] text-stone-500 dark:text-stone-400 px-1">
+              <CheckCircle2 size={13} className="text-emerald-500 shrink-0" />
+              <span>上次自動同步：{lastSyncInfo.time} {lastSyncInfo.count !== null ? `(${lastSyncInfo.count} 筆)` : ''}</span>
+            </div>
+          ) : null}
+
           <div>
             <label htmlFor="gpt-bridge-url" className="text-xs font-semibold text-stone-700 dark:text-stone-300">
               Google Apps Script 雲端端點網址 (Web App URL)
@@ -1075,7 +1105,7 @@ export default function SettingsPage() {
             ) : (
               <Sparkles size={18} />
             )}
-            <span>立即同步最新記事至 ChatGPT (Google Drive)</span>
+            <span>手動立即同步至 ChatGPT (Google Drive)</span>
           </button>
 
           {gptSyncMessage && (
