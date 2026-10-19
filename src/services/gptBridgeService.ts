@@ -222,6 +222,7 @@ export interface PullCloudEventsResult {
   pulledCount: number
   addedCount: number
   updatedCount: number
+  deletedCount: number
   error?: string
 }
 
@@ -242,7 +243,7 @@ interface RawCloudEvent {
 }
 
 /**
- * Pull latest events added or updated in Google Apps Script Cloud storage (e.g. by ChatGPT assistant)
+ * Pull latest events added, updated, or deleted in Google Apps Script Cloud storage (e.g. by ChatGPT assistant)
  * and safely merge into local IndexedDB without creating duplicate records.
  */
 export const pullGptCloudEvents = async (
@@ -252,11 +253,11 @@ export const pullGptCloudEvents = async (
   const key = getGptSecretKey().trim()
 
   if (!url) {
-    return { success: false, pulledCount: 0, addedCount: 0, updatedCount: 0, error: '未設定 Google Apps Script 網址' }
+    return { success: false, pulledCount: 0, addedCount: 0, updatedCount: 0, deletedCount: 0, error: '未設定 Google Apps Script 網址' }
   }
 
   if (isCurrentlyPulling) {
-    return { success: false, pulledCount: 0, addedCount: 0, updatedCount: 0, error: '正在拉取中' }
+    return { success: false, pulledCount: 0, addedCount: 0, updatedCount: 0, deletedCount: 0, error: '正在拉取中' }
   }
 
   isCurrentlyPulling = true
@@ -274,15 +275,27 @@ export const pullGptCloudEvents = async (
       throw new Error(`HTTP ${response.status}`)
     }
 
-    const data = (await response.json()) as { events?: RawCloudEvent[] }
+    const data = (await response.json()) as { events?: RawCloudEvent[]; deletedIds?: string[] }
     const cloudEvents = Array.isArray(data?.events) ? data.events : []
+    const deletedIds = Array.isArray(data?.deletedIds) ? data.deletedIds : []
 
     const localEvents = await repo.getAll()
     const localMap = new Map<string, Event>(localEvents.map((evt) => [evt.id, evt]))
 
     let addedCount = 0
     let updatedCount = 0
+    let deletedCount = 0
 
+    // 1. Delete events that were marked as deleted in cloud by ChatGPT assistant
+    for (const delId of deletedIds) {
+      if (delId && localMap.has(delId)) {
+        await repo.remove(delId)
+        localMap.delete(delId)
+        deletedCount++
+      }
+    }
+
+    // 2. Merge cloud events into local database
     for (const ce of cloudEvents) {
       if (!ce || typeof ce !== 'object') continue
       const ceId = ce.id?.trim() || ''
@@ -365,11 +378,11 @@ export const pullGptCloudEvents = async (
       }
     }
 
-    if (addedCount > 0 || updatedCount > 0) {
+    if (addedCount > 0 || updatedCount > 0 || deletedCount > 0) {
       const refreshedEvents = await repo.getAll()
       void syncWidgetSnapshot(refreshedEvents)
       if (typeof window !== 'undefined' && window.dispatchEvent) {
-        window.dispatchEvent(new CustomEvent('edennote:events-updated', { detail: { addedCount, updatedCount } }))
+        window.dispatchEvent(new CustomEvent('edennote:events-updated', { detail: { addedCount, updatedCount, deletedCount } }))
       }
     }
 
@@ -380,7 +393,7 @@ export const pullGptCloudEvents = async (
       localStorage.setItem(GPT_LAST_PULL_ADDED_KEY, String(addedCount))
       window.dispatchEvent(
         new CustomEvent('edennote:gpt-pull-completed', {
-          detail: { success: true, pulledCount: cloudEvents.length, addedCount, updatedCount },
+          detail: { success: true, pulledCount: cloudEvents.length, addedCount, updatedCount, deletedCount },
         })
       )
     }
@@ -390,6 +403,7 @@ export const pullGptCloudEvents = async (
       pulledCount: cloudEvents.length,
       addedCount,
       updatedCount,
+      deletedCount,
     }
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err)
@@ -399,7 +413,7 @@ export const pullGptCloudEvents = async (
         new CustomEvent('edennote:gpt-pull-completed', { detail: { success: false, error: errorMsg } })
       )
     }
-    return { success: false, pulledCount: 0, addedCount: 0, updatedCount: 0, error: errorMsg }
+    return { success: false, pulledCount: 0, addedCount: 0, updatedCount: 0, deletedCount: 0, error: errorMsg }
   } finally {
     isCurrentlyPulling = false
   }
@@ -407,14 +421,10 @@ export const pullGptCloudEvents = async (
 
 /**
  * Complete Google Apps Script template code supporting 2-way sync:
- * Reading, Full backup from EdenNote, and Add Event from ChatGPT assistant.
+ * Reading, Full backup from EdenNote, Add Event, and Delete Event from ChatGPT assistant.
  */
 export const GAS_CODE_TEMPLATE = `/**
- * EdenNote 雲端生活秘書 - Google Apps Script (雙向同步版)
- * 支援功能：
- * 1. EdenNote App 全自動推播/覆寫 (POST /exec)
- * 2. ChatGPT 雲端生活秘書即時查詢所有記事 (GET /exec)
- * 3. ChatGPT 雲端生活秘書自動新增記事 (POST 或 GET action=add)
+ * EdenNote 雲端生活秘書 - Google Apps Script (雙向同步版：支援查詢、新增與刪除)
  */
 
 const SECRET_KEY = "eden_secret_888"; // 請與 EdenNote 設定中的 Secret Key 一致
@@ -425,10 +435,10 @@ function getOrCreateStorageFile() {
   if (files.hasNext()) {
     return files.next();
   }
-  return DriveApp.createFile(FILE_NAME, JSON.stringify({ events: [], updatedAt: new Date().toISOString() }), MimeType.PLAIN_TEXT);
+  return DriveApp.createFile(FILE_NAME, JSON.stringify({ events: [], deletedIds: [], updatedAt: new Date().toISOString() }), MimeType.PLAIN_TEXT);
 }
 
-// 處理 GET 請求：支援讀取所有記事 或 ChatGPT 透過 GET 參數直接新增記事
+// 處理 GET 請求：支援讀取所有記事、透過 GET 新增記事、或透過 GET 刪除記事
 function doGet(e) {
   try {
     const key = e && e.parameter && e.parameter.key;
@@ -439,13 +449,62 @@ function doGet(e) {
 
     const action = e && e.parameter && e.parameter.action;
 
+    // 支援 ChatGPT 刪除記事
+    if (action === "delete" || action === "delete_event") {
+      const file = getOrCreateStorageFile();
+      const content = file.getBlob().getDataAsString();
+      let db = { events: [], deletedIds: [] };
+      try { db = JSON.parse(content); } catch (err) {}
+      if (!Array.isArray(db.events)) db.events = [];
+      if (!Array.isArray(db.deletedIds)) db.deletedIds = [];
+
+      const targetId = e.parameter.id;
+      const targetTitle = (e.parameter.title || "").trim();
+      const targetDate = (e.parameter.date || "").trim();
+
+      const remainingEvents = [];
+      const removedEvents = [];
+
+      for (var i = 0; i < db.events.length; i++) {
+        var evt = db.events[i];
+        var match = false;
+        if (targetId && evt.id === targetId) {
+          match = true;
+        } else if (targetTitle && evt.title && (evt.title.indexOf(targetTitle) !== -1 || targetTitle.indexOf(evt.title) !== -1)) {
+          if (!targetDate || evt.date === targetDate) {
+            match = true;
+          }
+        }
+        if (match) {
+          removedEvents.push(evt);
+          if (evt.id && db.deletedIds.indexOf(evt.id) === -1) {
+            db.deletedIds.push(evt.id);
+          }
+        } else {
+          remainingEvents.push(evt);
+        }
+      }
+
+      db.events = remainingEvents;
+      db.updatedAt = new Date().toISOString();
+      file.setContent(JSON.stringify(db));
+
+      return ContentService.createTextOutput(JSON.stringify({
+        status: "ok",
+        message: removedEvents.length > 0 ? ("已成功刪除 " + removedEvents.length + " 筆記事！") : "未找到符合的記事",
+        deletedCount: removedEvents.length,
+        deletedEvents: removedEvents
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
     // 支援 ChatGPT 透過 GET 快速新增記事
     if (action === "add" || action === "add_event") {
       const file = getOrCreateStorageFile();
       const content = file.getBlob().getDataAsString();
-      let db = { events: [] };
+      let db = { events: [], deletedIds: [] };
       try { db = JSON.parse(content); } catch (err) {}
       if (!Array.isArray(db.events)) db.events = [];
+      if (!Array.isArray(db.deletedIds)) db.deletedIds = [];
 
       const newEvent = {
         id: "gpt-" + Utilities.getUuid(),
@@ -473,14 +532,15 @@ function doGet(e) {
     // 預設：讀取所有記事
     const file = getOrCreateStorageFile();
     const content = file.getBlob().getDataAsString();
-    let db = { events: [] };
+    let db = { events: [], deletedIds: [] };
     try { db = JSON.parse(content); } catch (err) {}
 
     return ContentService.createTextOutput(JSON.stringify({
       status: "ok",
       count: db.events ? db.events.length : 0,
       updatedAt: db.updatedAt || "",
-      events: db.events || []
+      events: db.events || [],
+      deletedIds: db.deletedIds || []
     })).setMimeType(ContentService.MimeType.JSON);
 
   } catch (err) {
@@ -489,7 +549,7 @@ function doGet(e) {
   }
 }
 
-// 處理 POST 請求：支援 EdenNote 全量同步 或 ChatGPT 透過 POST JSON 新增單筆記事
+// 處理 POST 請求：支援 EdenNote 全量同步、ChatGPT 新增單筆、或 ChatGPT 刪除單筆
 function doPost(e) {
   try {
     const key = e && e.parameter && e.parameter.key;
@@ -501,12 +561,61 @@ function doPost(e) {
     const payload = JSON.parse(e.postData.contents);
     const file = getOrCreateStorageFile();
 
-    // 情況 A：ChatGPT 透過 POST 新增單筆記事
-    if (payload.action === "add_event" || payload.action === "add" || payload.event) {
+    // 情況 A：ChatGPT 刪除指定記事
+    if (payload.action === "delete_event" || payload.action === "delete" || payload.deleteTarget) {
       const content = file.getBlob().getDataAsString();
-      let db = { events: [] };
+      let db = { events: [], deletedIds: [] };
       try { db = JSON.parse(content); } catch (err) {}
       if (!Array.isArray(db.events)) db.events = [];
+      if (!Array.isArray(db.deletedIds)) db.deletedIds = [];
+
+      const target = payload.deleteTarget || payload;
+      const targetId = target.id;
+      const targetTitle = (target.title || "").trim();
+      const targetDate = (target.date || "").trim();
+
+      const remainingEvents = [];
+      const removedEvents = [];
+
+      for (var i = 0; i < db.events.length; i++) {
+        var evt = db.events[i];
+        var match = false;
+        if (targetId && evt.id === targetId) {
+          match = true;
+        } else if (targetTitle && evt.title && (evt.title.indexOf(targetTitle) !== -1 || targetTitle.indexOf(evt.title) !== -1)) {
+          if (!targetDate || evt.date === targetDate) {
+            match = true;
+          }
+        }
+        if (match) {
+          removedEvents.push(evt);
+          if (evt.id && db.deletedIds.indexOf(evt.id) === -1) {
+            db.deletedIds.push(evt.id);
+          }
+        } else {
+          remainingEvents.push(evt);
+        }
+      }
+
+      db.events = remainingEvents;
+      db.updatedAt = new Date().toISOString();
+      file.setContent(JSON.stringify(db));
+
+      return ContentService.createTextOutput(JSON.stringify({
+        status: "ok",
+        message: removedEvents.length > 0 ? ("已成功從 EdenNote 刪除 " + removedEvents.length + " 筆記事！") : "未找到符合的記事",
+        deletedCount: removedEvents.length,
+        deletedEvents: removedEvents
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // 情況 B：ChatGPT 新增單筆記事
+    if (payload.action === "add_event" || payload.action === "add" || payload.event) {
+      const content = file.getBlob().getDataAsString();
+      let db = { events: [], deletedIds: [] };
+      try { db = JSON.parse(content); } catch (err) {}
+      if (!Array.isArray(db.events)) db.events = [];
+      if (!Array.isArray(db.deletedIds)) db.deletedIds = [];
 
       const raw = payload.event || payload;
       const newEvent = {
@@ -532,9 +641,16 @@ function doPost(e) {
       })).setMimeType(ContentService.MimeType.JSON);
     }
 
-    // 情況 B：EdenNote App 全量推播同步
+    // 情況 C：EdenNote App 全量推播同步
     if (payload.events && Array.isArray(payload.events)) {
-      file.setContent(JSON.stringify(payload));
+      const content = file.getBlob().getDataAsString();
+      let db = { events: [], deletedIds: [] };
+      try { db = JSON.parse(content); } catch (err) {}
+      file.setContent(JSON.stringify({
+        events: payload.events,
+        deletedIds: db.deletedIds || [],
+        updatedAt: new Date().toISOString()
+      }));
       return ContentService.createTextOutput(JSON.stringify({
         status: "ok",
         message: "EdenNote 全量同步成功",
@@ -554,15 +670,15 @@ function doPost(e) {
 export const CHATGPT_ACTIONS_SCHEMA = `openapi: 3.1.0
 info:
   title: EdenNote 生活秘書雲端 API
-  description: 供 ChatGPT 生活秘書即時讀取與自動寫入 EdenNote 個人記事
-  version: 2.0.0
+  description: 供 ChatGPT 生活秘書即時讀取、自動新增或刪除 EdenNote 個人記事
+  version: 2.1.0
 servers:
   - url: https://script.google.com/macros/s/AKfycbw9VzMUGW9ASUgms7_xb6r_iPfX-cD7uHbHoFavkmIbJSntOCpNM-kHajKyimXwXngf
 paths:
   /exec:
     get:
       operationId: getEvents
-      summary: 查詢所有記事或透過 GET 新增記事
+      summary: 查詢所有記事（亦可傳入 action=delete 進行快速刪除）
       parameters:
         - name: key
           in: query
@@ -572,19 +688,26 @@ paths:
             default: eden_secret_888
         - name: action
           in: query
+          description: 操作模式：查詢填 get，刪除填 delete
           required: false
           schema:
             type: string
-            enum: [get, add]
+            enum: [get, add, delete]
         - name: title
           in: query
-          description: 記事標題（例如：跟老婆看電影）
+          description: 記事標題或關鍵字（例如：老婆感冒）
           required: false
           schema:
             type: string
         - name: date
           in: query
-          description: 日期 YYYY-MM-DD（例如昨天請換算為真實日期）
+          description: 日期 YYYY-MM-DD（例如：2026-10-18）
+          required: false
+          schema:
+            type: string
+        - name: id
+          in: query
+          description: 要刪除的記事 ID（若知道 ID 請提供）
           required: false
           schema:
             type: string
@@ -597,12 +720,6 @@ paths:
         - name: detail
           in: query
           description: 詳細內容或備註
-          required: false
-          schema:
-            type: string
-        - name: tags
-          in: query
-          description: 標籤逗號分隔（例如：電影,約會）
           required: false
           schema:
             type: string
@@ -619,8 +736,8 @@ paths:
                   message:
                     type: string
     post:
-      operationId: addEvent
-      summary: 自動新增一筆記事至 EdenNote
+      operationId: addOrDeleteEvent
+      summary: 自動新增記事 (add_event) 或刪除指定記事 (delete_event)
       parameters:
         - name: key
           in: query
@@ -634,15 +751,16 @@ paths:
           application/json:
             schema:
               type: object
+              required:
+                - action
               properties:
                 action:
                   type: string
-                  default: add_event
+                  description: 操作：新增填 add_event，刪除填 delete_event
+                  enum: [add_event, delete_event]
                 event:
                   type: object
-                  required:
-                    - title
-                    - date
+                  description: 新增記事時填寫的資料
                   properties:
                     title:
                       type: string
@@ -660,9 +778,22 @@ paths:
                       type: array
                       items:
                         type: string
+                deleteTarget:
+                  type: object
+                  description: 刪除記事時填寫的指定條件（標題、日期或ID）
+                  properties:
+                    title:
+                      type: string
+                      description: 要刪除的記事標題或關鍵字（例如：老婆感冒）
+                    date:
+                      type: string
+                      description: 格式 YYYY-MM-DD（例如：2026-10-18）
+                    id:
+                      type: string
+                      description: 記事 ID
       responses:
         '200':
-          description: 新增成功
+          description: 操作成功
           content:
             application/json:
               schema:
@@ -676,13 +807,19 @@ paths:
 export const CHATGPT_INSTRUCTIONS_PROMPT = `你是 Eden 的專屬「EdenNote 生活秘書」。
 你的任務是協助 Eden 管理生活回憶、記事、工作、排程與慢箋。
 
-【兩大核心任務】：
+【三大核心任務】：
 1. 查詢與回答（查詢記事）：
-   - 當 Eden 詢問以前發生過什麼、查待辦事項、慢箋何時領藥或回憶時，呼叫 getEvents 取得最新記事，親切回答。
+   - 當 Eden 詢問以前發生過什麼、查待辦事項、慢箋何時領藥或回憶時，呼叫 getEvents(action='get') 取得最新記事，親切回答。
 
 2. 自動記錄（寫入記事）：
    - 當 Eden 說「幫我記下...」、「昨天跟老婆看電影」、「明天早上要繳電費」等需求時：
      a. 分析相對時間（例如：「昨天」請推算換算為對應的真實 YYYY-MM-DD；「明天」亦同）。
-     b. 自動提煉標題（例如：跟老婆看電影）、詳細內容（若有提及細節或觀看電影名稱）、合適分類（例如：生活、娛樂、工作、家庭）。
-     c. 主動呼叫 addEvent（或 getEvents action='add'）將這筆記事寫入 EdenNote！
-     d. 成功後溫暖回覆：「已為您記錄到 EdenNote 囉！📅 日期：... 📝 標題：... 🏷️ 分類：...」`
+     b. 自動提煉標題（例如：跟老婆看電影）、詳細內容、合適分類（例如：生活、娛樂、工作、家庭）。
+     c. 呼叫 addOrDeleteEvent(action='add_event', event={title, date, category, detail}) 寫入 EdenNote！
+     d. 成功後溫暖回覆：「已為您記錄到 EdenNote 囉！📅 日期：... 📝 標題：... 🏷️ 分類：...」
+
+3. 自動刪除（刪除記事）：
+   - 當 Eden 說「幫我刪除...」、「刪除昨天老婆感冒的紀錄」時：
+     a. 分析相對時間（如昨天換算為 YYYY-MM-DD）與標題關鍵字（如「老婆感冒」）。
+     b. 呼叫 addOrDeleteEvent(action='delete_event', deleteTarget={title: '老婆感冒', date: '2026-10-18'}) 或呼叫 getEvents(action='delete', title='老婆感冒', date='2026-10-18') 執行刪除！
+     c. 刪除成功後親切回覆：「已為您從 EdenNote 刪除該筆紀錄囉！🗑️ 日期：... 📝 標題：...」`

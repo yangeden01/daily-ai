@@ -211,4 +211,67 @@ describe('gptBridgeService', () => {
     expect(pullInfo.addedCount).toBe(1)
     expect(isGptPulling()).toBe(false)
   })
+
+  it('pulls and deletes events locally when marked in deletedIds', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        events: [],
+        deletedIds: ['evt-to-delete'],
+      }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const localDb: Event[] = [
+      {
+        id: 'evt-to-delete',
+        date: '2026-10-18',
+        title: '老婆感冒',
+        detail: '看醫生拿藥',
+        category: '生活',
+        tags: [],
+        attachmentIds: [],
+        createdAt: '2026-10-18T10:00:00Z',
+        updatedAt: '2026-10-18T10:00:00Z',
+      },
+      {
+        id: 'evt-to-keep',
+        date: '2026-10-18',
+        title: '跟老婆看電影',
+        detail: '看院線片',
+        category: '生活',
+        tags: [],
+        attachmentIds: [],
+        createdAt: '2026-10-18T12:00:00Z',
+        updatedAt: '2026-10-18T12:00:00Z',
+      },
+    ]
+
+    const mockRepo: EventRepository = {
+      getAll: vi.fn().mockImplementation(async () => [...localDb]),
+      getById: vi.fn().mockImplementation(async (id: string) => localDb.find((e) => e.id === id)),
+      search: vi.fn().mockResolvedValue([]),
+      add: vi.fn().mockImplementation(async (evt: Event) => {
+        localDb.push(evt)
+        return evt
+      }),
+      update: vi.fn().mockImplementation(async (evt: Event) => {
+        const idx = localDb.findIndex((e) => e.id === evt.id)
+        if (idx !== -1) localDb[idx] = evt
+        return evt
+      }),
+      remove: vi.fn().mockImplementation(async (id: string) => {
+        const idx = localDb.findIndex((e) => e.id === id)
+        if (idx !== -1) localDb.splice(idx, 1)
+      }),
+    }
+
+    const pullResult = await pullGptCloudEvents(mockRepo)
+
+    expect(pullResult.success).toBe(true)
+    expect(pullResult.deletedCount).toBe(1)
+    expect(localDb).toHaveLength(1)
+    expect(localDb[0].id).toBe('evt-to-keep')
+  })
 })
