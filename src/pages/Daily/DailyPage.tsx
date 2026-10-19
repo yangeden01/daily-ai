@@ -53,6 +53,7 @@ export default function DailyPage() {
   const [lastClearedTitle, setLastClearedTitle] = useState<string | null>(null)
   const [lastClearedDetail, setLastClearedDetail] = useState<string | null>(null)
   const [isPulling, setIsPulling] = useState<boolean>(false)
+  const [syncFeedback, setSyncFeedback] = useState<string | null>(null)
 
   const handleClearTitle = () => {
     if (!eventTitle) return
@@ -104,11 +105,21 @@ export default function DailyPage() {
 
   const handleManualRefresh = useCallback(async () => {
     setIsPulling(true)
+    setSyncFeedback(null)
     try {
-      await pullGptCloudEvents(eventRepository)
+      const res = await pullGptCloudEvents(eventRepository)
+      if (res.success) {
+        const changes = (res.updatedCount || 0) + (res.addedCount || 0) + (res.deletedCount || 0)
+        setSyncFeedback(changes > 0 ? `已更新 ${changes} 筆` : '已是最新')
+      } else {
+        setSyncFeedback(`失敗: ${res.error || '連線異常'}`)
+      }
+    } catch (e: unknown) {
+      setSyncFeedback(e instanceof Error ? e.message : '連線異常')
     } finally {
       setIsPulling(false)
       void loadEvents()
+      setTimeout(() => setSyncFeedback(null), 3500)
     }
   }, [loadEvents])
 
@@ -517,7 +528,7 @@ export default function DailyPage() {
               title="立即與生活秘書雲端同步"
             >
               <RotateCw size={11} className={isPulling ? 'animate-spin text-indigo-600 dark:text-indigo-400' : ''} />
-              <span>{isPulling ? '同步中…' : '雲端同步'}</span>
+              <span>{isPulling ? '同步中…' : syncFeedback ? syncFeedback : '雲端同步'}</span>
             </button>
             <span className="text-xs tabular-nums text-stone-400">
               {events.length} {isAnniversaryMode ? '個紀念日' : isNotesMode ? 'notes' : 'events'}

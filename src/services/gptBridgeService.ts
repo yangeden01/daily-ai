@@ -268,14 +268,7 @@ export const pullGptCloudEvents = async (
   try {
     const sep = url.includes('?') ? '&' : '?'
     const targetEndpoint = `${url}${sep}key=${encodeURIComponent(key)}&_t=${Date.now()}`
-    const response = await fetch(targetEndpoint, {
-      method: 'GET',
-      cache: 'no-store',
-      headers: {
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        Pragma: 'no-cache',
-      },
-    })
+    const response = await fetch(targetEndpoint)
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`)
