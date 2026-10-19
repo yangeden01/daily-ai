@@ -613,6 +613,11 @@ paths:
             application/json:
               schema:
                 type: object
+                properties:
+                  status:
+                    type: string
+                  message:
+                    type: string
     post:
       operationId: addEvent
       summary: 自動新增一筆記事至 EdenNote
@@ -661,7 +666,12 @@ paths:
           content:
             application/json:
               schema:
-                type: object`
+                type: object
+                properties:
+                  status:
+                    type: string
+                  message:
+                    type: string`
 
 export const CHATGPT_INSTRUCTIONS_PROMPT = `你是 Eden 的專屬「EdenNote 生活秘書」。
 你的任務是協助 Eden 管理生活回憶、記事、工作、排程與慢箋。
