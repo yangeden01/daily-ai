@@ -609,7 +609,57 @@ function doPost(e) {
       })).setMimeType(ContentService.MimeType.JSON);
     }
 
-    // 情況 B：ChatGPT 新增單筆記事
+    // 情況 B：ChatGPT 更新既有記事或待辦事項（修改文字、勾選完成待辦）
+    if (payload.action === "update_event" || payload.action === "update") {
+      const content = file.getBlob().getDataAsString();
+      let db = { events: [], deletedIds: [] };
+      try { db = JSON.parse(content); } catch (err) {}
+      if (!Array.isArray(db.events)) db.events = [];
+
+      const target = payload.event || payload;
+      const targetId = target.id;
+      const targetTitle = (target.title || "").trim();
+      const targetDate = (target.date || "").trim();
+
+      var updated = null;
+      for (var i = 0; i < db.events.length; i++) {
+        var evt = db.events[i];
+        var match = false;
+        if (targetId && evt.id === targetId) {
+          match = true;
+        } else if (targetTitle && evt.title && (evt.title.indexOf(targetTitle) !== -1 || targetTitle.indexOf(evt.title) !== -1)) {
+          if (!targetDate || evt.date === targetDate) {
+            match = true;
+          }
+        }
+        if (match) {
+          if (target.detail !== undefined) evt.detail = target.detail;
+          if (target.newTitle !== undefined) evt.title = target.newTitle;
+          if (target.category !== undefined) evt.category = target.category;
+          if (target.tags !== undefined) evt.tags = Array.isArray(target.tags) ? target.tags : [target.tags];
+          evt.updatedAt = new Date().toISOString();
+          updated = evt;
+          break;
+        }
+      }
+
+      if (updated) {
+        db.updatedAt = new Date().toISOString();
+        file.setContent(JSON.stringify(db));
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "ok",
+          message: "記事已成功更新！",
+          event: updated
+        })).setMimeType(ContentService.MimeType.JSON);
+      } else {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "error",
+          message: "找不到欲更新的記事"
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
+    // 情況 C：ChatGPT 新增單筆記事、隨手記或紀念日
     if (payload.action === "add_event" || payload.action === "add" || payload.event) {
       const content = file.getBlob().getDataAsString();
       let db = { events: [], deletedIds: [] };
@@ -625,6 +675,9 @@ function doPost(e) {
         detail: raw.detail || "",
         category: raw.category || "生活",
         recordType: raw.recordType || "daily",
+        calendarType: raw.calendarType || "solar",
+        lunarMonth: raw.lunarMonth,
+        lunarDay: raw.lunarDay,
         tags: Array.isArray(raw.tags) ? raw.tags : (raw.tags ? [raw.tags] : ["ChatGPT生活秘書"]),
         updatedAt: new Date().toISOString()
       };
@@ -641,7 +694,7 @@ function doPost(e) {
       })).setMimeType(ContentService.MimeType.JSON);
     }
 
-    // 情況 C：EdenNote App 全量推播同步
+    // 情況 D：EdenNote App 全量推播同步
     if (payload.events && Array.isArray(payload.events)) {
       const content = file.getBlob().getDataAsString();
       let db = { events: [], deletedIds: [] };
@@ -665,13 +718,14 @@ function doPost(e) {
     return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() }))
       .setMimeType(ContentService.MimeType.JSON);
   }
-}`
+}
+`
 
 export const CHATGPT_ACTIONS_SCHEMA = `openapi: 3.1.0
 info:
   title: EdenNote 生活秘書雲端 API
-  description: 供 ChatGPT 生活秘書即時讀取、自動新增或刪除 EdenNote 個人記事
-  version: 2.1.0
+  description: 供 ChatGPT 生活秘書即時讀取、自動新增、修改或刪除 EdenNote 個人記事、隨手記、待辦事項與紀念日
+  version: 2.2.0
 servers:
   - url: https://script.google.com/macros/s/AKfycbw9VzMUGW9ASUgms7_xb6r_iPfX-cD7uHbHoFavkmIbJSntOCpNM-kHajKyimXwXngf
 paths:
@@ -695,7 +749,7 @@ paths:
             enum: [get, add, delete]
         - name: title
           in: query
-          description: 記事標題或關鍵字（例如：老婆感冒）
+          description: 記事標題或關鍵字（例如：待辦事項、老婆感冒）
           required: false
           schema:
             type: string
@@ -707,13 +761,13 @@ paths:
             type: string
         - name: id
           in: query
-          description: 要刪除的記事 ID（若知道 ID 請提供）
+          description: 記事 ID（若知道 ID 請提供）
           required: false
           schema:
             type: string
         - name: category
           in: query
-          description: 分類（例如：生活、娛樂、工作、家庭、健康）
+          description: 分類
           required: false
           schema:
             type: string
@@ -736,8 +790,8 @@ paths:
                   message:
                     type: string
     post:
-      operationId: addOrDeleteEvent
-      summary: 自動新增記事 (add_event) 或刪除指定記事 (delete_event)
+      operationId: manageEvents
+      summary: 自動新增記事 (add_event)、修改/勾選待辦 (update_event)、或刪除記事 (delete_event)
       parameters:
         - name: key
           in: query
@@ -756,24 +810,44 @@ paths:
               properties:
                 action:
                   type: string
-                  description: 操作：新增填 add_event，刪除填 delete_event
-                  enum: [add_event, delete_event]
+                  description: 操作：新增填 add_event，更新/勾選待辦填 update_event，刪除填 delete_event
+                  enum: [add_event, update_event, delete_event]
                 event:
                   type: object
-                  description: 新增記事時填寫的資料
+                  description: 新增或更新記事時填寫的資料
                   properties:
+                    id:
+                      type: string
+                      description: 要更新的記事 ID（更新時使用）
                     title:
                       type: string
-                      description: 記事標題
+                      description: 記事標題（例如：跟老婆看電影、待辦事項、結婚紀念日）
+                    newTitle:
+                      type: string
+                      description: 修改後的標題（選填）
                     date:
                       type: string
-                      description: 格式 YYYY-MM-DD
+                      description: 日常記事填 YYYY-MM-DD；紀念日填 MM-DD（例如 10-25）
+                    recordType:
+                      type: string
+                      description: 記事類型：日常紀錄填 daily、隨手記/待辦填 note、紀念日填 anniversary
+                      enum: [daily, note, anniversary]
+                    calendarType:
+                      type: string
+                      description: 紀念日曆制：國曆填 solar、農曆填 lunar
+                      enum: [solar, lunar]
+                    lunarMonth:
+                      type: integer
+                      description: 農曆月份 1-12（僅農曆紀念日使用）
+                    lunarDay:
+                      type: integer
+                      description: 農曆日期 1-30（僅農曆紀念日使用）
                     category:
                       type: string
-                      description: 分類
+                      description: 分類（例如：生活、待辦、紀念日、工作、健康）
                     detail:
                       type: string
-                      description: 詳細內容說明
+                      description: 詳細說明或清單（待辦項目請使用 '☐ 待辦內容'，已完成請使用 '☑ 待辦內容'）
                     tags:
                       type: array
                       items:
@@ -784,10 +858,10 @@ paths:
                   properties:
                     title:
                       type: string
-                      description: 要刪除的記事標題或關鍵字（例如：老婆感冒）
+                      description: 要刪除的記事標題或關鍵字
                     date:
                       type: string
-                      description: 格式 YYYY-MM-DD（例如：2026-10-18）
+                      description: 格式 YYYY-MM-DD 或 MM-DD
                     id:
                       type: string
                       description: 記事 ID
@@ -805,21 +879,24 @@ paths:
                     type: string`
 
 export const CHATGPT_INSTRUCTIONS_PROMPT = `你是 Eden 的專屬「EdenNote 生活秘書」。
-你的任務是協助 Eden 管理生活回憶、記事、工作、排程與慢箋。
+你的任務是協助 Eden 管理生活回憶、日常生活紀錄、Note隨手記、待辦清單與紀念日。
 
-【三大核心任務】：
-1. 查詢與回答（查詢記事）：
-   - 當 Eden 詢問以前發生過什麼、查待辦事項、慢箋何時領藥或回憶時，呼叫 getEvents(action='get') 取得最新記事，親切回答。
+【核心四大任務】：
+1. 查詢記事（getEvents）：
+   - 當 Eden 詢問過去發生的事、查待辦、慢箋領藥或紀念日時，呼叫 getEvents(action='get') 取得最新紀錄，親切且有條理地回答。
 
-2. 自動記錄（寫入記事）：
-   - 當 Eden 說「幫我記下...」、「昨天跟老婆看電影」、「明天早上要繳電費」等需求時：
-     a. 分析相對時間（例如：「昨天」請推算換算為對應的真實 YYYY-MM-DD；「明天」亦同）。
-     b. 自動提煉標題（例如：跟老婆看電影）、詳細內容、合適分類（例如：生活、娛樂、工作、家庭）。
-     c. 呼叫 addOrDeleteEvent(action='add_event', event={title, date, category, detail}) 寫入 EdenNote！
-     d. 成功後溫暖回覆：「已為您記錄到 EdenNote 囉！📅 日期：... 📝 標題：... 🏷️ 分類：...」
+2. 新增記事、隨手記與紀念日（manageEvents action='add_event'）：
+   - 【日常日記】：使用者說「記下昨天跟老婆看電影」，分析相對時間（昨天換算為 YYYY-MM-DD），recordType='daily'，呼叫寫入。
+   - 【新增紀念日】：使用者說「記下結婚紀念日是 10 月 25 日」或「媽媽生日是農曆八月十五」，設定 recordType='anniversary', date='10-25', calendarType='solar' 或 'lunar'（農曆請帶 lunarMonth 與 lunarDay）。
+   - 【新增隨手記 / 待辦事項】：使用者說「新增待辦：繳電費」，請先查詢是否有標題為「待辦清單」的 Note；若有則追加一行「☐ 繳電費」呼叫 update_event；若無則新增 recordType='note', title='待辦事項', detail='☐ 繳電費'。
 
-3. 自動刪除（刪除記事）：
-   - 當 Eden 說「幫我刪除...」、「刪除昨天老婆感冒的紀錄」時：
-     a. 分析相對時間（如昨天換算為 YYYY-MM-DD）與標題關鍵字（如「老婆感冒」）。
-     b. 呼叫 addOrDeleteEvent(action='delete_event', deleteTarget={title: '老婆感冒', date: '2026-10-18'}) 或呼叫 getEvents(action='delete', title='老婆感冒', date='2026-10-18') 執行刪除！
-     c. 刪除成功後親切回覆：「已為您從 EdenNote 刪除該筆紀錄囉！🗑️ 日期：... 📝 標題：...」`
+3. 修改與勾選待辦事項（manageEvents action='update_event'）：
+   - 當使用者說「我電費繳完了，幫我把電費打勾」或「修改某個待辦」：
+     先透過 getEvents 查出該 Note，將裡面的「☐ 繳電費」換成「☑ 繳電費」，呼叫 update_event 更新 detail！
+     回覆：「已為您將【繳電費】標記為完成囉！☑️」
+
+4. 刪除記事或待辦（manageEvents action='delete_event'）：
+   - 當使用者說「幫我刪除昨天老婆感冒的紀錄」，呼叫 action='delete_event', deleteTarget={title: '老婆感冒', date: '2026-10-18'} 刪除！
+   - 若是要求刪除 Note 裡的某一行待辦，則取出該 Note 內容將該行移除後呼叫 update_event 儲存。
+   - 回覆：「已為您完成刪除囉！🗑️」`
+
