@@ -110,7 +110,12 @@ export default function DailyPage() {
       const res = await pullGptCloudEvents(eventRepository)
       if (res.success) {
         const changes = (res.updatedCount || 0) + (res.addedCount || 0) + (res.deletedCount || 0)
-        setSyncFeedback(changes > 0 ? `已更新 ${changes} 筆` : '已是最新')
+        const dailyCount = res.localAfterBreakdown?.daily
+        if (changes > 0) {
+          setSyncFeedback(dailyCount ? `已更新 ${changes} 筆 (日常 ${dailyCount} / 雲端 ${res.pulledCount})` : `已更新 ${changes} 筆`)
+        } else {
+          setSyncFeedback(dailyCount ? `已是最新 (日常 ${dailyCount} / 雲端 ${res.pulledCount})` : `已是最新 (${res.pulledCount} 筆)`)
+        }
       } else {
         setSyncFeedback(`失敗: ${res.error || '連線異常'}`)
       }
@@ -119,7 +124,7 @@ export default function DailyPage() {
     } finally {
       setIsPulling(false)
       void loadEvents()
-      setTimeout(() => setSyncFeedback(null), 3500)
+      setTimeout(() => setSyncFeedback(null), 4500)
     }
   }, [loadEvents])
 

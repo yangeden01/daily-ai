@@ -65,6 +65,15 @@ export class IndexedDBRepository implements EventRepository {
     return copyEvent(event)
   }
 
+  async upsert(event: Event): Promise<Event> {
+    const database = await this.getDatabase()
+    const transaction = database.transaction(EVENT_STORE, 'readwrite')
+    transaction.objectStore(EVENT_STORE).put(copyEvent(event))
+    await transactionToPromise(transaction)
+    void this.triggerWidgetSync()
+    return copyEvent(event)
+  }
+
   async update(id: string, event: Event): Promise<Event> {
     const database = await this.getDatabase()
     const transaction = database.transaction(EVENT_STORE, 'readwrite')

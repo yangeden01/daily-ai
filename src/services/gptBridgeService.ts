@@ -276,12 +276,45 @@ export const syncGptCloudSnapshot = (
   })
 }
 
+export interface GptSyncDiagnostics {
+  timestamp: string
+  cloudTotal: number
+  cloudBreakdown: { daily: number; note: number; anniversary: number }
+  localBeforeTotal: number
+  localBeforeBreakdown: { daily: number; note: number; anniversary: number }
+  localAfterTotal: number
+  localAfterBreakdown: { daily: number; note: number; anniversary: number }
+  addedCount: number
+  updatedCount: number
+  deletedCount: number
+  targetVerified: boolean
+  targetRecord?: { id: string; title: string; date: string }
+  status: 'success' | 'error'
+  errorMessage?: string
+}
+
+export const GPT_SYNC_DIAGNOSTICS_KEY = 'edennote_gpt_sync_diagnostics'
+
+export const getLatestSyncDiagnostics = (): GptSyncDiagnostics | null => {
+  if (typeof window === 'undefined' || !window.localStorage) return null
+  try {
+    const raw = localStorage.getItem(GPT_SYNC_DIAGNOSTICS_KEY)
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
 export interface PullCloudEventsResult {
   success: boolean
   pulledCount: number
   addedCount: number
   updatedCount: number
   deletedCount: number
+  cloudBreakdown?: { daily: number; note: number; anniversary: number }
+  localBeforeBreakdown?: { daily: number; note: number; anniversary: number }
+  localAfterBreakdown?: { daily: number; note: number; anniversary: number }
+  diagnostics?: GptSyncDiagnostics
   error?: string
 }
 
@@ -325,8 +358,9 @@ export const pullGptCloudEvents = async (
   }
 
   try {
-    const sep = url.includes('?') ? '&' : '?'
-    const targetEndpoint = `${url}${sep}key=${encodeURIComponent(key)}&_t=${Date.now()}&all=true`
+    const cleanUrl = url.replace(/\/+$/, '')
+    const sep = cleanUrl.includes('?') ? '&' : '?'
+    const targetEndpoint = `${cleanUrl}${sep}key=${encodeURIComponent(key)}&_t=${Date.now()}&all=true&source=app`
     const response = await fetch(targetEndpoint)
 
     if (!response.ok) {
@@ -342,7 +376,23 @@ export const pullGptCloudEvents = async (
     const deletedIds = Array.isArray(data?.deletedIds) ? data.deletedIds : []
     const rawDeletedRecords = Array.isArray(data?.deletedRecords) ? data.deletedRecords : []
 
+    const countType = (list: Array<{ recordType?: string }>, type: 'daily' | 'note' | 'anniversary') => {
+      if (type === 'daily') return list.filter((e) => !e.recordType || e.recordType === 'daily').length
+      return list.filter((e) => e.recordType === type).length
+    }
+
+    const cloudBreakdown = {
+      daily: countType(cloudEvents, 'daily'),
+      note: countType(cloudEvents, 'note'),
+      anniversary: countType(cloudEvents, 'anniversary'),
+    }
+
     const localEvents = await repo.getAll()
+    const localBeforeBreakdown = {
+      daily: countType(localEvents, 'daily'),
+      note: countType(localEvents, 'note'),
+      anniversary: countType(localEvents, 'anniversary'),
+    }
     const localMap = new Map<string, Event>(localEvents.map((evt) => [evt.id, evt]))
 
     let addedCount = 0
@@ -438,40 +488,51 @@ export const pullGptCloudEvents = async (
             lunarDay: ce.lunarDay !== undefined ? ce.lunarDay : existingById.lunarDay,
             updatedAt: ce.updatedAt || new Date().toISOString(),
           }
-          await repo.update(existingById.id, updatedEvent)
+          if (repo.upsert) {
+            await repo.upsert(updatedEvent)
+          } else {
+            await repo.update(existingById.id, updatedEvent)
+          }
           localMap.set(existingById.id, updatedEvent)
           updatedCount++
         }
       } else {
-        // Check if there is an existing event by Title (to handle date changes or ID mismatches)
+        // Fallback: match by BOTH Title and Date only (never by title alone across different dates)
         const trimmedTitle = (ce.title || '').trim()
         const trimmedDate = (ce.date || '').trim()
         const trimmedDetail = (ce.detail || '').trim()
 
-        const existingByTitle = trimmedTitle
-          ? localEvents.find((evt) => (evt.title || '').trim() === trimmedTitle)
+        const existingByTitleAndDate = trimmedTitle && trimmedDate
+          ? localEvents.find(
+              (evt) =>
+                (evt.title || '').trim().toLowerCase() === trimmedTitle.toLowerCase() &&
+                (evt.date || '').trim() === trimmedDate
+            )
           : undefined
 
-        if (existingByTitle) {
+        if (existingByTitleAndDate) {
           const updatedEvent: Event = {
-            ...existingByTitle,
-            id: ceId || existingByTitle.id,
-            date: trimmedDate || existingByTitle.date,
-            detail: ce.detail !== undefined ? ce.detail : existingByTitle.detail,
-            category: ce.category !== undefined ? ce.category : existingByTitle.category,
-            recordType: ce.recordType || existingByTitle.recordType,
-            calendarType: ce.calendarType || existingByTitle.calendarType,
+            ...existingByTitleAndDate,
+            id: ceId || existingByTitleAndDate.id,
+            date: trimmedDate || existingByTitleAndDate.date,
+            detail: ce.detail !== undefined ? ce.detail : existingByTitleAndDate.detail,
+            category: ce.category !== undefined ? ce.category : existingByTitleAndDate.category,
+            recordType: ce.recordType || existingByTitleAndDate.recordType,
+            calendarType: ce.calendarType || existingByTitleAndDate.calendarType,
             updatedAt: ce.updatedAt || new Date().toISOString(),
           }
-          if (ceId && ceId !== existingByTitle.id) {
-            await repo.delete(existingByTitle.id)
-            await repo.add(updatedEvent)
-            localMap.delete(existingByTitle.id)
-            localMap.set(ceId, updatedEvent)
+          if (repo.upsert) {
+            await repo.upsert(updatedEvent)
           } else {
-            await repo.update(existingByTitle.id, updatedEvent)
-            localMap.set(existingByTitle.id, updatedEvent)
+            if (ceId && ceId !== existingByTitleAndDate.id) {
+              await repo.delete(existingByTitleAndDate.id)
+              await repo.add(updatedEvent)
+            } else {
+              await repo.update(existingByTitleAndDate.id, updatedEvent)
+            }
           }
+          localMap.delete(existingByTitleAndDate.id)
+          localMap.set(updatedEvent.id, updatedEvent)
           updatedCount++
         } else {
           // Check for exact duplicate title + date + detail
@@ -511,16 +572,50 @@ export const pullGptCloudEvents = async (
               lunarDay: ce.lunarDay,
             }
 
-            await repo.add(newEvent)
+            if (repo.upsert) {
+              await repo.upsert(newEvent)
+            } else {
+              await repo.add(newEvent)
+            }
             localMap.set(newEvent.id, newEvent)
+            localEvents.push(newEvent)
             addedCount++
           }
         }
       }
     }
 
+    const refreshedEvents = await repo.getAll()
+    const localAfterBreakdown = {
+      daily: countType(refreshedEvents, 'daily'),
+      note: countType(refreshedEvents, 'note'),
+      anniversary: countType(refreshedEvents, 'anniversary'),
+    }
+
+    // Verify presence of voice test target ID
+    const targetVoiceEvent = refreshedEvents.find(
+      (e) => e.id === 'gpt-8fbcde0d-2edc-4224-b08b-5493febe3ab5'
+    )
+
+    const diag: GptSyncDiagnostics = {
+      timestamp: new Date().toISOString(),
+      cloudTotal: cloudEvents.length,
+      cloudBreakdown,
+      localBeforeTotal: localEvents.length,
+      localBeforeBreakdown,
+      localAfterTotal: refreshedEvents.length,
+      localAfterBreakdown,
+      addedCount,
+      updatedCount,
+      deletedCount,
+      targetVerified: !!targetVoiceEvent,
+      targetRecord: targetVoiceEvent
+        ? { id: targetVoiceEvent.id, title: targetVoiceEvent.title, date: targetVoiceEvent.date }
+        : undefined,
+      status: 'success',
+    }
+
     if (addedCount > 0 || updatedCount > 0 || deletedCount > 0) {
-      const refreshedEvents = await repo.getAll()
       void syncWidgetSnapshot(refreshedEvents)
       if (typeof window !== 'undefined' && window.dispatchEvent) {
         window.dispatchEvent(new CustomEvent('edennote:events-updated', { detail: { addedCount, updatedCount, deletedCount } }))
@@ -532,9 +627,10 @@ export const pullGptCloudEvents = async (
       localStorage.setItem(GPT_LAST_PULL_TIME_KEY, nowStr)
       localStorage.setItem(GPT_LAST_PULL_STATUS_KEY, 'success')
       localStorage.setItem(GPT_LAST_PULL_ADDED_KEY, String(addedCount))
+      localStorage.setItem(GPT_SYNC_DIAGNOSTICS_KEY, JSON.stringify(diag))
       window.dispatchEvent(
         new CustomEvent('edennote:gpt-pull-completed', {
-          detail: { success: true, pulledCount: cloudEvents.length, addedCount, updatedCount, deletedCount },
+          detail: { success: true, pulledCount: cloudEvents.length, addedCount, updatedCount, deletedCount, diagnostics: diag },
         })
       )
     }
@@ -545,16 +641,36 @@ export const pullGptCloudEvents = async (
       addedCount,
       updatedCount,
       deletedCount,
+      cloudBreakdown,
+      localBeforeBreakdown,
+      localAfterBreakdown,
+      diagnostics: diag,
     }
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err)
+    const errDiag: GptSyncDiagnostics = {
+      timestamp: new Date().toISOString(),
+      cloudTotal: 0,
+      cloudBreakdown: { daily: 0, note: 0, anniversary: 0 },
+      localBeforeTotal: 0,
+      localBeforeBreakdown: { daily: 0, note: 0, anniversary: 0 },
+      localAfterTotal: 0,
+      localAfterBreakdown: { daily: 0, note: 0, anniversary: 0 },
+      addedCount: 0,
+      updatedCount: 0,
+      deletedCount: 0,
+      targetVerified: false,
+      status: 'error',
+      errorMessage: errorMsg,
+    }
     if (typeof window !== 'undefined' && window.localStorage) {
       localStorage.setItem(GPT_LAST_PULL_STATUS_KEY, `error: ${errorMsg}`)
+      localStorage.setItem(GPT_SYNC_DIAGNOSTICS_KEY, JSON.stringify(errDiag))
       window.dispatchEvent(
-        new CustomEvent('edennote:gpt-pull-completed', { detail: { success: false, error: errorMsg } })
+        new CustomEvent('edennote:gpt-pull-completed', { detail: { success: false, error: errorMsg, diagnostics: errDiag } })
       )
     }
-    return { success: false, pulledCount: 0, addedCount: 0, updatedCount: 0, deletedCount: 0, error: errorMsg }
+    return { success: false, pulledCount: 0, addedCount: 0, updatedCount: 0, deletedCount: 0, diagnostics: errDiag, error: errorMsg }
   } finally {
     isCurrentlyPulling = false
   }

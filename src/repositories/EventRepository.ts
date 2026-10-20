@@ -9,4 +9,5 @@ export interface EventRepository {
   update(id: string, event: Event): Promise<Event>
   delete(id: string): Promise<void>
   replaceAll(events: Event[]): Promise<void>
+  upsert?(event: Event): Promise<Event>
 }

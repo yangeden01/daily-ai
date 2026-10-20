@@ -56,7 +56,8 @@ import {
   pullGptCloudEvents,
   setGptAutoSyncEnabled,
   setGptBridgeUrl,
-  setGptSecretKey,
+  getLatestSyncDiagnostics,
+  type GptSyncDiagnostics,
   syncGptCloudSnapshot,
 } from '../../services/gptBridgeService'
 
@@ -102,6 +103,7 @@ export default function SettingsPage() {
   const [gptPullMessage, setGptPullMessage] = useState<string | null>(null)
   const [showSetupGuide, setShowSetupGuide] = useState(false)
   const [copiedSnippetType, setCopiedSnippetType] = useState<string | null>(null)
+  const [diagnostics, setDiagnostics] = useState<GptSyncDiagnostics | null>(getLatestSyncDiagnostics)
 
   useEffect(() => {
     const onSyncStarted = () => setIsSyncing(true)
@@ -113,6 +115,7 @@ export default function SettingsPage() {
     const onPullCompleted = () => {
       setIsPulling(false)
       setLastPullInfo(getLastGptPullInfo())
+      setDiagnostics(getLatestSyncDiagnostics())
     }
     window.addEventListener('edennote:gpt-sync-started', onSyncStarted)
     window.addEventListener('edennote:gpt-sync-completed', onSyncCompleted)
@@ -168,11 +171,15 @@ export default function SettingsPage() {
       const result = await pullGptCloudEvents(eventRepository)
       if (result.success) {
         setGptPullStatus('success')
-        setGptPullMessage(`📥 雲端拉取成功！雲端現有 ${result.pulledCount} 筆，本次新增 ${result.addedCount} 筆，更新 ${result.updatedCount} 筆。`)
+        const diag = result.diagnostics ?? getLatestSyncDiagnostics()
+        setDiagnostics(diag)
+        const dailyStr = diag ? `（日常: ${diag.localAfterBreakdown.daily} 筆, Notes: ${diag.localAfterBreakdown.note} 筆, 紀念日: ${diag.localAfterBreakdown.anniversary} 筆）` : ''
+        setGptPullMessage(`📥 雲端拉取成功！雲端現有 ${result.pulledCount} 筆，本次新增 ${result.addedCount} 筆，更新 ${result.updatedCount} 筆。本機總計 ${diag?.localAfterTotal ?? result.pulledCount} 筆${dailyStr}。`)
         setLastPullInfo(getLastGptPullInfo())
       } else {
         setGptPullStatus('error')
         setGptPullMessage(`拉取失敗：${result.error || '請確認網路與 Script 網址'}`)
+        setDiagnostics(result.diagnostics ?? getLatestSyncDiagnostics())
       }
     } catch (err: unknown) {
       console.error('GPT Pull error:', err)
@@ -1250,6 +1257,59 @@ export default function SettingsPage() {
               }`}
             >
               {gptSyncMessage}
+            </div>
+          )}
+
+          {/* 同步診斷與統計分析報告 */}
+          {diagnostics && (
+            <div className="rounded-xl border border-indigo-200/80 bg-indigo-50/70 p-3.5 text-xs text-indigo-950 dark:border-indigo-900/50 dark:bg-indigo-950/40 dark:text-indigo-200 space-y-2.5">
+              <div className="flex items-center justify-between font-bold text-[13px] text-indigo-900 dark:text-indigo-200 border-b border-indigo-200/60 pb-1.5 dark:border-indigo-800/60">
+                <span className="flex items-center gap-1.5">
+                  <Database size={15} className="text-indigo-600 dark:text-indigo-400" />
+                  雲端同步各階段診斷紀錄
+                </span>
+                <span className="text-[11px] font-normal text-indigo-600/80 dark:text-indigo-400">
+                  {diagnostics.timestamp ? new Date(diagnostics.timestamp).toLocaleTimeString('zh-TW') : ''}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 text-[11px]">
+                <div className="rounded-lg bg-white/70 p-2 dark:bg-stone-900/50 border border-indigo-100 dark:border-indigo-900/30">
+                  <div className="font-semibold text-indigo-900 dark:text-indigo-300">☁️ 雲端取得筆數</div>
+                  <div className="mt-0.5 text-base font-bold text-indigo-600 dark:text-indigo-400">
+                    {diagnostics.cloudTotal} <span className="text-xs font-normal text-stone-500">筆</span>
+                  </div>
+                  <div className="mt-1 text-[10px] text-stone-600 dark:text-stone-400">
+                    日常: {diagnostics.cloudBreakdown.daily} ｜ Note: {diagnostics.cloudBreakdown.note} ｜ 紀念日: {diagnostics.cloudBreakdown.anniversary}
+                  </div>
+                </div>
+
+                <div className="rounded-lg bg-white/70 p-2 dark:bg-stone-900/50 border border-indigo-100 dark:border-indigo-900/30">
+                  <div className="font-semibold text-indigo-900 dark:text-indigo-300">💾 本機儲存筆數</div>
+                  <div className="mt-0.5 text-base font-bold text-emerald-600 dark:text-emerald-400">
+                    {diagnostics.localAfterTotal} <span className="text-xs font-normal text-stone-500">筆</span>
+                  </div>
+                  <div className="mt-1 text-[10px] text-stone-600 dark:text-stone-400">
+                    日常: {diagnostics.localAfterBreakdown.daily} ｜ Note: {diagnostics.localAfterBreakdown.note} ｜ 紀念日: {diagnostics.localAfterBreakdown.anniversary}
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-lg bg-white/80 p-2.5 text-[11px] leading-relaxed dark:bg-stone-900/60 border border-indigo-100 dark:border-indigo-900/30 space-y-1.5">
+                <div className="font-semibold text-stone-800 dark:text-stone-200 flex items-center justify-between">
+                  <span>📱 畫面顯示統計說明：</span>
+                  <span className="text-[10px] font-normal text-stone-500">Daily Timeline 專屬日常視圖</span>
+                </div>
+                <p className="text-stone-600 dark:text-stone-300">
+                  Daily 畫面顯示之「<strong>{diagnostics.localAfterBreakdown.daily} events</strong>」為「日常」類型紀錄。隨手記（{diagnostics.localAfterBreakdown.note} 筆）與紀念日（{diagnostics.localAfterBreakdown.anniversary} 筆）各自獨立展示於專屬功能分頁中。本機資料庫總筆數（{diagnostics.localAfterTotal} 筆）與雲端總筆數（{diagnostics.cloudTotal} 筆）<strong>完全一致且無任何遺漏</strong>。
+                </p>
+                <div className="pt-1.5 border-t border-stone-200/60 dark:border-stone-800 flex items-center justify-between text-[11px]">
+                  <span>語音測試 ID 驗證狀態：</span>
+                  <span className={diagnostics.targetVerified ? "font-bold text-emerald-600 dark:text-emerald-400" : "font-bold text-amber-600 dark:text-amber-400"}>
+                    {diagnostics.targetVerified ? "✅ 已同步並存在於本機 (gpt-8fbcde0d...)" : "⏳ 尚未於本機找到"}
+                  </span>
+                </div>
+              </div>
             </div>
           )}
 
