@@ -2,6 +2,7 @@ import type { Event } from '../models/Event'
 import { attachmentRepository, eventRepository } from '../repositories'
 import type { AttachmentRepository } from '../repositories/AttachmentRepository'
 import type { EventRepository } from '../repositories/EventRepository'
+import { recordLocalTombstone } from './gptBridgeService'
 
 export const deleteEventWithAttachments = async (
   event: Event,
@@ -13,6 +14,7 @@ export const deleteEventWithAttachments = async (
 
   try {
     await events.delete(event.id)
+    recordLocalTombstone({ id: event.id, title: event.title, date: event.date })
   } catch (error) {
     await attachments.addMany(attachmentSnapshot)
     throw error

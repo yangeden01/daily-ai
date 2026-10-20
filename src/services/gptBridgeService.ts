@@ -87,6 +87,62 @@ export const getLastGptPullInfo = (): { time: string | null; status: string | nu
   return { time, status, addedCount }
 }
 
+export interface TombstoneRecord {
+  id: string
+  title: string
+  date: string
+  deletedAt: string
+}
+
+export const GPT_LOCAL_TOMBSTONES_KEY = 'edennote_local_tombstones'
+
+export const getLocalTombstones = (): TombstoneRecord[] => {
+  if (typeof window === 'undefined' || !window.localStorage) return []
+  try {
+    const raw = localStorage.getItem(GPT_LOCAL_TOMBSTONES_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000
+    return parsed.filter(
+      (item) => item && (item.id || item.title) && (!item.deletedAt || new Date(item.deletedAt).getTime() > cutoff)
+    )
+  } catch {
+    return []
+  }
+}
+
+export const recordLocalTombstone = (item: { id: string; title?: string; date?: string }): void => {
+  if (typeof window === 'undefined' || !window.localStorage || (!item.id && !item.title)) return
+  try {
+    const tombstones = getLocalTombstones()
+    const now = new Date().toISOString()
+    const existingIdx = tombstones.findIndex(
+      (t) => (item.id && t.id === item.id) || (item.title && t.title === item.title && (!item.date || t.date === item.date))
+    )
+    const newRecord: TombstoneRecord = {
+      id: item.id || '',
+      title: item.title || '',
+      date: item.date || '',
+      deletedAt: now,
+    }
+    if (existingIdx !== -1) {
+      tombstones[existingIdx] = newRecord
+    } else {
+      tombstones.push(newRecord)
+    }
+    const trimmed = tombstones.slice(-500)
+    localStorage.setItem(GPT_LOCAL_TOMBSTONES_KEY, JSON.stringify(trimmed))
+  } catch {
+    // ignore
+  }
+}
+
+export const clearLocalTombstones = (): void => {
+  if (typeof window === 'undefined' || !window.localStorage) return
+  localStorage.removeItem(GPT_LOCAL_TOMBSTONES_KEY)
+}
+
 let isCurrentlySyncing = false
 let isCurrentlyPulling = false
 let syncDebounceTimer: ReturnType<typeof setTimeout> | null = null
@@ -124,6 +180,7 @@ const executeSync = async (
     updatedAt: evt.updatedAt || evt.lastEditedAt || '',
   }))
 
+  const localTombstones = getLocalTombstones()
   const targetEndpoint = `${url}${url.includes('?') ? '&' : '?'}key=${encodeURIComponent(key)}`
 
   isCurrentlySyncing = true
@@ -139,6 +196,8 @@ const executeSync = async (
       },
       body: JSON.stringify({
         events: simplifiedEvents,
+        deletedIds: localTombstones.map((t) => t.id).filter(Boolean),
+        deletedRecords: localTombstones,
         syncedAt: new Date().toISOString(),
       }),
     })
@@ -274,9 +333,14 @@ export const pullGptCloudEvents = async (
       throw new Error(`HTTP ${response.status}`)
     }
 
-    const data = (await response.json()) as { events?: RawCloudEvent[]; deletedIds?: string[] }
+    const data = (await response.json()) as {
+      events?: RawCloudEvent[]
+      deletedIds?: string[]
+      deletedRecords?: Array<{ id?: string; title?: string; date?: string }>
+    }
     const cloudEvents = Array.isArray(data?.events) ? data.events : []
     const deletedIds = Array.isArray(data?.deletedIds) ? data.deletedIds : []
+    const rawDeletedRecords = Array.isArray(data?.deletedRecords) ? data.deletedRecords : []
 
     const localEvents = await repo.getAll()
     const localMap = new Map<string, Event>(localEvents.map((evt) => [evt.id, evt]))
@@ -286,17 +350,64 @@ export const pullGptCloudEvents = async (
     let deletedCount = 0
 
     // 1. Delete events that were marked as deleted in cloud by ChatGPT assistant
+    // (A) By exact ID in deletedIds
     for (const delId of deletedIds) {
       if (delId && localMap.has(delId)) {
+        const target = localMap.get(delId)
         await repo.delete(delId)
         localMap.delete(delId)
+        recordLocalTombstone({ id: delId, title: target?.title, date: target?.date })
         deletedCount++
       }
     }
 
-    // 2. Merge cloud events into local database
+    // (B) By tombstone metadata (title + date, solves ID mismatch when created on different clients)
+    for (const dRec of rawDeletedRecords) {
+      if (!dRec) continue
+      const dId = (dRec.id || '').trim()
+      const dTitle = (dRec.title || '').trim().toLowerCase()
+      const dDate = (dRec.date || '').trim()
+
+      if (dId && localMap.has(dId)) {
+        const target = localMap.get(dId)
+        await repo.delete(dId)
+        localMap.delete(dId)
+        recordLocalTombstone({ id: dId, title: target?.title, date: target?.date })
+        deletedCount++
+      } else if (dTitle) {
+        for (const [locId, locEvt] of Array.from(localMap.entries())) {
+          const locTitle = (locEvt.title || '').trim().toLowerCase()
+          const locDate = (locEvt.date || '').trim()
+          if (locTitle === dTitle && (!dDate || locDate === dDate)) {
+            await repo.delete(locId)
+            localMap.delete(locId)
+            recordLocalTombstone({ id: locId, title: locEvt.title, date: locEvt.date })
+            deletedCount++
+          }
+        }
+      }
+    }
+
+    // 2. Filter out cloud events that match local tombstones (prevent resurrection of locally deleted events)
+    const localTombstones = getLocalTombstones()
+    const isCloudEventTombstoned = (ce: RawCloudEvent) => {
+      const ceId = (ce.id || '').trim()
+      const ceTitle = (ce.title || '').trim().toLowerCase()
+      const ceDate = (ce.date || '').trim()
+      if (ceId && deletedIds.includes(ceId)) return true
+      return localTombstones.some((t) => {
+        if (ceId && t.id === ceId) return true
+        if (ceTitle && t.title && t.title.trim().toLowerCase() === ceTitle) {
+          if (!t.date || !ceDate || t.date === ceDate) return true
+        }
+        return false
+      })
+    }
+
+    // 3. Merge cloud events into local database
     for (const ce of cloudEvents) {
       if (!ce || typeof ce !== 'object') continue
+      if (isCloudEventTombstoned(ce)) continue
       const ceId = ce.id?.trim() || ''
 
       const existingById = ceId ? localMap.get(ceId) : undefined
@@ -344,6 +455,7 @@ export const pullGptCloudEvents = async (
         if (existingByTitle) {
           const updatedEvent: Event = {
             ...existingByTitle,
+            id: ceId || existingByTitle.id,
             date: trimmedDate || existingByTitle.date,
             detail: ce.detail !== undefined ? ce.detail : existingByTitle.detail,
             category: ce.category !== undefined ? ce.category : existingByTitle.category,
@@ -351,8 +463,15 @@ export const pullGptCloudEvents = async (
             calendarType: ce.calendarType || existingByTitle.calendarType,
             updatedAt: ce.updatedAt || new Date().toISOString(),
           }
-          await repo.update(existingByTitle.id, updatedEvent)
-          localMap.set(existingByTitle.id, updatedEvent)
+          if (ceId && ceId !== existingByTitle.id) {
+            await repo.delete(existingByTitle.id)
+            await repo.add(updatedEvent)
+            localMap.delete(existingByTitle.id)
+            localMap.set(ceId, updatedEvent)
+          } else {
+            await repo.update(existingByTitle.id, updatedEvent)
+            localMap.set(existingByTitle.id, updatedEvent)
+          }
           updatedCount++
         } else {
           // Check for exact duplicate title + date + detail
@@ -508,10 +627,11 @@ function doGet(e) {
     if (action === "delete" || action === "delete_event") {
       const file = getOrCreateStorageFile();
       const content = file.getBlob().getDataAsString();
-      let db = { events: [], deletedIds: [] };
+      let db = { events: [], deletedIds: [], deletedRecords: [] };
       try { db = JSON.parse(content); } catch (err) {}
       if (!Array.isArray(db.events)) db.events = [];
       if (!Array.isArray(db.deletedIds)) db.deletedIds = [];
+      if (!Array.isArray(db.deletedRecords)) db.deletedRecords = [];
 
       const targetId = e.parameter.id;
       const targetTitle = (e.parameter.title || "").trim();
@@ -535,9 +655,27 @@ function doGet(e) {
           if (evt.id && db.deletedIds.indexOf(evt.id) === -1) {
             db.deletedIds.push(evt.id);
           }
+          db.deletedRecords.push({
+            id: evt.id || "",
+            title: evt.title || "",
+            date: evt.date || "",
+            deletedAt: new Date().toISOString()
+          });
         } else {
           remainingEvents.push(evt);
         }
+      }
+
+      if (targetId && db.deletedIds.indexOf(targetId) === -1) {
+        db.deletedIds.push(targetId);
+      }
+      if (targetId || targetTitle) {
+        db.deletedRecords.push({
+          id: targetId || "",
+          title: targetTitle || "",
+          date: targetDate || "",
+          deletedAt: new Date().toISOString()
+        });
       }
 
       db.events = remainingEvents;
@@ -546,7 +684,7 @@ function doGet(e) {
 
       return ContentService.createTextOutput(JSON.stringify({
         status: "ok",
-        message: removedEvents.length > 0 ? ("已成功刪除 " + removedEvents.length + " 筆記事！") : "未找到符合的記事",
+        message: removedEvents.length > 0 ? ("已成功刪除 " + removedEvents.length + " 筆記事！") : "記事已標記刪除",
         deletedCount: removedEvents.length,
         deletedEvents: removedEvents
       })).setMimeType(ContentService.MimeType.JSON);
@@ -643,10 +781,11 @@ function doGet(e) {
     // 讀取資料庫
     const file = getOrCreateStorageFile();
     const content = file.getBlob().getDataAsString();
-    let db = { events: [], deletedIds: [] };
+    let db = { events: [], deletedIds: [], deletedRecords: [] };
     try { db = JSON.parse(content); } catch (err) {}
     if (!Array.isArray(db.events)) db.events = [];
     if (!Array.isArray(db.deletedIds)) db.deletedIds = [];
+    if (!Array.isArray(db.deletedRecords)) db.deletedRecords = [];
 
     // 若為 EdenNote App 的全量雙向同步 (all=true 或 source=app)
     if (e.parameter.all === "true" || e.parameter.source === "app") {
@@ -655,7 +794,8 @@ function doGet(e) {
         count: db.events.length,
         updatedAt: db.updatedAt || "",
         events: db.events,
-        deletedIds: db.deletedIds
+        deletedIds: db.deletedIds,
+        deletedRecords: db.deletedRecords
       })).setMimeType(ContentService.MimeType.JSON);
     }
 
@@ -840,12 +980,13 @@ function doPost(e) {
     // 情況 A：ChatGPT 刪除指定記事
     if (payload.action === "delete_event" || payload.action === "delete" || payload.deleteTarget) {
       const content = file.getBlob().getDataAsString();
-      let db = { events: [], deletedIds: [] };
+      let db = { events: [], deletedIds: [], deletedRecords: [] };
       try { db = JSON.parse(content); } catch (err) {}
       if (!Array.isArray(db.events)) db.events = [];
       if (!Array.isArray(db.deletedIds)) db.deletedIds = [];
+      if (!Array.isArray(db.deletedRecords)) db.deletedRecords = [];
 
-      const target = payload.deleteTarget || payload;
+      const target = payload.deleteTarget || payload.event || payload;
       const targetId = target.id;
       const targetTitle = (target.title || "").trim();
       const targetDate = (target.date || "").trim();
@@ -868,9 +1009,27 @@ function doPost(e) {
           if (evt.id && db.deletedIds.indexOf(evt.id) === -1) {
             db.deletedIds.push(evt.id);
           }
+          db.deletedRecords.push({
+            id: evt.id || "",
+            title: evt.title || "",
+            date: evt.date || "",
+            deletedAt: new Date().toISOString()
+          });
         } else {
           remainingEvents.push(evt);
         }
+      }
+
+      if (targetId && db.deletedIds.indexOf(targetId) === -1) {
+        db.deletedIds.push(targetId);
+      }
+      if (targetId || targetTitle) {
+        db.deletedRecords.push({
+          id: targetId || "",
+          title: targetTitle || "",
+          date: targetDate || "",
+          deletedAt: new Date().toISOString()
+        });
       }
 
       db.events = remainingEvents;
@@ -879,7 +1038,7 @@ function doPost(e) {
 
       return ContentService.createTextOutput(JSON.stringify({
         status: "ok",
-        message: removedEvents.length > 0 ? ("已成功從 EdenNote 刪除 " + removedEvents.length + " 筆記事！") : "未找到符合的記事",
+        message: removedEvents.length > 0 ? ("已成功從 EdenNote 刪除 " + removedEvents.length + " 筆記事！") : "記事已標記刪除",
         deletedCount: removedEvents.length,
         deletedEvents: removedEvents
       })).setMimeType(ContentService.MimeType.JSON);
@@ -983,18 +1142,61 @@ function doPost(e) {
       })).setMimeType(ContentService.MimeType.JSON);
     }
 
-    // 情況 D：EdenNote App 全量推播同步（智能雙向合併：若雲端記事有 ChatGPT 較新的修改，予以保留不被舊客戶端覆蓋）
+    // 情況 D：EdenNote App 全量推播同步（具備 Tombstone 防復活與雙向智慧合併）
     if (payload.events && Array.isArray(payload.events)) {
       const content = file.getBlob().getDataAsString();
-      let db = { events: [], deletedIds: [] };
+      let db = { events: [], deletedIds: [], deletedRecords: [] };
       try { db = JSON.parse(content); } catch (err) {}
       if (!Array.isArray(db.events)) db.events = [];
       if (!Array.isArray(db.deletedIds)) db.deletedIds = [];
+      if (!Array.isArray(db.deletedRecords)) db.deletedRecords = [];
+
+      // 1. 合併客戶端傳入的 deletedIds 與 deletedRecords
+      if (Array.isArray(payload.deletedIds)) {
+        for (var di = 0; di < payload.deletedIds.length; di++) {
+          var did = payload.deletedIds[di];
+          if (did && db.deletedIds.indexOf(did) === -1) {
+            db.deletedIds.push(did);
+          }
+        }
+      }
+      if (Array.isArray(payload.deletedRecords)) {
+        for (var dri = 0; dri < payload.deletedRecords.length; dri++) {
+          var drec = payload.deletedRecords[dri];
+          if (drec && (drec.id || drec.title)) {
+            if (drec.id && db.deletedIds.indexOf(drec.id) === -1) db.deletedIds.push(drec.id);
+            var exists = false;
+            for (var ki = 0; ki < db.deletedRecords.length; ki++) {
+              if (drec.id && db.deletedRecords[ki].id === drec.id) { exists = true; break; }
+            }
+            if (!exists) db.deletedRecords.push(drec);
+          }
+        }
+      }
+
+      function isEventDeleted(evt) {
+        if (!evt) return true;
+        if (evt.id && db.deletedIds.indexOf(evt.id) !== -1) return true;
+        var evtTitle = (evt.title || "").trim().toLowerCase();
+        var evtDate = (evt.date || "").trim();
+        for (var k = 0; k < db.deletedRecords.length; k++) {
+          var dr = db.deletedRecords[k];
+          if (evt.id && dr.id && dr.id === evt.id) return true;
+          var drTitle = (dr.title || "").trim().toLowerCase();
+          var drDate = (dr.date || "").trim();
+          if (drTitle && drTitle === evtTitle) {
+            if (!drDate || !evtDate || drDate === evtDate) return true;
+          }
+        }
+        return false;
+      }
 
       var cloudMap = {};
       for (var ci = 0; ci < db.events.length; ci++) {
         var ce = db.events[ci];
-        if (ce && ce.id) cloudMap[ce.id] = ce;
+        if (ce && ce.id && !isEventDeleted(ce)) {
+          cloudMap[ce.id] = ce;
+        }
       }
 
       var mergedEvents = [];
@@ -1003,6 +1205,8 @@ function doPost(e) {
       for (var pi = 0; pi < payload.events.length; pi++) {
         var pe = payload.events[pi];
         if (!pe || !pe.id) continue;
+        if (isEventDeleted(pe)) continue; // 絕不讓已刪除的舊快照復活
+
         seenIds[pe.id] = true;
         var existingCloud = cloudMap[pe.id];
         if (existingCloud) {
@@ -1020,14 +1224,18 @@ function doPost(e) {
       // 補上雲端有但 payload 尚未拉取的新增記事（且未被標記刪除者）
       for (var ci2 = 0; ci2 < db.events.length; ci2++) {
         var ce2 = db.events[ci2];
-        if (ce2 && ce2.id && !seenIds[ce2.id] && db.deletedIds.indexOf(ce2.id) === -1) {
+        if (ce2 && ce2.id && !seenIds[ce2.id] && !isEventDeleted(ce2)) {
           mergedEvents.push(ce2);
         }
       }
 
+      if (db.deletedRecords.length > 1000) db.deletedRecords = db.deletedRecords.slice(-1000);
+      if (db.deletedIds.length > 1000) db.deletedIds = db.deletedIds.slice(-1000);
+
       file.setContent(JSON.stringify({
         events: mergedEvents,
-        deletedIds: db.deletedIds || [],
+        deletedIds: db.deletedIds,
+        deletedRecords: db.deletedRecords,
         updatedAt: new Date().toISOString()
       }));
       return ContentService.createTextOutput(JSON.stringify({

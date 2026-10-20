@@ -4,6 +4,8 @@ import type { EventRepository } from '../repositories/EventRepository'
 import {
   DEFAULT_GPT_BRIDGE_URL,
   DEFAULT_GPT_SECRET_KEY,
+  clearLocalTombstones,
+  getLocalTombstones,
   getGptBridgeUrl,
   getLastGptPullInfo,
   getLastGptSyncInfo,
@@ -12,6 +14,7 @@ import {
   isGptPulling,
   isGptSyncing,
   pullGptCloudEvents,
+  recordLocalTombstone,
   setGptAutoSyncEnabled,
   setGptBridgeUrl,
   setGptSecretKey,
@@ -281,5 +284,81 @@ describe('gptBridgeService', () => {
     expect(pullResult.deletedCount).toBe(1)
     expect(localDb).toHaveLength(1)
     expect(localDb[0].id).toBe('evt-to-keep')
+  })
+
+  it('records and returns local tombstones', () => {
+    clearLocalTombstones()
+    expect(getLocalTombstones()).toHaveLength(0)
+
+    recordLocalTombstone({ id: 'evt-del-1', title: '和老婆吃四川火鍋', date: '2026-10-18' })
+    const tombstones = getLocalTombstones()
+    expect(tombstones).toHaveLength(1)
+    expect(tombstones[0].id).toBe('evt-del-1')
+    expect(tombstones[0].title).toBe('和老婆吃四川火鍋')
+    expect(tombstones[0].date).toBe('2026-10-18')
+  })
+
+  it('pulls and deletes locally by title and date even when ID mismatches (solves四川火鍋sync anomaly)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        events: [],
+        deletedIds: ['gpt-990ca22d-14af-4861-9e47-152a9efa6cf2'],
+        deletedRecords: [
+          {
+            id: 'gpt-990ca22d-14af-4861-9e47-152a9efa6cf2',
+            title: '和老婆吃四川火鍋',
+            date: '2026-10-18',
+            deletedAt: '2026-10-19T00:00:00Z',
+          },
+        ],
+      }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    // Local DB has local UUID, NOT the gpt- ID
+    const localDb: Event[] = [
+      {
+        id: 'local-uuid-original-huoguo',
+        date: '2026-10-18',
+        title: '和老婆吃四川火鍋',
+        detail: '麻辣鴨血',
+        category: '生活',
+        tags: [],
+        attachmentIds: [],
+        createdAt: '2026-10-18T10:00:00Z',
+        updatedAt: '2026-10-18T10:00:00Z',
+      },
+    ]
+
+    const mockRepo: EventRepository = {
+      getAll: vi.fn().mockImplementation(async () => [...localDb]),
+      getById: vi.fn().mockImplementation(async (id: string) => localDb.find((e) => e.id === id)),
+      search: vi.fn().mockResolvedValue([]),
+      add: vi.fn().mockImplementation(async (evt: Event) => {
+        localDb.push(evt)
+        return evt
+      }),
+      update: vi.fn().mockImplementation(async (_id: string, evt: Event) => {
+        const idx = localDb.findIndex((e) => e.id === evt.id)
+        if (idx !== -1) localDb[idx] = evt
+        return evt
+      }),
+      delete: vi.fn().mockImplementation(async (id: string) => {
+        const idx = localDb.findIndex((e) => e.id === id)
+        if (idx !== -1) localDb.splice(idx, 1)
+      }),
+      replaceAll: vi.fn().mockImplementation(async (events: Event[]) => {
+        localDb.length = 0
+        localDb.push(...events)
+      }),
+    }
+
+    const pullResult = await pullGptCloudEvents(mockRepo)
+
+    expect(pullResult.success).toBe(true)
+    expect(pullResult.deletedCount).toBe(1)
+    expect(localDb).toHaveLength(0) // Successfully deleted despite ID mismatch!
   })
 })
