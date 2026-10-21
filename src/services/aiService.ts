@@ -54,12 +54,183 @@ function extractSearchKeywords(rawPrompt: string): string[] {
 }
 
 /**
+ * Structured Note Actions that the AI Assistant can execute directly on EdenNote.
+ */
+export interface EdenNoteActionPayload {
+  action: 'create' | 'update' | 'delete'
+  data: {
+    id?: string
+    date?: string
+    title?: string
+    detail?: string
+    category?: string
+    amount?: number
+    tags?: string[]
+  }
+}
+
+/**
+ * Parse structured edennote-action JSON block from assistant response.
+ */
+export function parseEdenNoteAction(content: string): { action: EdenNoteActionPayload | null; cleanContent: string } {
+  if (!content) return { action: null, cleanContent: '' }
+  const match = content.match(/```edennote-action\s*([\s\S]*?)\s*```/)
+  if (!match) {
+    return { action: null, cleanContent: content }
+  }
+
+  try {
+    const parsed = JSON.parse(match[1]) as EdenNoteActionPayload
+    const cleanContent = content.replace(/```edennote-action\s*[\s\S]*?\s*```/, '').trim()
+    return { action: parsed, cleanContent }
+  } catch (err) {
+    console.warn('Failed to parse edennote-action block:', err)
+    return { action: null, cleanContent: content }
+  }
+}
+
+/**
+ * Convert assistant Markdown answer into natural, clear spoken speech for TTS.
+ */
+export function cleanTextForSpeech(text: string): string {
+  if (!text) return ''
+  const cleaned = text
+    .replace(/```edennote-action[\s\S]*?```/g, '')
+    .replace(/```[\s\S]*?```/g, '')
+    .replace(/\|[^\n]+\|/g, ' ')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/[#*`_~>]/g, '')
+    .replace(/[-+]\s+/g, '')
+    .replace(/CAGR/gi, '年化複合成長率')
+    .replace(/TWD/gi, '元')
+    .replace(/https?:\/\/\S+/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  // Limit spoken length so assistant doesn't recite endless lists
+  if (cleaned.length > 250) {
+    return cleaned.slice(0, 240) + '。詳細內容已顯示在螢幕對話框中。'
+  }
+  return cleaned
+}
+
+/**
  * Local analytical engine to handle data queries directly if Gemini quota is unavailable.
  */
 export function localSmartAnalyze(prompt: string, events: Event[]): string {
   const p = prompt.trim().toLowerCase()
   const currency = new Intl.NumberFormat('zh-TW', { style: 'currency', currency: 'TWD', maximumFractionDigits: 0 })
   const total = events.length
+
+  // --- A0. 語音或文字指令：新增 / 記錄記事 (Create Note Action) ---
+  const isCreateIntent = /^(請幫我記|幫我記|記一下|記一筆|新增記事|新增待辦|新增|記錄一筆|記錄|紀錄一筆|紀錄|寫下|提醒我)/i.test(prompt) ||
+    /(記到|新增到|寫到|記在)edennote/i.test(prompt) ||
+    /^(買了|吃了|喝了|花了|花費)/.test(prompt)
+
+  if (isCreateIntent) {
+    const now = new Date()
+    const targetDate = new Date(now)
+    let dateStr = ''
+
+    if (p.includes('明天') || p.includes('明日')) {
+      targetDate.setDate(targetDate.getDate() + 1)
+    } else if (p.includes('後天')) {
+      targetDate.setDate(targetDate.getDate() + 2)
+    } else if (p.includes('昨天') || p.includes('昨日')) {
+      targetDate.setDate(targetDate.getDate() - 1)
+    } else if (p.includes('前天')) {
+      targetDate.setDate(targetDate.getDate() - 2)
+    } else {
+      const dateMatch = prompt.match(/(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/) || prompt.match(/(\d{1,2})月(\d{1,2})[號日]/)
+      if (dateMatch) {
+        if (dateMatch.length === 4) {
+          dateStr = `${dateMatch[1]}-${String(dateMatch[2]).padStart(2, '0')}-${String(dateMatch[3]).padStart(2, '0')}`
+        } else if (dateMatch.length === 3) {
+          dateStr = `${now.getFullYear()}-${String(dateMatch[1]).padStart(2, '0')}-${String(dateMatch[2]).padStart(2, '0')}`
+        }
+      }
+    }
+
+    if (!dateStr) {
+      dateStr = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`
+    }
+
+    let amount: number | undefined = undefined
+    const amountMatch = prompt.match(/(\d+(?:,\d+)*(?:\.\d+)?)\s*(?:元|塊|twd|ntd|\$)/i) || prompt.match(/(?:花了|消費|支出|金額|買了)\s*(\d+(?:,\d+)*(?:\.\d+)?)/)
+    if (amountMatch) {
+      amount = parseFloat(amountMatch[1].replace(/,/g, ''))
+    }
+
+    let category = '生活'
+    const tags = ['語音記事']
+    if (/(看病|看診|牙醫|醫院|診所|掛號|感冒|吃藥|醫生)/.test(prompt)) {
+      category = '醫療'
+      tags.push('醫療')
+    } else if (/(早餐|午餐|晚餐|宵夜|咖啡|飲料|吃|喝|牛排|便當|火鍋)/.test(prompt)) {
+      category = '餐飲'
+      tags.push('餐飲')
+    } else if (/(加班|開會|主管|上班|專案|工作|值班|報告)/.test(prompt)) {
+      category = '工作'
+      tags.push('工作')
+    } else if (/(買|花費|購物|消費|繳費|買了|帳單)/.test(prompt)) {
+      category = '財務'
+      tags.push('消費')
+    } else if (/(生日|紀念日|週年)/.test(prompt)) {
+      category = '紀念日'
+      tags.push('紀念日')
+    }
+
+    if (/(待辦|提醒|記得)/.test(prompt)) {
+      tags.push('待辦')
+    }
+
+    let cleanTitle = prompt
+      .replace(/^(請幫我記一下|請幫我記一筆|請幫我記|幫我記一下|幫我記一筆|幫我記|記一下|記一筆|新增記事|新增待辦|新增|記錄一筆|記錄|紀錄一筆|紀錄|寫下|提醒我)/g, '')
+      .replace(/^(今天|今日|明天|明日|後天|昨天|昨日|前天)/g, '')
+      .replace(/(記到|新增到|寫到|記在)edennote/gi, '')
+      .replace(/[，,。.\n\r#；;:：、\t]/g, ' ')
+      .trim()
+
+    if (!cleanTitle) cleanTitle = '日常語音記事'
+
+    const actionData: EdenNoteActionPayload = {
+      action: 'create',
+      data: {
+        date: dateStr,
+        title: cleanTitle,
+        category,
+        amount,
+        tags,
+        detail: prompt,
+      },
+    }
+
+    const actionBlock = `\`\`\`edennote-action\n${JSON.stringify(actionData, null, 2)}\n\`\`\``
+    return `${actionBlock}\n\n### 📝 已為您記錄至 EdenNote\n\n- **日期**：${dateStr}\n- **標題**：**${cleanTitle}**\n- **分類**：${category}\n${amount ? `- **金額**：${currency.format(amount)}\n` : ''}- **標籤**：${tags.join(' ')}\n\n*💡 記事已成功存入 EdenNote，您可隨時在 Daily 頁面檢視或點擊進行編輯！*`
+  }
+
+  // --- A1. 刪除記事指令 (Delete Note Action) ---
+  const isDeleteIntent = /^(請幫我刪除|幫我刪除|刪除記事|刪除事件|刪除|刪掉|移除)/.test(prompt)
+  if (isDeleteIntent) {
+    const rawKw = prompt.replace(/^(請幫我刪除|幫我刪除|刪除記事|刪除事件|刪除|刪掉|移除)/g, '').trim()
+    const kw = rawKw.replace(/(的記事|的事件|這筆|那筆|這篇|紀錄|記事)/g, '').trim()
+    const target = events.find((e) => {
+      const text = `${e.title} ${e.detail} ${e.category}`.toLowerCase()
+      return (kw && text.includes(kw.toLowerCase())) || (rawKw && text.includes(rawKw.toLowerCase()))
+    })
+
+    if (target) {
+      const actionData: EdenNoteActionPayload = {
+        action: 'delete',
+        data: {
+          id: target.id,
+          title: target.title,
+        },
+      }
+      const actionBlock = `\`\`\`edennote-action\n${JSON.stringify(actionData, null, 2)}\n\`\`\``
+      return `${actionBlock}\n\n### 🗑️ 已為您刪除記事\n\n已自 EdenNote 移除：**[${target.date || '無日期'}] ${target.title}**（${target.category}）。`
+    }
+  }
 
   // A. 外部即時資訊 / 體育賽事 / 新聞 / 天氣 / 股市等外部問題
   const isExternalLiveQuery = /(亞運|奧運|世足|世界盃|中職|棒球|籃球|nba|mlb|賽程|戰績|比分|金牌|獎牌|體育|天氣|氣溫|下雨|降雨|即時新聞|今日新聞|國際新聞|頭條|股價|美股|台股|大盤|匯率|總統大選|熱搜)/i.test(prompt)
@@ -664,7 +835,26 @@ ${eventsFormatted || '（目前資料庫中尚無任何事件紀錄）'}
    - 必須使用台灣習慣的「繁體中文」回答。
    - 語氣親切、專業、富有洞察力與對話感（如官方 Gemini App 對話體驗）。
    - 善用 Markdown 排版：小標題、粗體、清單、Markdown 表格。
-   - 若引用到特定個人事件，請標示出日期與標題，並標記格式 [事件：標題 (日期)](event:ID)。`
+   - 若引用到特定個人事件，請標示出日期與標題，並標記格式 [事件：標題 (日期)](event:ID)。
+
+4. 記事增減與修改動作（EdenNote Action 執行能力）：
+   當使用者發出「新增記事、幫我記、記一筆、新增待辦、寫下、修改記事、刪除事件」等指令時：
+   請務必在回覆中附上一個專屬的 JSON 動作區塊：
+   \`\`\`edennote-action
+   {
+     "action": "create" | "update" | "delete",
+     "data": {
+       "id": "若為修改或刪除請提供該事件 ID",
+       "date": "YYYY-MM-DD",
+       "title": "事件標題",
+       "detail": "備註詳情",
+       "category": "工作 | 生活 | 醫療 | 餐飲 | 財務 | 紀念日",
+       "amount": 數字金額（若有），無則省略,
+       "tags": ["標籤名稱"]
+     }
+   }
+   \`\`\`
+   同時在該區塊外，用自然流暢的口吻向使用者確認執行結果（例如：「好的！已為您在 2026-10-22 新增【看牙醫】（醫療），時間為下午三點！」）。`
 }
 
 /**

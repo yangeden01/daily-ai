@@ -1,25 +1,38 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ArrowUp,
   Bot,
   Check,
+  CircleDollarSign,
+  Clock,
   Copy,
+  Database,
+  ExternalLink,
   Globe,
+  KeyRound,
   LoaderCircle,
+  Mic,
+  MicOff,
+  PhoneCall,
+  PhoneOff,
   RotateCcw,
   Sparkles,
   TrendingUp,
-  Clock,
-  CircleDollarSign,
-  Database,
-  ExternalLink,
-  KeyRound,
+  Volume2,
+  VolumeX,
   X,
 } from 'lucide-react'
 import type { Event } from '../../models/Event'
 import { eventRepository } from '../../repositories'
 import { MarkdownMessage } from '../../components/AIChat/MarkdownMessage'
-import { sendChatMessage, testGeminiApiKey, type ChatMessage } from '../../services/aiService'
+import {
+  sendChatMessage,
+  testGeminiApiKey,
+  parseEdenNoteAction,
+  cleanTextForSpeech,
+  type ChatMessage,
+  type EdenNoteActionPayload,
+} from '../../services/aiService'
 import { useAI } from '../../contexts/AIContext'
 
 const STORAGE_KEY = 'edennote_ai_chat_history_v1'
@@ -49,6 +62,39 @@ export const AIAssistantPage: React.FC = () => {
   const [input, setInput] = useState('')
   const [isSending, setIsSending] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
+
+  // Voice Assistant & Hands-free Mode State
+  const [isVoiceCallOpen, setIsVoiceCallOpen] = useState(false)
+  const [voiceCallStatus, setVoiceCallStatus] = useState<
+    'idle' | 'listening' | 'processing' | 'speaking' | 'paused' | 'unsupported' | 'error'
+  >('idle')
+  const [liveTranscript, setLiveTranscript] = useState('')
+  const [lastAiReply, setLastAiReply] = useState('')
+  const [voiceError, setVoiceError] = useState<string | null>(null)
+  const [autoTTS, setAutoTTS] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('edennote_ai_tts_enabled')
+      return saved !== null ? saved === 'true' : true
+    } catch {
+      return true
+    }
+  })
+  const [isDictatingInput, setIsDictatingInput] = useState(false)
+
+  // Refs for tracking voice lifecycle without stale closures
+  const isVoiceCallOpenRef = useRef(false)
+  const voiceCallStatusRef = useRef<'idle' | 'listening' | 'processing' | 'speaking' | 'paused' | 'unsupported' | 'error'>('idle')
+  const recognitionRef = useRef<any>(null)
+  const silenceTimerRef = useRef<any>(null)
+
+  // Keep refs in sync
+  useEffect(() => {
+    isVoiceCallOpenRef.current = isVoiceCallOpen
+  }, [isVoiceCallOpen])
+
+  useEffect(() => {
+    voiceCallStatusRef.current = voiceCallStatus
+  }, [voiceCallStatus])
 
   // User Gemini API Key modal state
   const [keyInput, setKeyInput] = useState(userApiKey)
@@ -107,7 +153,337 @@ export const AIAssistantPage: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isSending])
 
-  const handleSend = async (customPrompt?: string) => {
+  // Cleanup speech synthesis and recognition on unmount
+  useEffect(() => {
+    return () => {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel()
+      }
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop()
+        } catch {}
+      }
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current)
+      }
+    }
+  }, [])
+
+  // Execute Note Actions (create, update, delete) directly on EdenNote local repository
+  const executeNoteAction = async (actionPayload: EdenNoteActionPayload) => {
+    try {
+      const { action, data } = actionPayload
+      const todayIso = new Date().toISOString().slice(0, 10)
+
+      if (action === 'create') {
+        const newEvent: Event = {
+          id: `evt-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          date: data.date || todayIso,
+          title: data.title || '日常記事',
+          detail: data.detail || '',
+          category: data.category || '生活',
+          amount: typeof data.amount === 'number' ? data.amount : undefined,
+          tags: Array.isArray(data.tags) && data.tags.length > 0 ? data.tags : ['語音記事'],
+          attachmentIds: [],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          recordType: 'daily',
+        }
+        await eventRepository.add(newEvent)
+        const reloaded = await eventRepository.getAll()
+        setEvents(reloaded)
+        return { success: true, event: newEvent }
+      } else if (action === 'update' && data.id) {
+        const existing = events.find((e) => e.id === data.id)
+        if (existing) {
+          const updated: Event = {
+            ...existing,
+            title: data.title ?? existing.title,
+            detail: data.detail ?? existing.detail,
+            category: data.category ?? existing.category,
+            date: data.date ?? existing.date,
+            amount: data.amount !== undefined ? data.amount : existing.amount,
+            tags: Array.isArray(data.tags) ? data.tags : existing.tags,
+            updatedAt: new Date().toISOString(),
+          }
+          await eventRepository.update(data.id, updated)
+          const reloaded = await eventRepository.getAll()
+          setEvents(reloaded)
+          return { success: true, event: updated }
+        }
+      } else if (action === 'delete') {
+        let targetId = data.id
+        if (!targetId && data.title) {
+          const found = events.find((e) => e.title.includes(data.title!))
+          if (found) targetId = found.id
+        }
+        if (targetId) {
+          await eventRepository.delete(targetId)
+          const reloaded = await eventRepository.getAll()
+          setEvents(reloaded)
+          return { success: true, deletedId: targetId }
+        }
+      }
+    } catch (err) {
+      console.error('Failed to execute note action:', err)
+    }
+    return { success: false }
+  }
+
+  // TTS speech helper
+  const speakVoiceReply = useCallback((text: string, onEnd?: () => void) => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+      onEnd?.()
+      return
+    }
+    try {
+      window.speechSynthesis.cancel()
+      const spokenText = cleanTextForSpeech(text)
+      if (!spokenText) {
+        onEnd?.()
+        return
+      }
+
+      setVoiceCallStatus('speaking')
+      const utterance = new SpeechSynthesisUtterance(spokenText)
+      utterance.lang = 'zh-TW'
+      utterance.rate = 1.05
+      utterance.pitch = 1.0
+
+      const voices = window.speechSynthesis.getVoices()
+      const zhVoice = voices.find((v) => v.lang.includes('zh-TW') || v.lang.includes('zh-HK') || v.lang.includes('zh'))
+      if (zhVoice) utterance.voice = zhVoice
+
+      utterance.onend = () => {
+        onEnd?.()
+      }
+      utterance.onerror = (e) => {
+        console.warn('SpeechSynthesis error:', e)
+        onEnd?.()
+      }
+
+      window.speechSynthesis.speak(utterance)
+    } catch (err) {
+      console.warn('TTS speak error:', err)
+      onEnd?.()
+    }
+  }, [])
+
+  // Toggle TTS setting
+  const toggleTTS = () => {
+    setAutoTTS((prev) => {
+      const next = !prev
+      try {
+        localStorage.setItem('edennote_ai_tts_enabled', String(next))
+      } catch {}
+      if (!next && typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel()
+      }
+      return next
+    })
+  }
+
+  // Stop current recognition
+  const stopVoiceRecognition = () => {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current)
+      silenceTimerRef.current = null
+    }
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop()
+      } catch {}
+      recognitionRef.current = null
+    }
+  }
+
+  // Continuous Voice Call: Start listening
+  const startVoiceCallListening = () => {
+    const SpeechRecognitionClass = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    if (!SpeechRecognitionClass) {
+      setVoiceCallStatus('unsupported')
+      setVoiceError('此裝置或瀏覽器不支援語音辨識 API，建議使用 Chrome 或最新 Android Webview。')
+      return
+    }
+
+    stopVoiceRecognition()
+    setVoiceCallStatus('listening')
+    setLiveTranscript('')
+    setVoiceError(null)
+
+    try {
+      const recognition = new SpeechRecognitionClass()
+      recognitionRef.current = recognition
+      recognition.lang = 'zh-TW'
+      recognition.continuous = false
+      recognition.interimResults = true
+      recognition.maxAlternatives = 1
+
+      let finalCaptured = ''
+
+      recognition.onstart = () => {
+        setVoiceCallStatus('listening')
+      }
+
+      recognition.onresult = (e: any) => {
+        let currentText = ''
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          const item = e.results[i]
+          if (item[0]?.transcript) {
+            currentText += item[0].transcript
+          }
+          if (item.isFinal) {
+            finalCaptured = currentText
+          }
+        }
+        setLiveTranscript(currentText || finalCaptured)
+
+        // Reset silence timer on every speech event: 1.3s of silence triggers sending
+        if (silenceTimerRef.current) {
+          clearTimeout(silenceTimerRef.current)
+        }
+        silenceTimerRef.current = setTimeout(() => {
+          if (currentText.trim()) {
+            stopVoiceRecognition()
+            void processVoiceUtterance(currentText.trim())
+          }
+        }, 1300)
+      }
+
+      recognition.onerror = (e: any) => {
+        console.warn('SpeechRecognition error:', e.error)
+        if (e.error === 'not-allowed') {
+          setVoiceError('請允許麥克風權限以使用免動手語音秘書。')
+          setVoiceCallStatus('error')
+        } else if (e.error === 'no-speech') {
+          if (isVoiceCallOpenRef.current && voiceCallStatusRef.current !== 'speaking' && voiceCallStatusRef.current !== 'processing') {
+            setTimeout(() => {
+              if (isVoiceCallOpenRef.current && voiceCallStatusRef.current !== 'speaking') {
+                startVoiceCallListening()
+              }
+            }, 300)
+          }
+        }
+      }
+
+      recognition.onend = () => {
+        if (finalCaptured.trim()) {
+          void processVoiceUtterance(finalCaptured.trim())
+        } else if (isVoiceCallOpenRef.current && voiceCallStatusRef.current === 'listening') {
+          setTimeout(() => {
+            if (isVoiceCallOpenRef.current && voiceCallStatusRef.current === 'listening') {
+              startVoiceCallListening()
+            }
+          }, 350)
+        }
+      }
+
+      recognition.start()
+    } catch (err) {
+      console.warn('Failed to start speech recognition:', err)
+      setVoiceCallStatus('error')
+    }
+  }
+
+  // Handle spoken utterance in hands-free voice mode
+  const processVoiceUtterance = async (spokenText: string) => {
+    if (!spokenText.trim()) return
+    setVoiceCallStatus('processing')
+    setLiveTranscript(spokenText)
+
+    // Check for exit / farewell commands
+    if (/^(再見|掰掰|拜拜|退出|結束|停止|休息吧|關閉)/.test(spokenText.trim())) {
+      const farewell = '好的！隨時為您服務，祝您有美好的一天！'
+      setLastAiReply(farewell)
+      speakVoiceReply(farewell, () => {
+        closeVoiceCall()
+      })
+      return
+    }
+
+    // Submit to AI
+    await handleSend(spokenText, true)
+  }
+
+  // Open hands-free voice secretary overlay
+  const openVoiceCall = () => {
+    setIsVoiceCallOpen(true)
+    isVoiceCallOpenRef.current = true
+    setLiveTranscript('')
+    const greeting = '您好！我是您的生活秘書，請直接說話，我正在聽。'
+    setLastAiReply(greeting)
+    speakVoiceReply(greeting, () => {
+      if (isVoiceCallOpenRef.current) {
+        startVoiceCallListening()
+      }
+    })
+  }
+
+  // Close hands-free voice secretary overlay
+  const closeVoiceCall = () => {
+    isVoiceCallOpenRef.current = false
+    setIsVoiceCallOpen(false)
+    setVoiceCallStatus('idle')
+    setLiveTranscript('')
+    stopVoiceRecognition()
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel()
+    }
+  }
+
+  // Quick dictation for bottom input textarea
+  const handleDictateClick = () => {
+    const SpeechRecognitionClass = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    if (!SpeechRecognitionClass) {
+      alert('您的瀏覽器不支援語音辨識功能。')
+      return
+    }
+
+    if (isDictatingInput) {
+      stopVoiceRecognition()
+      setIsDictatingInput(false)
+      return
+    }
+
+    try {
+      const rec = new SpeechRecognitionClass()
+      recognitionRef.current = rec
+      rec.lang = 'zh-TW'
+      rec.continuous = false
+      rec.interimResults = true
+
+      setIsDictatingInput(true)
+
+      rec.onresult = (e: any) => {
+        let text = ''
+        for (let i = 0; i < e.results.length; i++) {
+          text += e.results[i][0].transcript
+        }
+        setInput(text)
+        if (textareaRef.current) {
+          textareaRef.current.style.height = 'auto'
+          textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`
+        }
+      }
+
+      rec.onerror = () => {
+        setIsDictatingInput(false)
+      }
+
+      rec.onend = () => {
+        setIsDictatingInput(false)
+      }
+
+      rec.start()
+    } catch (err) {
+      console.warn('Dictation failed:', err)
+      setIsDictatingInput(false)
+    }
+  }
+
+  // Send message
+  const handleSend = async (customPrompt?: string, isFromVoiceCall = false) => {
     const textToSend = (customPrompt || input).trim()
     if (!textToSend || isSending) return
 
@@ -144,25 +520,62 @@ export const AIAssistantPage: React.FC = () => {
         setIsLocalMode(true)
       }
 
+      // Execute Note Action if present in reply
+      const { action, cleanContent } = parseEdenNoteAction(response.reply)
+      if (action) {
+        await executeNoteAction(action)
+      }
+
+      const finalReply = cleanContent || response.reply
+
       const assistantMessage: ChatMessage = {
         id: `assistant-${Date.now()}`,
         role: 'assistant',
-        content: response.reply,
+        content: finalReply,
         timestamp: new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }),
         sources: response.sources,
         isLocalFallback: response.isLocalFallback,
       }
 
       setMessages((prev) => [...prev, assistantMessage])
+      setLastAiReply(finalReply)
+
+      // Audio response feedback
+      if (isFromVoiceCall || (autoTTS && isVoiceCallOpenRef.current)) {
+        speakVoiceReply(finalReply, () => {
+          // Automatic hands-free re-listen loop!
+          if (isVoiceCallOpenRef.current) {
+            setTimeout(() => {
+              if (isVoiceCallOpenRef.current) {
+                startVoiceCallListening()
+              }
+            }, 350)
+          }
+        })
+      } else if (autoTTS && !isFromVoiceCall) {
+        speakVoiceReply(finalReply)
+      }
     } catch (err: unknown) {
       const error = err as Error
+      const errMsg = `⚠️ 回覆時發生問題：${error?.message || '未知錯誤'}。請重新提問或稍後再試。`
       const errorMessage: ChatMessage = {
         id: `assistant-error-${Date.now()}`,
         role: 'assistant',
-        content: `⚠️ 回覆時發生問題：${error?.message || '未知錯誤'}。請重新提問或稍後再試。`,
+        content: errMsg,
         timestamp: new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }),
       }
       setMessages((prev) => [...prev, errorMessage])
+      setLastAiReply(errMsg)
+
+      if (isFromVoiceCall) {
+        speakVoiceReply(errMsg, () => {
+          if (isVoiceCallOpenRef.current) {
+            setTimeout(() => {
+              if (isVoiceCallOpenRef.current) startVoiceCallListening()
+            }, 400)
+          }
+        })
+      }
     } finally {
       setIsSending(false)
     }
@@ -192,8 +605,8 @@ export const AIAssistantPage: React.FC = () => {
 
   return (
     <div className="flex flex-col min-h-[calc(100dvh-135px)] pb-36 sm:pb-40">
-      {/* Top Bar: Database status and Clear button */}
-      <section className="sticky top-14 z-10 flex items-center justify-between gap-2 rounded-2xl border border-stone-200/90 bg-white/95 px-3.5 py-2.5 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-stone-900/95">
+      {/* Top Bar: Database status, Voice TTS toggle, and Clear button */}
+      <section className="sticky top-14 z-10 flex items-center justify-between gap-2 rounded-2xl border border-stone-200/90 bg-white/95 px-3 py-2 sm:px-3.5 sm:py-2.5 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-stone-900/95">
         <div className="flex items-center gap-2 text-xs font-semibold text-stone-700 dark:text-stone-300">
           <span className="relative flex h-2.5 w-2.5">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
@@ -201,7 +614,7 @@ export const AIAssistantPage: React.FC = () => {
           </span>
           <span className="flex items-center gap-1">
             <Database size={13} className="text-indigo-600 dark:text-indigo-400" />
-            <span>EdenNote 資料庫：</span>
+            <span className="hidden xs:inline">EdenNote 資料庫：</span>
             {loadingEvents ? (
               <span className="text-stone-400">載入中…</span>
             ) : (
@@ -210,24 +623,71 @@ export const AIAssistantPage: React.FC = () => {
           </span>
         </div>
 
-        {/* Clear chat history button */}
-        {messages.length > 0 && (
+        <div className="flex items-center gap-1.5">
+          {/* TTS Audio toggle */}
           <button
             type="button"
-            onClick={handleClear}
-            className="inline-flex items-center gap-1 rounded-full border border-stone-200 bg-stone-50 px-2.5 py-1 text-xs font-medium text-stone-600 hover:bg-stone-100 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300 transition"
-            title="清空對話"
+            onClick={toggleTTS}
+            className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium transition ${
+              autoTTS
+                ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300'
+                : 'bg-stone-100 text-stone-400 dark:bg-stone-800 dark:text-stone-500'
+            }`}
+            title={autoTTS ? '已開啟語音自動朗讀' : '已關閉語音朗讀'}
           >
-            <RotateCcw size={12} />
-            <span>清空對話</span>
+            {autoTTS ? <Volume2 size={13} /> : <VolumeX size={13} />}
+            <span className="hidden xs:inline">{autoTTS ? '朗讀開' : '朗讀關'}</span>
           </button>
-        )}
+
+          {/* Clear chat history button */}
+          {messages.length > 0 && (
+            <button
+              type="button"
+              onClick={handleClear}
+              className="inline-flex items-center gap-1 rounded-full border border-stone-200 bg-stone-50 px-2 py-1 text-xs font-medium text-stone-600 hover:bg-stone-100 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300 transition"
+              title="清空對話"
+            >
+              <RotateCcw size={12} />
+              <span className="hidden sm:inline">清空</span>
+            </button>
+          )}
+        </div>
+      </section>
+
+      {/* Prominent Hands-free Voice Call Banner */}
+      <section className="mt-3">
+        <button
+          type="button"
+          onClick={openVoiceCall}
+          className="group relative flex w-full items-center justify-between overflow-hidden rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 p-3.5 text-left text-white shadow-lg shadow-indigo-600/20 transition-all hover:scale-[1.01] hover:shadow-xl active:scale-95"
+        >
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-md transition group-hover:scale-110">
+              <PhoneCall size={22} className="animate-pulse text-white" />
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5 font-bold text-sm tracking-tight sm:text-base">
+                <span>🎙️ 開啟免持連續語音對話</span>
+                <span className="rounded-full bg-white/25 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white">
+                  免碰手機
+                </span>
+              </div>
+              <p className="mt-0.5 text-xs text-white/80">
+                開車、做家事全程動嘴問、用耳聽，自動查詢與增減記事
+              </p>
+            </div>
+          </div>
+          <div className="hidden sm:flex items-center gap-1 text-xs font-semibold text-white/90">
+            <span>開始通話</span>
+            <span>&rarr;</span>
+          </div>
+        </button>
       </section>
 
       {/* Messages area */}
       <div className="flex-1 space-y-4 py-4 pb-12">
         {messages.length === 0 ? (
-          /* Empty / Welcome State like ChatGPT */
+          /* Empty / Welcome State */
           <div className="my-auto flex flex-col items-center justify-center py-6 text-center">
             <div className="relative mb-3 flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-tr from-indigo-600 via-purple-600 to-pink-500 text-white shadow-lg shadow-indigo-500/25">
               <Sparkles size={32} />
@@ -237,7 +697,7 @@ export const AIAssistantPage: React.FC = () => {
               EdenNote AI 助理
             </h2>
             <p className="mt-2 max-w-md text-xs sm:text-sm leading-relaxed text-stone-500 dark:text-stone-400">
-              我是專屬於您的 EdenNote 智慧分析助理，能深入閱讀並分析您儲存在本裝置內的個人生活紀錄（薪資調幅、工時加班、記事備忘、消費與紀念日）！
+              我是專屬於您的 EdenNote 智慧生活秘書，能深入閱讀並分析您儲存在本裝置內的個人生活紀錄，並支援全程語音查詢與增減記事！
             </p>
 
             {/* Quick feature badges */}
@@ -253,14 +713,35 @@ export const AIAssistantPage: React.FC = () => {
               </span>
             </div>
 
-            {/* Direct jump to input tip */}
-            <div className="mt-6 text-center">
+            {/* Quick Prompts */}
+            <div className="mt-5 flex flex-wrap justify-center gap-2 max-w-md">
               <button
                 type="button"
-                onClick={() => textareaRef.current?.focus()}
-                className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-4 py-2 text-xs font-semibold text-indigo-700 transition hover:bg-indigo-100 active:scale-95 dark:bg-indigo-950/60 dark:text-indigo-300 dark:hover:bg-indigo-900/80"
+                onClick={() => void handleSend('今天有哪些記事？')}
+                className="rounded-full border border-stone-200 bg-white px-3 py-1.5 text-xs text-stone-700 shadow-sm transition hover:bg-stone-50 hover:border-indigo-300 dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300"
               >
-                <span>💬 請直接在下方輸入框鍵入問題即可開始對話</span>
+                📅 今天有哪些記事？
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleSend('幫我分析歷年加薪')}
+                className="rounded-full border border-stone-200 bg-white px-3 py-1.5 text-xs text-stone-700 shadow-sm transition hover:bg-stone-50 hover:border-indigo-300 dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300"
+              >
+                📈 分析歷年加薪
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleSend('幫我記一下明天上午十點看牙醫')}
+                className="rounded-full border border-stone-200 bg-white px-3 py-1.5 text-xs text-stone-700 shadow-sm transition hover:bg-stone-50 hover:border-indigo-300 dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300"
+              >
+                📝 幫我記明天看牙醫
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleSend('統計加班紀錄')}
+                className="rounded-full border border-stone-200 bg-white px-3 py-1.5 text-xs text-stone-700 shadow-sm transition hover:bg-stone-50 hover:border-indigo-300 dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300"
+              >
+                ⏱️ 統計加班紀錄
               </button>
             </div>
           </div>
@@ -317,38 +798,49 @@ export const AIAssistantPage: React.FC = () => {
                         </div>
                       )}
 
-                      {/* Action buttons (Copy) */}
+                      {/* Action buttons (Copy, Read aloud) */}
                       <div className="mt-2.5 flex items-center justify-between text-[11px] text-stone-400">
                         <div className="flex items-center gap-2">
                           <span>{message.timestamp}</span>
                           {message.isLocalFallback ? (
-                            <span className="inline-flex items-center gap-1 rounded bg-stone-100 px-1.5 py-0.5 text-[10px] font-medium text-stone-600 dark:bg-white/10 dark:text-stone-300" title="離線或預付額度維護時由本機引擎解答">
-                              ⚡ 本機分析
+                            <span className="inline-flex items-center gap-1 rounded bg-stone-100 px-1.5 py-0.5 text-[10px] font-medium text-stone-600 dark:bg-white/10 dark:text-stone-300">
+                              ⚡ 本機引擎
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-300" title="由雲端 Gemini 3.8 Flash AI Agent 深度分析解答">
-                              ✨ Gemini AI Agent
+                            <span className="inline-flex items-center gap-1 rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-300">
+                              ✨ Gemini AI
                             </span>
                           )}
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => copyToClipboard(message.content, message.id)}
-                          className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-stone-100 hover:text-stone-600 dark:hover:bg-stone-800 dark:hover:text-stone-200"
-                          title="複製內容"
-                        >
-                          {copiedId === message.id ? (
-                            <>
-                              <Check size={12} className="text-emerald-500" />
-                              <span className="text-emerald-500">已複製</span>
-                            </>
-                          ) : (
-                            <>
-                              <Copy size={12} />
-                              <span>複製</span>
-                            </>
-                          )}
-                        </button>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => speakVoiceReply(message.content)}
+                            className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-stone-100 hover:text-stone-600 dark:hover:bg-stone-800 dark:hover:text-stone-200"
+                            title="語音朗讀回覆"
+                          >
+                            <Volume2 size={12} />
+                            <span>朗讀</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => copyToClipboard(message.content, message.id)}
+                            className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-stone-100 hover:text-stone-600 dark:hover:bg-stone-800 dark:hover:text-stone-200"
+                            title="複製內容"
+                          >
+                            {copiedId === message.id ? (
+                              <>
+                                <Check size={12} className="text-emerald-500" />
+                                <span className="text-emerald-500">已複製</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy size={12} />
+                                <span>複製</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -372,7 +864,7 @@ export const AIAssistantPage: React.FC = () => {
             </div>
             <div className="flex items-center gap-2 rounded-3xl rounded-tl-sm border border-stone-200/90 bg-white px-4 py-3 text-xs sm:text-sm font-medium text-stone-600 shadow-sm dark:border-white/10 dark:bg-stone-900 dark:text-stone-300">
               <LoaderCircle size={16} className="animate-spin text-indigo-600 dark:text-indigo-400" />
-              <span>EdenNote AI 正在檢索資料庫並思考計算中…</span>
+              <span>EdenNote AI 正在檢索資料庫並思考處理中…</span>
             </div>
           </div>
         )}
@@ -386,7 +878,21 @@ export const AIAssistantPage: React.FC = () => {
         style={{ bottom: 'calc(var(--app-bottom-margin, 1.75rem) + 4.75rem)' }}
       >
         <div className="pointer-events-auto">
-          <div className="relative flex items-end gap-2 rounded-3xl border-2 border-indigo-400/90 bg-white/95 p-1.5 sm:p-2 shadow-2xl shadow-indigo-950/15 backdrop-blur-md transition-all focus-within:border-indigo-600 focus-within:ring-4 focus-within:ring-indigo-500/20 dark:border-indigo-500/80 dark:bg-stone-900/95 dark:shadow-black/40">
+          <div className="relative flex items-end gap-1.5 sm:gap-2 rounded-3xl border-2 border-indigo-400/90 bg-white/95 p-1.5 sm:p-2 shadow-2xl shadow-indigo-950/15 backdrop-blur-md transition-all focus-within:border-indigo-600 focus-within:ring-4 focus-within:ring-indigo-500/20 dark:border-indigo-500/80 dark:bg-stone-900/95 dark:shadow-black/40">
+            {/* Quick Microphone Button for Text Input */}
+            <button
+              type="button"
+              onClick={handleDictateClick}
+              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl transition active:scale-95 ${
+                isDictatingInput
+                  ? 'bg-rose-500 text-white animate-pulse shadow-md shadow-rose-500/30'
+                  : 'bg-stone-100 text-stone-600 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700'
+              }`}
+              title={isDictatingInput ? '正在聆聽語音... 點擊結束' : '語音口述打字'}
+            >
+              {isDictatingInput ? <MicOff size={18} /> : <Mic size={18} />}
+            </button>
+
             <textarea
               ref={textareaRef}
               rows={1}
@@ -394,13 +900,12 @@ export const AIAssistantPage: React.FC = () => {
               disabled={isSending}
               onChange={(e) => {
                 setInput(e.target.value)
-                // Auto-expand textarea
                 e.target.style.height = 'auto'
                 e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`
               }}
               onKeyDown={handleKeyDown}
-              placeholder="問問EdenNote AI"
-              className="flex-1 max-h-32 resize-none bg-transparent px-3 py-2 text-sm leading-relaxed text-stone-900 placeholder:text-stone-400 focus:outline-none dark:text-white dark:placeholder:text-stone-500"
+              placeholder={isDictatingInput ? '正在聆聽您的口述...' : '問問EdenNote AI，或吩咐記下一筆...'}
+              className="flex-1 max-h-32 resize-none bg-transparent px-2.5 py-2 text-sm leading-relaxed text-stone-900 placeholder:text-stone-400 focus:outline-none dark:text-white dark:placeholder:text-stone-500"
             />
 
             <button
@@ -419,6 +924,176 @@ export const AIAssistantPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* ========================================================================= */}
+      {/* IMMERSIVE HANDS-FREE VOICE CALL OVERLAY (免動手連續語音生活秘書全螢幕介面) */}
+      {/* ========================================================================= */}
+      {isVoiceCallOpen && (
+        <div className="fixed inset-0 z-50 flex flex-col justify-between bg-stone-950/95 p-6 text-white backdrop-blur-2xl animate-in fade-in duration-300">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 text-white shadow-md shadow-indigo-500/30">
+                <Sparkles size={20} />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-base tracking-tight">EdenNote 生活秘書</h3>
+                <p className="text-[11px] text-stone-400">連續語音對話中 • 全程免碰手機</p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={closeVoiceCall}
+              className="rounded-full bg-white/10 p-2 text-stone-300 transition hover:bg-white/20 active:scale-90"
+              title="關閉語音對話"
+            >
+              <X size={20} />
+            </button>
+          </div>
+
+          {/* Center Visual: The Animated Audio Orb & Status */}
+          <div className="my-auto flex flex-col items-center justify-center text-center">
+            {/* Status Pill */}
+            <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-xs font-semibold backdrop-blur-md">
+              {voiceCallStatus === 'listening' && (
+                <>
+                  <span className="relative flex h-2.5 w-2.5">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500"></span>
+                  </span>
+                  <span className="text-emerald-400">正在聆聽中… 請直接開口說話</span>
+                </>
+              )}
+              {voiceCallStatus === 'processing' && (
+                <>
+                  <LoaderCircle size={14} className="animate-spin text-purple-400" />
+                  <span className="text-purple-300">正在思考並檢索 EdenNote 資料庫…</span>
+                </>
+              )}
+              {voiceCallStatus === 'speaking' && (
+                <>
+                  <Volume2 size={14} className="animate-bounce text-pink-400" />
+                  <span className="text-pink-300">生活秘書正在用語音回答您…</span>
+                </>
+              )}
+              {voiceCallStatus === 'paused' && <span className="text-amber-300">已暫停聆聽</span>}
+              {voiceCallStatus === 'error' && <span className="text-rose-400">麥克風連線異常</span>}
+              {voiceCallStatus === 'unsupported' && <span className="text-rose-400">不支援語音辨識</span>}
+            </div>
+
+            {/* Glowing Radial Audio Orb */}
+            <div className="relative flex items-center justify-center">
+              {/* Outer Glow Ring */}
+              <div
+                className={`absolute h-48 w-48 rounded-full bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 blur-2xl opacity-40 transition-all duration-700 ${
+                  voiceCallStatus === 'listening'
+                    ? 'scale-125 opacity-70 animate-pulse'
+                    : voiceCallStatus === 'speaking'
+                    ? 'scale-110 opacity-60 animate-pulse'
+                    : 'scale-90 opacity-30'
+                }`}
+              />
+
+              {/* Main Glowing Circle */}
+              <div
+                className={`relative flex h-36 w-36 items-center justify-center rounded-full bg-gradient-to-tr from-indigo-600 via-purple-600 to-pink-500 shadow-2xl shadow-purple-600/50 transition-all duration-500 ${
+                  voiceCallStatus === 'listening'
+                    ? 'scale-105 shadow-emerald-500/40'
+                    : voiceCallStatus === 'speaking'
+                    ? 'scale-105 shadow-pink-500/40'
+                    : 'scale-95'
+                }`}
+              >
+                {voiceCallStatus === 'listening' ? (
+                  <Mic size={48} className="animate-pulse text-white" />
+                ) : voiceCallStatus === 'speaking' ? (
+                  <Volume2 size={48} className="animate-pulse text-white" />
+                ) : (
+                  <Sparkles size={48} className="text-white" />
+                )}
+              </div>
+            </div>
+
+            {/* Realtime Live Speech Subtitle */}
+            <div className="mt-8 max-w-md px-4">
+              {liveTranscript ? (
+                <p className="text-base sm:text-lg font-medium text-white/95 leading-relaxed">
+                  “{liveTranscript}”
+                </p>
+              ) : (
+                <p className="text-xs sm:text-sm text-stone-400 leading-relaxed">
+                  您可以說：
+                  <br />
+                  <span className="font-semibold text-stone-300">「幫我查上週看醫生的費用」</span>、
+                  <span className="font-semibold text-stone-300">「幫我記明天下午看牙醫」</span>、
+                  <span className="font-semibold text-stone-300">「查加薪紀錄」</span>
+                </p>
+              )}
+
+              {/* Last Spoken AI Reply Snippet */}
+              {lastAiReply && !liveTranscript && (
+                <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-3 text-xs text-stone-300 text-left">
+                  <p className="font-bold text-indigo-300 mb-1">🤖 秘書回覆：</p>
+                  <p className="line-clamp-3 leading-relaxed">{lastAiReply}</p>
+                </div>
+              )}
+
+              {voiceError && (
+                <div className="mt-4 rounded-2xl bg-rose-950/60 border border-rose-800/80 p-3 text-xs text-rose-300">
+                  {voiceError}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Bottom Call Controls */}
+          <div className="mx-auto flex w-full max-w-sm items-center justify-around pb-6">
+            {/* Pause / Resume Mic button */}
+            <button
+              type="button"
+              onClick={() => {
+                if (voiceCallStatus === 'listening') {
+                  stopVoiceRecognition()
+                  setVoiceCallStatus('paused')
+                } else if (voiceCallStatus === 'paused') {
+                  startVoiceCallListening()
+                }
+              }}
+              className="flex h-14 w-14 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur-md transition hover:bg-white/20 active:scale-95"
+              title={voiceCallStatus === 'listening' ? '暫停聆聽' : '繼續聆聽'}
+            >
+              {voiceCallStatus === 'listening' ? <MicOff size={24} /> : <Mic size={24} />}
+            </button>
+
+            {/* End Call Button */}
+            <button
+              type="button"
+              onClick={closeVoiceCall}
+              className="flex h-16 w-16 items-center justify-center rounded-full bg-rose-600 text-white shadow-xl shadow-rose-600/40 transition hover:bg-rose-700 active:scale-95"
+              title="結束語音對話"
+            >
+              <PhoneOff size={28} />
+            </button>
+
+            {/* Say Farewell button */}
+            <button
+              type="button"
+              onClick={() => {
+                const farewell = '好的！隨時為您服務，祝您有美好的一天！'
+                setLastAiReply(farewell)
+                speakVoiceReply(farewell, () => {
+                  closeVoiceCall()
+                })
+              }}
+              className="flex h-14 w-14 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur-md transition hover:bg-white/20 active:scale-95 text-xs font-bold"
+              title="說聲再見並退出"
+            >
+              說再見
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Gemini API Key Configuration Modal */}
       {showKeyModal && (
