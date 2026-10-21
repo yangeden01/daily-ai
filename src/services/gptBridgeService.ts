@@ -276,6 +276,15 @@ export const syncGptCloudSnapshot = (
   })
 }
 
+export const getEventTimestamp = (evt?: unknown): number => {
+  if (!evt || typeof evt !== 'object') return 0
+  const e = evt as Record<string, unknown>
+  const timeStr = (e.updatedAt || e.lastEditedAt || e.createdAt) as string | undefined
+  if (!timeStr || typeof timeStr !== 'string') return 0
+  const t = new Date(timeStr).getTime()
+  return isNaN(t) ? 0 : t
+}
+
 export interface GptSyncDiagnostics {
   timestamp: string
   cloudTotal: number
@@ -287,6 +296,7 @@ export interface GptSyncDiagnostics {
   addedCount: number
   updatedCount: number
   deletedCount: number
+  localNewerCount?: number
   targetVerified: boolean
   targetRecord?: { id: string; title: string; date: string }
   status: 'success' | 'error'
@@ -311,6 +321,7 @@ export interface PullCloudEventsResult {
   addedCount: number
   updatedCount: number
   deletedCount: number
+  localNewerCount?: number
   cloudBreakdown?: { daily: number; note: number; anniversary: number }
   localBeforeBreakdown?: { daily: number; note: number; anniversary: number }
   localAfterBreakdown?: { daily: number; note: number; anniversary: number }
@@ -398,6 +409,7 @@ export const pullGptCloudEvents = async (
     let addedCount = 0
     let updatedCount = 0
     let deletedCount = 0
+    let localNewerCount = 0
 
     // 1. Delete events that were marked as deleted in cloud by ChatGPT assistant
     // (A) By exact ID in deletedIds
@@ -444,8 +456,14 @@ export const pullGptCloudEvents = async (
       const ceId = (ce.id || '').trim()
       const ceTitle = (ce.title || '').trim().toLowerCase()
       const ceDate = (ce.date || '').trim()
+      const ceTime = getEventTimestamp(ce)
       if (ceId && deletedIds.includes(ceId)) return true
       return localTombstones.some((t) => {
+        const tombstoneTime = t.deletedAt ? new Date(t.deletedAt).getTime() : 0
+        // If event in cloud was created or updated strictly AFTER local tombstone was recorded, it is re-created
+        if (ceTime > 0 && tombstoneTime > 0 && ceTime > tombstoneTime) {
+          return false
+        }
         if (ceId && t.id === ceId) return true
         if (ceTitle && t.title && t.title.trim().toLowerCase() === ceTitle) {
           if (!t.date || !ceDate || t.date === ceDate) return true
@@ -454,7 +472,7 @@ export const pullGptCloudEvents = async (
       })
     }
 
-    // 3. Merge cloud events into local database
+    // 3. Merge cloud events into local database with STRICT Last-Write-Wins rule
     for (const ce of cloudEvents) {
       if (!ce || typeof ce !== 'object') continue
       if (isCloudEventTombstoned(ce)) continue
@@ -463,14 +481,12 @@ export const pullGptCloudEvents = async (
       const existingById = ceId ? localMap.get(ceId) : undefined
 
       if (existingById) {
-        // Compare updatedAt timestamp or detect content/date changes
-        const cloudTime = ce.updatedAt ? new Date(ce.updatedAt).getTime() : 0
-        const localTime = existingById.updatedAt ? new Date(existingById.updatedAt).getTime() : 0
-        const hasDateChanged = ce.date !== undefined && ce.date !== existingById.date
-        const hasTitleChanged = ce.title !== undefined && ce.title !== existingById.title
-        const hasDetailChanged = ce.detail !== undefined && ce.detail !== existingById.detail
+        const cloudTime = getEventTimestamp(ce)
+        const localTime = getEventTimestamp(existingById)
 
-        if (cloudTime > localTime || hasDateChanged || hasTitleChanged || hasDetailChanged) {
+        // Strict Last-Write-Wins:
+        // Case A: Cloud is strictly newer -> update local record
+        if (cloudTime > localTime) {
           const updatedEvent: Event = {
             ...existingById,
             title: ce.title !== undefined ? ce.title : existingById.title,
@@ -486,7 +502,7 @@ export const pullGptCloudEvents = async (
             calendarType: ce.calendarType || existingById.calendarType,
             lunarMonth: ce.lunarMonth !== undefined ? ce.lunarMonth : existingById.lunarMonth,
             lunarDay: ce.lunarDay !== undefined ? ce.lunarDay : existingById.lunarDay,
-            updatedAt: ce.updatedAt || new Date().toISOString(),
+            updatedAt: ce.updatedAt || new Date(cloudTime).toISOString(),
           }
           if (repo.upsert) {
             await repo.upsert(updatedEvent)
@@ -495,7 +511,12 @@ export const pullGptCloudEvents = async (
           }
           localMap.set(existingById.id, updatedEvent)
           updatedCount++
+        } else if (localTime > cloudTime) {
+          // Case B: Local is strictly newer! NEVER overwrite local with old cloud data!
+          // Flag that local has newer un-synced edits to automatically push back to cloud
+          localNewerCount++
         }
+        // Case C: cloudTime === localTime -> already identical/in-sync
       } else {
         // Fallback: match by BOTH Title and Date only (never by title alone across different dates)
         const trimmedTitle = (ce.title || '').trim()
@@ -511,29 +532,36 @@ export const pullGptCloudEvents = async (
           : undefined
 
         if (existingByTitleAndDate) {
-          const updatedEvent: Event = {
-            ...existingByTitleAndDate,
-            id: ceId || existingByTitleAndDate.id,
-            date: trimmedDate || existingByTitleAndDate.date,
-            detail: ce.detail !== undefined ? ce.detail : existingByTitleAndDate.detail,
-            category: ce.category !== undefined ? ce.category : existingByTitleAndDate.category,
-            recordType: ce.recordType || existingByTitleAndDate.recordType,
-            calendarType: ce.calendarType || existingByTitleAndDate.calendarType,
-            updatedAt: ce.updatedAt || new Date().toISOString(),
-          }
-          if (repo.upsert) {
-            await repo.upsert(updatedEvent)
-          } else {
-            if (ceId && ceId !== existingByTitleAndDate.id) {
-              await repo.delete(existingByTitleAndDate.id)
-              await repo.add(updatedEvent)
-            } else {
-              await repo.update(existingByTitleAndDate.id, updatedEvent)
+          const cloudTime = getEventTimestamp(ce)
+          const localTime = getEventTimestamp(existingByTitleAndDate)
+
+          if (cloudTime > localTime) {
+            const updatedEvent: Event = {
+              ...existingByTitleAndDate,
+              id: ceId || existingByTitleAndDate.id,
+              date: trimmedDate || existingByTitleAndDate.date,
+              detail: ce.detail !== undefined ? ce.detail : existingByTitleAndDate.detail,
+              category: ce.category !== undefined ? ce.category : existingByTitleAndDate.category,
+              recordType: ce.recordType || existingByTitleAndDate.recordType,
+              calendarType: ce.calendarType || existingByTitleAndDate.calendarType,
+              updatedAt: ce.updatedAt || new Date(cloudTime).toISOString(),
             }
+            if (repo.upsert) {
+              await repo.upsert(updatedEvent)
+            } else {
+              if (ceId && ceId !== existingByTitleAndDate.id) {
+                await repo.delete(existingByTitleAndDate.id)
+                await repo.add(updatedEvent)
+              } else {
+                await repo.update(existingByTitleAndDate.id, updatedEvent)
+              }
+            }
+            localMap.delete(existingByTitleAndDate.id)
+            localMap.set(updatedEvent.id, updatedEvent)
+            updatedCount++
+          } else if (localTime > cloudTime) {
+            localNewerCount++
           }
-          localMap.delete(existingByTitleAndDate.id)
-          localMap.set(updatedEvent.id, updatedEvent)
-          updatedCount++
         } else {
           // Check for exact duplicate title + date + detail
           const duplicate = localEvents.find(
@@ -558,11 +586,11 @@ export const pullGptCloudEvents = async (
 
             const newEvent: Event = {
               id: generatedId,
-              date: trimmedDate || new Date().toISOString().slice(0, 10),
+              date: trimmedDate || (ce.recordType === 'note' ? '' : new Date().toISOString().slice(0, 10)),
               title: trimmedTitle || '語音記事',
               detail: trimmedDetail,
-              category: (ce.category || '').trim() || '生活',
-              recordType: ce.recordType || 'daily',
+              category: (ce.category || '').trim() || (ce.recordType === 'anniversary' ? '紀念日' : '生活'),
+              recordType: (ce.recordType === 'note' || ce.recordType === 'anniversary') ? ce.recordType : 'daily',
               tags: tagsArray.length > 0 ? tagsArray : ['ChatGPT生活秘書'],
               attachmentIds: [],
               createdAt: ce.createdAt || ce.updatedAt || new Date().toISOString(),
@@ -608,6 +636,7 @@ export const pullGptCloudEvents = async (
       addedCount,
       updatedCount,
       deletedCount,
+      localNewerCount,
       targetVerified: !!targetVoiceEvent,
       targetRecord: targetVoiceEvent
         ? { id: targetVoiceEvent.id, title: targetVoiceEvent.title, date: targetVoiceEvent.date }
@@ -622,6 +651,11 @@ export const pullGptCloudEvents = async (
       }
     }
 
+    // Automatic reverse-push: if phone has newer modifications than cloud, push to Google Drive!
+    if (localNewerCount > 0 && isGptAutoSyncEnabled()) {
+      void syncGptCloudSnapshot(refreshedEvents, { force: true })
+    }
+
     if (typeof window !== 'undefined' && window.localStorage) {
       const nowStr = new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
       localStorage.setItem(GPT_LAST_PULL_TIME_KEY, nowStr)
@@ -630,7 +664,7 @@ export const pullGptCloudEvents = async (
       localStorage.setItem(GPT_SYNC_DIAGNOSTICS_KEY, JSON.stringify(diag))
       window.dispatchEvent(
         new CustomEvent('edennote:gpt-pull-completed', {
-          detail: { success: true, pulledCount: cloudEvents.length, addedCount, updatedCount, deletedCount, diagnostics: diag },
+          detail: { success: true, pulledCount: cloudEvents.length, addedCount, updatedCount, deletedCount, localNewerCount, diagnostics: diag },
         })
       )
     }
@@ -641,6 +675,7 @@ export const pullGptCloudEvents = async (
       addedCount,
       updatedCount,
       deletedCount,
+      localNewerCount,
       cloudBreakdown,
       localBeforeBreakdown,
       localAfterBreakdown,

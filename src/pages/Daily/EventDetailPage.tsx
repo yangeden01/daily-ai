@@ -23,6 +23,7 @@ import { TagsField } from '../../components/EventEditor/TagsField'
 import { handleListEditingKey, parseTodoLine, toggleTodoLineAt, type ListEditingKey } from '../../utils/textFormatting'
 import { prepareSelectedAttachments } from '../../services/AttachmentPreparationService'
 import { saveFile } from '../../utils/fileSaver'
+import { syncGptCloudSnapshot } from '../../services/gptBridgeService'
 
 const formatDateTime = (value: string): string =>
   new Intl.DateTimeFormat('zh-TW', {
@@ -304,6 +305,7 @@ export default function EventDetailPage() {
       }
       await eventRepository.update(event.id, updatedEvent)
       setEvent(updatedEvent)
+      void eventRepository.getAll().then((all) => void syncGptCloudSnapshot(all, { force: true }))
     } catch {
       setErrorMessage('待辦狀態更新失敗')
     }
@@ -345,7 +347,7 @@ export default function EventDetailPage() {
           }
         }
 
-        await eventRepository.update(event.id, {
+        const updatedEventPayload: Event = {
           ...event,
           date: newEventDate,
           title: resolvedTitle,
@@ -359,7 +361,11 @@ export default function EventDetailPage() {
             calendarType,
             ...(calendarType === 'lunar' ? { lunarMonth, lunarDay, isLeapMonth } : {}),
           } : {}),
-        })
+        }
+
+        await eventRepository.update(event.id, updatedEventPayload)
+        // Immediately push updated database to cloud so cloud has latest before navigating
+        void eventRepository.getAll().then((all) => void syncGptCloudSnapshot(all, { force: true }))
       } catch (error) {
         await Promise.all(addedAttachments.map(({ id }) => attachmentRepository.delete(id)))
         throw error

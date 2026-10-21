@@ -517,4 +517,148 @@ describe('gptBridgeService', () => {
     // The new 2026 record is added!
     expect(localDb.find((e) => e.id === 'cloud-hualien-2026')?.date).toBe('2026-05-01')
   })
+
+  it('preserves local changes and does NOT overwrite with older cloud data when localTime > cloudTime', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          status: 'ok',
+          count: 1,
+          events: [
+            {
+              id: 'evt-phone-edit',
+              date: '2026-10-20',
+              title: '舊雲端標題',
+              detail: '舊雲端內容',
+              category: '生活',
+              recordType: 'daily',
+              updatedAt: '2026-10-20T10:00:00.000Z',
+            },
+          ],
+          deletedIds: [],
+        }),
+      })
+    )
+
+    // Local DB has a NEWER modification from user on phone (12:00:00 vs 10:00:00)
+    const localDb: Event[] = [
+      {
+        id: 'evt-phone-edit',
+        date: '2026-10-20',
+        title: '新手機修改標題',
+        detail: '新手機修改內容',
+        category: '生活',
+        recordType: 'daily',
+        tags: [],
+        attachmentIds: [],
+        createdAt: '2026-10-20T09:00:00.000Z',
+        updatedAt: '2026-10-20T12:00:00.000Z',
+      },
+    ]
+
+    const mockRepo: EventRepository = {
+      getAll: vi.fn().mockImplementation(async () => [...localDb]),
+      getById: vi.fn().mockImplementation(async (id: string) => localDb.find((e) => e.id === id)),
+      search: vi.fn().mockResolvedValue([]),
+      add: vi.fn().mockImplementation(async (evt: Event) => {
+        localDb.push(evt)
+        return evt
+      }),
+      update: vi.fn().mockImplementation(async (_id: string, evt: Event) => {
+        const idx = localDb.findIndex((e) => e.id === evt.id)
+        if (idx !== -1) localDb[idx] = evt
+        return evt
+      }),
+      delete: vi.fn().mockImplementation(async (id: string) => {
+        const idx = localDb.findIndex((e) => e.id === id)
+        if (idx !== -1) localDb.splice(idx, 1)
+      }),
+      replaceAll: vi.fn().mockImplementation(async (events: Event[]) => {
+        localDb.length = 0
+        localDb.push(...events)
+      }),
+    }
+
+    const res = await pullGptCloudEvents(mockRepo)
+
+    expect(res.success).toBe(true)
+    expect(res.updatedCount).toBe(0) // Did NOT overwrite local!
+    expect(res.localNewerCount).toBe(1)
+    // Local data must retain the user's edits!
+    expect(localDb[0].title).toBe('新手機修改標題')
+    expect(localDb[0].detail).toBe('新手機修改內容')
+  })
+
+  it('updates local with newer cloud data when cloudTime > localTime', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          status: 'ok',
+          count: 1,
+          events: [
+            {
+              id: 'evt-chatgpt-edit',
+              date: '2026-10-20',
+              title: 'ChatGPT 更新後的標題',
+              detail: 'ChatGPT 更新後的詳細內容',
+              category: '生活',
+              recordType: 'daily',
+              updatedAt: '2026-10-20T15:00:00.000Z',
+            },
+          ],
+          deletedIds: [],
+        }),
+      })
+    )
+
+    // Local DB has older version (10:00:00 vs 15:00:00)
+    const localDb: Event[] = [
+      {
+        id: 'evt-chatgpt-edit',
+        date: '2026-10-20',
+        title: '舊手機標題',
+        detail: '舊手機內容',
+        category: '生活',
+        recordType: 'daily',
+        tags: [],
+        attachmentIds: [],
+        createdAt: '2026-10-20T09:00:00.000Z',
+        updatedAt: '2026-10-20T10:00:00.000Z',
+      },
+    ]
+
+    const mockRepo: EventRepository = {
+      getAll: vi.fn().mockImplementation(async () => [...localDb]),
+      getById: vi.fn().mockImplementation(async (id: string) => localDb.find((e) => e.id === id)),
+      search: vi.fn().mockResolvedValue([]),
+      add: vi.fn().mockImplementation(async (evt: Event) => {
+        localDb.push(evt)
+        return evt
+      }),
+      update: vi.fn().mockImplementation(async (_id: string, evt: Event) => {
+        const idx = localDb.findIndex((e) => e.id === evt.id)
+        if (idx !== -1) localDb[idx] = evt
+        return evt
+      }),
+      delete: vi.fn().mockImplementation(async (id: string) => {
+        const idx = localDb.findIndex((e) => e.id === id)
+        if (idx !== -1) localDb.splice(idx, 1)
+      }),
+      replaceAll: vi.fn().mockImplementation(async (events: Event[]) => {
+        localDb.length = 0
+        localDb.push(...events)
+      }),
+    }
+
+    const res = await pullGptCloudEvents(mockRepo)
+
+    expect(res.success).toBe(true)
+    expect(res.updatedCount).toBe(1)
+    expect(localDb[0].title).toBe('ChatGPT 更新後的標題')
+    expect(localDb[0].detail).toBe('ChatGPT 更新後的詳細內容')
+  })
 })

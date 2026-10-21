@@ -56,6 +56,7 @@ import {
   pullGptCloudEvents,
   setGptAutoSyncEnabled,
   setGptBridgeUrl,
+  setGptSecretKey,
   getLatestSyncDiagnostics,
   type GptSyncDiagnostics,
   syncGptCloudSnapshot,
@@ -1295,13 +1296,34 @@ export default function SettingsPage() {
                 </div>
               </div>
 
+              <div className="grid grid-cols-3 gap-2 text-[11px]">
+                <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/40 p-2 text-emerald-900 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/40 text-center">
+                  <div className="font-semibold text-[10px]">📥 本次新增</div>
+                  <div className="text-sm font-bold">{diagnostics.addedCount} <span className="text-[10px] font-normal">筆</span></div>
+                </div>
+                <div className="rounded-lg bg-blue-50 dark:bg-blue-950/40 p-2 text-blue-900 dark:text-blue-300 border border-blue-200/60 dark:border-blue-800/40 text-center">
+                  <div className="font-semibold text-[10px]">🔄 雲端更新</div>
+                  <div className="text-sm font-bold">{diagnostics.updatedCount} <span className="text-[10px] font-normal">筆</span></div>
+                </div>
+                <div className="rounded-lg bg-purple-50 dark:bg-purple-950/40 p-2 text-purple-900 dark:text-purple-300 border border-purple-200/60 dark:border-purple-800/40 text-center" title="本機修改較新，依 Last-Write-Wins 原則保留本機並已自動反向推播至雲端">
+                  <div className="font-semibold text-[10px]">🛡️ 本機更新保留</div>
+                  <div className="text-sm font-bold">{diagnostics.localNewerCount ?? 0} <span className="text-[10px] font-normal">筆</span></div>
+                </div>
+              </div>
+
+              {diagnostics.errorMessage && (
+                <div className="rounded-lg bg-red-50 p-2 text-[11px] text-red-800 dark:bg-red-950/50 dark:text-red-300 border border-red-200 dark:border-red-800/50">
+                  <span className="font-bold">❌ 失敗原因：</span> {diagnostics.errorMessage}
+                </div>
+              )}
+
               <div className="rounded-lg bg-white/80 p-2.5 text-[11px] leading-relaxed dark:bg-stone-900/60 border border-indigo-100 dark:border-indigo-900/30 space-y-1.5">
                 <div className="font-semibold text-stone-800 dark:text-stone-200 flex items-center justify-between">
                   <span>📱 畫面顯示統計說明：</span>
                   <span className="text-[10px] font-normal text-stone-500">Daily Timeline 專屬日常視圖</span>
                 </div>
                 <p className="text-stone-600 dark:text-stone-300">
-                  Daily 畫面顯示之「<strong>{diagnostics.localAfterBreakdown.daily} events</strong>」為「日常」類型紀錄。隨手記（{diagnostics.localAfterBreakdown.note} 筆）與紀念日（{diagnostics.localAfterBreakdown.anniversary} 筆）各自獨立展示於專屬功能分頁中。本機資料庫總筆數（{diagnostics.localAfterTotal} 筆）與雲端總筆數（{diagnostics.cloudTotal} 筆）<strong>完全一致且無任何遺漏</strong>。
+                  Daily 畫面顯示之「<strong>{diagnostics.localAfterBreakdown.daily} events</strong>」為「日常」類型紀錄。隨手記（{diagnostics.localAfterBreakdown.note} 筆）與紀念日（{diagnostics.localAfterBreakdown.anniversary} 筆）各自獨立展示於專屬功能分頁中。本機資料庫總筆數（{diagnostics.localAfterTotal} 筆）與雲端總筆數（{diagnostics.cloudTotal} 筆）已啟動時間戳保護，<strong>任何手機修改皆受到 Last-Write-Wins 保護不被覆蓋</strong>。
                 </p>
                 <div className="pt-1.5 border-t border-stone-200/60 dark:border-stone-800 flex items-center justify-between text-[11px]">
                   <span>語音測試 ID 驗證狀態：</span>

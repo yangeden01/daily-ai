@@ -3,7 +3,7 @@ import { CalendarHeart, Check, ChevronRight, Clock, Inbox, LoaderCircle, Moon, N
 import { Link, useLocation } from 'react-router-dom'
 import type { Event, CalendarType } from '../../models/Event'
 import { attachmentRepository, eventRepository } from '../../repositories'
-import { pullGptCloudEvents } from '../../services/gptBridgeService'
+import { pullGptCloudEvents, syncGptCloudSnapshot } from '../../services/gptBridgeService'
 import { filesToAttachments, formatFileSize } from '../../utils/attachments'
 import { toLocalDateInputValue } from '../../utils/localDate'
 import { normalizeTags } from '../../utils/normalizeTags'
@@ -265,6 +265,7 @@ export default function DailyPage() {
       await attachmentRepository.addMany(attachments)
       try {
         await eventRepository.add(newEvent)
+        void eventRepository.getAll().then((all) => void syncGptCloudSnapshot(all, { force: true }))
       } catch (error) {
         await attachmentRepository.deleteByEventId(eventId)
         throw error

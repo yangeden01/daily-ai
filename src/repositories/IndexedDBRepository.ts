@@ -59,19 +59,29 @@ export class IndexedDBRepository implements EventRepository {
   async add(event: Event): Promise<Event> {
     const database = await this.getDatabase()
     const transaction = database.transaction(EVENT_STORE, 'readwrite')
-    transaction.objectStore(EVENT_STORE).add(copyEvent(event))
+    const stampedEvent = copyEvent({
+      ...event,
+      updatedAt: event.updatedAt || new Date().toISOString(),
+      createdAt: event.createdAt || new Date().toISOString(),
+    })
+    transaction.objectStore(EVENT_STORE).add(stampedEvent)
     await transactionToPromise(transaction)
     void this.triggerWidgetSync()
-    return copyEvent(event)
+    return copyEvent(stampedEvent)
   }
 
   async upsert(event: Event): Promise<Event> {
     const database = await this.getDatabase()
     const transaction = database.transaction(EVENT_STORE, 'readwrite')
-    transaction.objectStore(EVENT_STORE).put(copyEvent(event))
+    const stampedEvent = copyEvent({
+      ...event,
+      updatedAt: event.updatedAt || new Date().toISOString(),
+      createdAt: event.createdAt || new Date().toISOString(),
+    })
+    transaction.objectStore(EVENT_STORE).put(stampedEvent)
     await transactionToPromise(transaction)
     void this.triggerWidgetSync()
-    return copyEvent(event)
+    return copyEvent(stampedEvent)
   }
 
   async update(id: string, event: Event): Promise<Event> {
@@ -85,7 +95,11 @@ export class IndexedDBRepository implements EventRepository {
       throw new Error(`Event not found: ${id}`)
     }
 
-    const updatedEvent = copyEvent({ ...event, id })
+    const updatedEvent = copyEvent({
+      ...event,
+      id,
+      updatedAt: event.updatedAt || new Date().toISOString(),
+    })
     store.put(updatedEvent)
     await transactionToPromise(transaction)
     void this.triggerWidgetSync()
