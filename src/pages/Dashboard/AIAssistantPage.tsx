@@ -35,6 +35,7 @@ import {
   testGeminiApiKey,
   parseEdenNoteAction,
   cleanTextForSpeech,
+  chunkSpeechText,
   type ChatMessage,
   type EdenNoteActionPayload,
 } from '../../services/aiService'
@@ -96,7 +97,13 @@ export const AIAssistantPage: React.FC = () => {
   const isVoiceCallOpenRef = useRef(false)
   const voiceCallStatusRef = useRef<'idle' | 'listening' | 'processing' | 'speaking' | 'paused' | 'unsupported' | 'error'>('idle')
   const recognitionRef = useRef<any>(null)
+  const isRecognizingRef = useRef(false)
   const silenceTimerRef = useRef<any>(null)
+  const restartTimerRef = useRef<any>(null)
+  const activeUtterancesRef = useRef<SpeechSynthesisUtterance[]>([])
+  const chunkTimeoutRef = useRef<any>(null)
+  const noSpeechStreakRef = useRef(0)
+  const isSpeakingRef = useRef(false)
 
   // Keep refs in sync
   useEffect(() => {
@@ -177,16 +184,34 @@ export const AIAssistantPage: React.FC = () => {
   // Cleanup speech synthesis and recognition on unmount
   useEffect(() => {
     return () => {
+      isSpeakingRef.current = false
+      isRecognizingRef.current = false
+      if (chunkTimeoutRef.current) {
+        clearTimeout(chunkTimeoutRef.current)
+        chunkTimeoutRef.current = null
+      }
+      if (restartTimerRef.current) {
+        clearTimeout(restartTimerRef.current)
+        restartTimerRef.current = null
+      }
+      activeUtterancesRef.current = []
       if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-        window.speechSynthesis.cancel()
+        try {
+          window.speechSynthesis.cancel()
+        } catch {}
       }
       if (recognitionRef.current) {
         try {
+          recognitionRef.current.abort()
+        } catch {}
+        try {
           recognitionRef.current.stop()
         } catch {}
+        recognitionRef.current = null
       }
       if (silenceTimerRef.current) {
         clearTimeout(silenceTimerRef.current)
+        silenceTimerRef.current = null
       }
     }
   }, [])
@@ -252,44 +277,149 @@ export const AIAssistantPage: React.FC = () => {
     return { success: false }
   }
 
-  // TTS speech helper
+  // Stop voice speaking
+  const stopVoiceSpeaking = useCallback(() => {
+    isSpeakingRef.current = false
+    if (chunkTimeoutRef.current) {
+      clearTimeout(chunkTimeoutRef.current)
+      chunkTimeoutRef.current = null
+    }
+    activeUtterancesRef.current = []
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.cancel()
+      } catch {}
+    }
+  }, [])
+
+  // Stop current recognition and cancel any restart timers
+  const stopVoiceRecognition = useCallback(() => {
+    if (restartTimerRef.current) {
+      clearTimeout(restartTimerRef.current)
+      restartTimerRef.current = null
+    }
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current)
+      silenceTimerRef.current = null
+    }
+    isRecognizingRef.current = false
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.abort()
+      } catch {}
+      try {
+        recognitionRef.current.stop()
+      } catch {}
+      recognitionRef.current = null
+    }
+  }, [])
+
+  // Robust chunked TTS speech helper to prevent Chromium/Android 15s freeze bug
   const speakVoiceReply = useCallback((text: string, onEnd?: () => void) => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
       onEnd?.()
       return
     }
-    try {
-      window.speechSynthesis.cancel()
-      const spokenText = cleanTextForSpeech(text)
-      if (!spokenText) {
-        onEnd?.()
+
+    // Stop ongoing speech & mic to prevent acoustic echo or audio focus conflict
+    stopVoiceSpeaking()
+    stopVoiceRecognition()
+
+    const spokenText = cleanTextForSpeech(text)
+    if (!spokenText.trim()) {
+      if (isVoiceCallOpenRef.current) {
+        setVoiceCallStatus('listening')
+      } else {
+        setVoiceCallStatus('idle')
+      }
+      onEnd?.()
+      return
+    }
+
+    setVoiceCallStatus('speaking')
+    isSpeakingRef.current = true
+
+    // Chunk into compact natural phrases (<= 32 characters) so each chunk takes ~2 seconds and never exceeds Android limits
+    const chunks = chunkSpeechText(spokenText, 32)
+    if (chunks.length === 0) {
+      isSpeakingRef.current = false
+      onEnd?.()
+      return
+    }
+
+    let currentChunkIndex = 0
+
+    const voices = window.speechSynthesis.getVoices()
+    const zhVoice = voices.find((v) => v.lang.includes('zh-TW') || v.lang.includes('zh-HK') || v.lang.includes('zh'))
+
+    const playNextChunk = () => {
+      if (chunkTimeoutRef.current) {
+        clearTimeout(chunkTimeoutRef.current)
+        chunkTimeoutRef.current = null
+      }
+
+      if (!isSpeakingRef.current) return
+
+      if (currentChunkIndex >= chunks.length) {
+        // All chunks finished cleanly!
+        isSpeakingRef.current = false
+        activeUtterancesRef.current = []
+
+        // Wait 600ms so speaker audio clears and Android releases audio focus before reopening microphone
+        setTimeout(() => {
+          if (isVoiceCallOpenRef.current) {
+            onEnd?.()
+          } else {
+            setVoiceCallStatus('idle')
+          }
+        }, 600)
         return
       }
 
-      setVoiceCallStatus('speaking')
-      const utterance = new SpeechSynthesisUtterance(spokenText)
+      const chunkText = chunks[currentChunkIndex]
+      currentChunkIndex++
+
+      const utterance = new SpeechSynthesisUtterance(chunkText)
       utterance.lang = 'zh-TW'
       utterance.rate = 1.05
       utterance.pitch = 1.0
-
-      const voices = window.speechSynthesis.getVoices()
-      const zhVoice = voices.find((v) => v.lang.includes('zh-TW') || v.lang.includes('zh-HK') || v.lang.includes('zh'))
       if (zhVoice) utterance.voice = zhVoice
 
-      utterance.onend = () => {
-        onEnd?.()
-      }
-      utterance.onerror = (e) => {
-        console.warn('SpeechSynthesis error:', e)
-        onEnd?.()
+      // Retain utterance reference to prevent V8 garbage collection mid-speech!
+      activeUtterancesRef.current.push(utterance)
+      ;(window as any).__edenUtterance = utterance
+
+      let hasAdvanced = false
+      const advance = () => {
+        if (hasAdvanced) return
+        hasAdvanced = true
+        if (chunkTimeoutRef.current) {
+          clearTimeout(chunkTimeoutRef.current)
+          chunkTimeoutRef.current = null
+        }
+        playNextChunk()
       }
 
+      utterance.onend = () => {
+        advance()
+      }
+
+      utterance.onerror = (e) => {
+        console.warn('SpeechSynthesis chunk error:', e)
+        advance()
+      }
+
+      // Safety watchdog per chunk: if Android TTS drops the onend event, advance automatically
+      const watchdogMs = Math.max(4500, chunkText.length * 400)
+      chunkTimeoutRef.current = setTimeout(() => {
+        advance()
+      }, watchdogMs)
+
       window.speechSynthesis.speak(utterance)
-    } catch (err) {
-      console.warn('TTS speak error:', err)
-      onEnd?.()
     }
-  }, [])
+
+    playNextChunk()
+  }, [stopVoiceSpeaking, stopVoiceRecognition])
 
   // Toggle TTS setting
   const toggleTTS = () => {
@@ -298,8 +428,8 @@ export const AIAssistantPage: React.FC = () => {
       try {
         localStorage.setItem('edennote_ai_tts_enabled', String(next))
       } catch {}
-      if (!next && typeof window !== 'undefined' && 'speechSynthesis' in window) {
-        window.speechSynthesis.cancel()
+      if (!next) {
+        stopVoiceSpeaking()
       }
       return next
     })
@@ -312,6 +442,7 @@ export const AIAssistantPage: React.FC = () => {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
         stream.getTracks().forEach((track) => track.stop())
         setVoiceError(null)
+        noSpeechStreakRef.current = 0
         startVoiceCallListening()
         return true
       }
@@ -323,22 +454,17 @@ export const AIAssistantPage: React.FC = () => {
     return false
   }
 
-  // Stop current recognition
-  const stopVoiceRecognition = () => {
-    if (silenceTimerRef.current) {
-      clearTimeout(silenceTimerRef.current)
-      silenceTimerRef.current = null
-    }
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.stop()
-      } catch {}
-      recognitionRef.current = null
-    }
-  }
-
   // Continuous Voice Call: Start listening
   const startVoiceCallListening = () => {
+    // If AI is currently speaking or voice overlay is closed, never open microphone
+    if (isSpeakingRef.current || !isVoiceCallOpenRef.current) return
+
+    // Clear any pending restart timers to prevent multiple concurrent recognizers
+    if (restartTimerRef.current) {
+      clearTimeout(restartTimerRef.current)
+      restartTimerRef.current = null
+    }
+
     const SpeechRecognitionClass = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
     if (!SpeechRecognitionClass) {
       setVoiceCallStatus('unsupported')
@@ -354,18 +480,26 @@ export const AIAssistantPage: React.FC = () => {
     try {
       const recognition = new SpeechRecognitionClass()
       recognitionRef.current = recognition
+      isRecognizingRef.current = true
       recognition.lang = 'zh-TW'
       recognition.continuous = false
       recognition.interimResults = true
       recognition.maxAlternatives = 1
 
       let finalCaptured = ''
+      const startedAt = Date.now()
 
       recognition.onstart = () => {
+        isRecognizingRef.current = true
         setVoiceCallStatus('listening')
       }
 
       recognition.onresult = (e: any) => {
+        // Discard any audio artifact occurring within the first 350ms of start (e.g. system chime echo)
+        if (Date.now() - startedAt < 350) {
+          return
+        }
+
         let currentText = ''
         for (let i = e.resultIndex; i < e.results.length; i++) {
           const item = e.results[i]
@@ -376,18 +510,24 @@ export const AIAssistantPage: React.FC = () => {
             finalCaptured = currentText
           }
         }
-        setLiveTranscript(currentText || finalCaptured)
 
-        // Reset silence timer on every speech event: 1.3s of silence triggers sending
+        const trimmed = (currentText || finalCaptured).trim()
+        if (trimmed.length >= 2) {
+          // Genuinely recognized speech: reset silence streak
+          noSpeechStreakRef.current = 0
+          setLiveTranscript(trimmed)
+        }
+
+        // 1.4s of silence after speech triggers sending
         if (silenceTimerRef.current) {
           clearTimeout(silenceTimerRef.current)
         }
         silenceTimerRef.current = setTimeout(() => {
-          if (currentText.trim()) {
+          if (trimmed.length >= 2) {
             stopVoiceRecognition()
-            void processVoiceUtterance(currentText.trim())
+            void processVoiceUtterance(trimmed)
           }
-        }, 1300)
+        }, 1400)
       }
 
       recognition.onerror = (e: any) => {
@@ -395,33 +535,45 @@ export const AIAssistantPage: React.FC = () => {
         if (e.error === 'not-allowed') {
           setVoiceError('尚未取得麥克風授權。請點擊下方按鈕，或至手機設定允許 EdenNote 使用麥克風。')
           setVoiceCallStatus('error')
-        } else if (e.error === 'no-speech') {
-          if (isVoiceCallOpenRef.current && voiceCallStatusRef.current !== 'speaking' && voiceCallStatusRef.current !== 'processing') {
-            setTimeout(() => {
-              if (isVoiceCallOpenRef.current && voiceCallStatusRef.current !== 'speaking') {
-                startVoiceCallListening()
-              }
-            }, 300)
-          }
         }
+        // CRITICAL: Do NOT schedule restarts inside onerror!
+        // Web Speech API will ALWAYS immediately fire onend after onerror.
+        // Doing restarts in both onerror and onend causes double-start collision loops and repeating chime sounds!
       }
 
       recognition.onend = () => {
-        if (finalCaptured.trim()) {
-          void processVoiceUtterance(finalCaptured.trim())
-        } else if (isVoiceCallOpenRef.current && voiceCallStatusRef.current === 'listening') {
-          setTimeout(() => {
-            if (isVoiceCallOpenRef.current && voiceCallStatusRef.current === 'listening') {
+        isRecognizingRef.current = false
+        if (!isVoiceCallOpenRef.current || isSpeakingRef.current) {
+          return
+        }
+
+        const trimmedFinal = finalCaptured.trim()
+        if (trimmedFinal.length >= 2) {
+          noSpeechStreakRef.current = 0
+          void processVoiceUtterance(trimmedFinal)
+          return
+        }
+
+        // No valid speech was captured during this cycle.
+        // Limit restarts so phone never plays continuous chime sounds!
+        noSpeechStreakRef.current++
+        if (noSpeechStreakRef.current < 2) {
+          // Allow at most ONE quiet retry after a 2-second delay
+          restartTimerRef.current = setTimeout(() => {
+            if (isVoiceCallOpenRef.current && !isSpeakingRef.current && voiceCallStatusRef.current === 'listening') {
               startVoiceCallListening()
             }
-          }, 350)
+          }, 2000)
+        } else {
+          // Enter calm paused state without any recurring prompt sound effects
+          setVoiceCallStatus('paused')
         }
       }
 
       recognition.start()
     } catch (err) {
       console.warn('Failed to start speech recognition:', err)
-      setVoiceCallStatus('error')
+      setVoiceCallStatus('paused')
     }
   }
 
@@ -450,6 +602,11 @@ export const AIAssistantPage: React.FC = () => {
     setIsVoiceCallOpen(true)
     isVoiceCallOpenRef.current = true
     setLiveTranscript('')
+    noSpeechStreakRef.current = 0
+    if (restartTimerRef.current) {
+      clearTimeout(restartTimerRef.current)
+      restartTimerRef.current = null
+    }
     const greeting = '您好！我是您的生活秘書，請直接說話，我正在聽。'
     setLastAiReply(greeting)
     speakVoiceReply(greeting, () => {
@@ -465,10 +622,13 @@ export const AIAssistantPage: React.FC = () => {
     setIsVoiceCallOpen(false)
     setVoiceCallStatus('idle')
     setLiveTranscript('')
-    stopVoiceRecognition()
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      window.speechSynthesis.cancel()
+    noSpeechStreakRef.current = 0
+    if (restartTimerRef.current) {
+      clearTimeout(restartTimerRef.current)
+      restartTimerRef.current = null
     }
+    stopVoiceRecognition()
+    stopVoiceSpeaking()
   }
 
   // Quick dictation for bottom input textarea
@@ -1159,7 +1319,9 @@ export const AIAssistantPage: React.FC = () => {
                   <span className="text-pink-300">生活秘書正在用語音回答您…</span>
                 </>
               )}
-              {voiceCallStatus === 'paused' && <span className="text-amber-300">已暫停聆聽</span>}
+              {voiceCallStatus === 'paused' && (
+                <span className="text-amber-300 font-medium">⏸️ 靜音等待中 • 點擊圓圈隨時開口</span>
+              )}
               {voiceCallStatus === 'error' && <span className="text-rose-400">麥克風連線異常</span>}
               {voiceCallStatus === 'unsupported' && <span className="text-rose-400">不支援語音辨識</span>}
             </div>
@@ -1178,23 +1340,36 @@ export const AIAssistantPage: React.FC = () => {
               />
 
               {/* Main Glowing Circle */}
-              <div
-                className={`relative flex h-36 w-36 items-center justify-center rounded-full bg-gradient-to-tr from-indigo-600 via-purple-600 to-pink-500 shadow-2xl shadow-purple-600/50 transition-all duration-500 ${
+              <button
+                type="button"
+                onClick={() => {
+                  if (voiceCallStatus === 'paused' || voiceCallStatus === 'idle') {
+                    noSpeechStreakRef.current = 0
+                    startVoiceCallListening()
+                  } else if (voiceCallStatus === 'listening') {
+                    stopVoiceRecognition()
+                    setVoiceCallStatus('paused')
+                  }
+                }}
+                className={`relative flex h-36 w-36 items-center justify-center rounded-full bg-gradient-to-tr from-indigo-600 via-purple-600 to-pink-500 shadow-2xl shadow-purple-600/50 transition-all duration-500 active:scale-95 ${
                   voiceCallStatus === 'listening'
                     ? 'scale-105 shadow-emerald-500/40'
                     : voiceCallStatus === 'speaking'
                     ? 'scale-105 shadow-pink-500/40'
-                    : 'scale-95'
+                    : 'scale-95 opacity-90'
                 }`}
+                title={voiceCallStatus === 'listening' ? '點擊暫停' : '點擊開始說話'}
               >
                 {voiceCallStatus === 'listening' ? (
                   <Mic size={48} className="animate-pulse text-white" />
                 ) : voiceCallStatus === 'speaking' ? (
                   <Volume2 size={48} className="animate-pulse text-white" />
+                ) : voiceCallStatus === 'paused' ? (
+                  <MicOff size={44} className="text-white/80" />
                 ) : (
                   <Sparkles size={48} className="text-white" />
                 )}
-              </div>
+              </button>
             </div>
 
             {/* Realtime Live Speech Subtitle */}
@@ -1258,7 +1433,8 @@ export const AIAssistantPage: React.FC = () => {
                 if (voiceCallStatus === 'listening') {
                   stopVoiceRecognition()
                   setVoiceCallStatus('paused')
-                } else if (voiceCallStatus === 'paused') {
+                } else if (voiceCallStatus === 'paused' || voiceCallStatus === 'idle') {
+                  noSpeechStreakRef.current = 0
                   startVoiceCallListening()
                 }
               }}

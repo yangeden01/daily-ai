@@ -94,24 +94,68 @@ export function parseEdenNoteAction(content: string): { action: EdenNoteActionPa
  */
 export function cleanTextForSpeech(text: string): string {
   if (!text) return ''
-  const cleaned = text
-    .replace(/```edennote-action[\s\S]*?```/g, '')
+  let cleaned = text
+    .replace(/```edennote-action[\s\S]*?```/gi, '')
     .replace(/```[\s\S]*?```/g, '')
     .replace(/\|[^\n]+\|/g, ' ')
+    .replace(/\[事件[：:]\s*([^\]]+?)(?:\s*\([0-9-]+\))?\]/gi, '$1')
     .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/\([0-9]{4}-[0-9]{2}-[0-9]{2}[^)]*\)/g, '')
     .replace(/[#*`_~>]/g, '')
-    .replace(/[-+]\s+/g, '')
+    .replace(/[-+•]\s+/g, '')
+    .replace(/\p{Extended_Pictographic}/gu, '')
     .replace(/CAGR/gi, '年化複合成長率')
     .replace(/TWD/gi, '元')
     .replace(/https?:\/\/\S+/g, '')
+    .replace(/（\s*）/g, '')
+    .replace(/\(\s*\)/g, '')
+    .replace(/\n+/g, '。')
+    .replace(/[：:]/g, '，')
     .replace(/\s+/g, ' ')
     .trim()
 
   // Limit spoken length so assistant doesn't recite endless lists
   if (cleaned.length > 250) {
-    return cleaned.slice(0, 240) + '。詳細內容已顯示在螢幕對話框中。'
+    cleaned = cleaned.slice(0, 240) + '。詳細內容已顯示在螢幕對話框中。'
   }
   return cleaned
+}
+
+/**
+ * Split spoken speech into small natural sentence phrases (max 25-32 chars).
+ * This completely avoids the Chromium/Android 15-second SpeechSynthesis buffer stall bug.
+ */
+export function chunkSpeechText(text: string, maxChunkLength = 32): string[] {
+  if (!text || !text.trim()) return []
+
+  const rawParts = text.split(/([。！？；;\n]+)/)
+  const sentences: string[] = []
+  for (let i = 0; i < rawParts.length; i += 2) {
+    const s = (rawParts[i] || '') + (rawParts[i + 1] || '')
+    if (s.trim()) sentences.push(s.trim())
+  }
+
+  const finalChunks: string[] = []
+  for (const sentence of sentences) {
+    if (sentence.length <= maxChunkLength) {
+      finalChunks.push(sentence)
+    } else {
+      // Split on commas, colons, or spaces
+      const subParts = sentence.split(/([，,、 ：: ])/)
+      let cur = ''
+      for (let j = 0; j < subParts.length; j++) {
+        if ((cur + subParts[j]).length > maxChunkLength && cur.length > 0) {
+          finalChunks.push(cur.trim())
+          cur = subParts[j]
+        } else {
+          cur += subParts[j]
+        }
+      }
+      if (cur.trim()) finalChunks.push(cur.trim())
+    }
+  }
+
+  return finalChunks.filter((c) => c.trim().length > 0)
 }
 
 /**

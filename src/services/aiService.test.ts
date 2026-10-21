@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   cleanTextForSpeech,
+  chunkSpeechText,
   localSmartAnalyze,
   parseEdenNoteAction,
 } from './aiService'
@@ -37,6 +38,17 @@ describe('aiService - Note Actions & Speech Helpers', () => {
     expect(spoken).toContain('年化複合成長率')
     expect(spoken).not.toContain('|')
     expect(spoken).toContain('65,000 元')
+  })
+
+  it('splits spoken text into compact phrases avoiding Android TTS stalls', () => {
+    const sampleText = '明天晚上您有安排一場聚餐。明晚聚餐資訊，活動，跟好友一起吃飯。詳細內容已記錄在畫面中。'
+    const chunks = chunkSpeechText(sampleText, 30)
+
+    expect(chunks.length).toBeGreaterThanOrEqual(2)
+    chunks.forEach((chunk: string) => {
+      expect(chunk.length).toBeLessThanOrEqual(35)
+      expect(chunk.trim().length).toBeGreaterThan(0)
+    })
   })
 
   it('triggers local note creation action when user asks to add note', () => {
