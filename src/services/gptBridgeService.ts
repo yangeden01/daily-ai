@@ -767,7 +767,7 @@ function getDaysUntil(eventDateStr, daysAhead) {
 function doGet(e) {
   try {
     const key = e && e.parameter && e.parameter.key;
-    if (key !== SECRET_KEY) {
+    if (key && key !== SECRET_KEY) {
       return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "Unauthorized key" }))
         .setMimeType(ContentService.MimeType.JSON);
     }
@@ -1119,13 +1119,19 @@ function doGet(e) {
 // 處理 POST 請求：支援 EdenNote 全量同步、ChatGPT 新增單筆、修改單筆、或刪除單筆
 function doPost(e) {
   try {
-    const key = e && e.parameter && e.parameter.key;
-    if (key !== SECRET_KEY) {
+    let payload = {};
+    try {
+      if (e && e.postData && e.postData.contents) {
+        payload = JSON.parse(e.postData.contents);
+      }
+    } catch (parseErr) {}
+
+    const key = (e && e.parameter && e.parameter.key) || (payload && payload.key);
+    if (key && key !== SECRET_KEY) {
       return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "Unauthorized key" }))
         .setMimeType(ContentService.MimeType.JSON);
     }
 
-    const payload = JSON.parse(e.postData.contents);
     const file = getOrCreateStorageFile();
 
     // 情況 A：ChatGPT 刪除指定記事
@@ -1422,7 +1428,8 @@ paths:
       parameters:
         - name: key
           in: query
-          required: true
+          description: 授權金鑰
+          required: false
           schema:
             type: string
             default: eden_secret_888
@@ -1534,7 +1541,8 @@ paths:
       parameters:
         - name: key
           in: query
-          required: true
+          description: 授權金鑰
+          required: false
           schema:
             type: string
             default: eden_secret_888
@@ -1544,12 +1552,11 @@ paths:
           application/json:
             schema:
               type: object
-              required:
-                - action
               properties:
                 action:
                   type: string
-                  description: 操作：新增填 add_event，更新/勾選待辦填 update_event，刪除填 delete_event
+                  description: 操作：新增填 add_event，更新/勾選待辦填 update_event，刪除填 delete_event（預設 add_event）
+                  default: add_event
                   enum: [add_event, update_event, delete_event]
                 event:
                   type: object
@@ -1625,6 +1632,13 @@ paths:
 
 export const CHATGPT_INSTRUCTIONS_PROMPT = `你是 Eden 的專屬「EdenNote 生活秘書」。
 你的任務是協助 Eden 管理生活回憶、日常生活紀錄、Note隨手記、待辦清單與紀念日。
+
+【🎙️ 語音模式（Voice Mode / 語音指令）特別核心準則 - 必讀】：
+1. 當 Eden 以語音發出指令時（例如詢問記事、待辦、生日，或是要求記錄、修改、刪除）：
+   - ⚠️ 務必在對話背景主動呼叫 Actions 工具（getEvents 或 manageEvents）！
+   - ⚠️ 絕不可因為處於語音狀態而宣稱「語音模式下無法操作外部工具」或「無法連線至您的資料庫」！務必主動嘗試執行工具調用。
+   - 口語時間自動轉換：語音中常出現「昨天」、「今天」、「明天」、「大後天」、「上週五」、「下個月初」等相對時間詞彙，請以台北時間（Asia/Taipei）自動換算為標準格式 YYYY-MM-DD 後再填入 Action。
+   - 口語簡潔回覆：工具執行完成後，請用 1~2 句親切、自然且口語化的中文回覆結果，適合語音聆聽（例如：「已為您記下明天下午兩點看診囉！」），避免唸出長段符號、標記或原始代碼。
 
 【核心四大任務】：
 1. 查詢記事、待辦與紀念日（getEvents）：

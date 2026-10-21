@@ -1452,6 +1452,28 @@ export default function SettingsPage() {
                     在 Custom GPT 的「Instructions」欄位貼上此段提示詞，小秘書便會精確識別「昨天」、「明天」或生活記事並自動寫入！
                   </p>
                 </div>
+
+                {/* 語音模式特別指引 */}
+                <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/50 text-amber-900 dark:text-amber-200 space-y-1.5">
+                  <div className="font-bold flex items-center gap-1.5">
+                    <span className="text-sm">🎙️</span>
+                    <span>語音操作須知：文字輸入正常，為何語音通話無法呼叫 Action？</span>
+                  </div>
+                  <div className="text-[11px] leading-relaxed text-amber-800 dark:text-amber-300 space-y-1">
+                    <p>
+                      <strong>1. 最推薦解法（100% 成功）：點擊輸入框右側的「麥克風」按鈕（Whisper 語音轉文字）</strong><br />
+                      在 ChatGPT 手機版對話輸入框右側，點擊「麥克風」圖示語音口述，系統會精準轉文字後送出，享受語音動口便利的同時，<strong>100% 正常觸發所有查詢、新增、修改與刪除 Actions</strong>！
+                    </p>
+                    <p>
+                      <strong>2. 為什麼點擊右下角耳機的「進階語音通話模式（Advanced Voice Mode）」會失敗？</strong><br />
+                      OpenAI 官方目前在 Advanced Voice Mode（全螢幕動態光球）底層架構中<strong>尚未支援第三方 Custom GPT Actions</strong>，調用時會因 OpenAI 平台限制而出現「Unrecognized recipient」或回報無法執行。
+                    </p>
+                    <p>
+                      <strong>3. 解除授權阻擋：務必勾選「Always Allow（永遠允許）」</strong><br />
+                      首次在 ChatGPT 文字對話中調用生活秘書時，系統彈出授權提示請務必點擊<strong>「Always allow（永遠允許）」</strong>，避免任何語音情境因等待螢幕點擊授權而逾時失敗。
+                    </p>
+                  </div>
+                </div>
               </div>
             )}
           </div>
