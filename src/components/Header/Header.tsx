@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import { Database, Download, Globe, KeyRound } from 'lucide-react'
+import { Download, RotateCcw, SlidersHorizontal } from 'lucide-react'
 import { usePWA } from '../../contexts/PWAContext'
 import { useAI } from '../../contexts/AIContext'
 import ModeSwitch from '../ModeSwitch/ModeSwitch'
@@ -17,7 +17,7 @@ const pageTitles: Record<string, string> = {
 export default function Header() {
   const { pathname, search } = useLocation()
   const { isStandalone, showInstallExperience, canPromptInstall, install } = usePWA()
-  const { userApiKey, setShowKeyModal, enableSearch, setEnableSearch, isLocalMode } = useAI()
+  const { setShowKeyModal, activeTab, setActiveTab, triggerNewChat } = useAI()
   const [showInstallGuide, setShowInstallGuide] = useState(false)
   const mode = appModeFromSearch(search)
   const isNotes = mode === 'notes'
@@ -44,66 +44,75 @@ export default function Header() {
     <>
       <header className="app-header">
         <div className="mx-auto flex h-16 max-w-2xl items-center justify-between gap-2 px-3.5 sm:px-6">
-          <h1 className="shrink-0 truncate text-base font-extrabold tracking-tight text-stone-950 sm:text-xl dark:text-white">{title}</h1>
-          <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
-            {showInstallExperience && !isStandalone && (
+          {isAIMode ? (
+            <div className="flex w-full items-center justify-between">
+              {/* Left: Circle Settings / Menu Button */}
               <button
                 type="button"
-                onClick={handleInstallClick}
-                className="inline-flex shrink-0 items-center gap-1 rounded-full bg-indigo-600 px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm transition-colors hover:bg-indigo-700 active:bg-indigo-800"
-                title="安裝 手機記事本 App"
+                onClick={() => setShowKeyModal(true)}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-stone-200/60 text-stone-700 transition hover:bg-stone-200 active:scale-95 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700"
+                title="AI 設定與金鑰配置"
+                aria-label="AI 設定"
               >
-                <Download size={12} strokeWidth={2.5} />
-                <span className="hidden xs:inline sm:inline">安裝</span>
+                <SlidersHorizontal size={18} strokeWidth={2.2} />
               </button>
-            )}
 
-            {isAIMode ? (
-              <div className="flex items-center gap-1 sm:gap-1.5">
-                {/* Custom Gemini Key Button / Model Indicator */}
+              {/* Center: Segmented Pill Switch [ 對話 | 工作 ] */}
+              <div className="flex items-center rounded-full bg-stone-200/80 p-1 dark:bg-[#202124]">
                 <button
                   type="button"
-                  onClick={() => setShowKeyModal(true)}
-                  className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] sm:px-2.5 sm:text-xs font-semibold whitespace-nowrap transition ${
-                    userApiKey
-                      ? 'bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-950/60 dark:text-indigo-300 dark:border-indigo-800'
-                      : 'bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800'
+                  onClick={() => setActiveTab('chat')}
+                  className={`rounded-full px-4 py-1.5 text-xs font-bold transition-all ${
+                    activeTab === 'chat'
+                      ? 'bg-white text-stone-900 shadow-sm dark:bg-stone-700 dark:text-white'
+                      : 'text-stone-500 hover:text-stone-800 dark:text-stone-400 dark:hover:text-stone-200'
                   }`}
-                  title="設定或變更自訂 Gemini API Key"
                 >
-                  <KeyRound size={12} className={userApiKey ? 'text-indigo-600 dark:text-indigo-400' : 'text-amber-600 dark:text-amber-400'} />
-                  <span>{userApiKey ? '✨ Gemini 3.8 Flash' : '🔑 設定 Key'}</span>
+                  對話
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('work')}
+                  className={`rounded-full px-4 py-1.5 text-xs font-bold transition-all ${
+                    activeTab === 'work'
+                      ? 'bg-white text-stone-900 shadow-sm dark:bg-stone-700 dark:text-white'
+                      : 'text-stone-500 hover:text-stone-800 dark:text-stone-400 dark:hover:text-stone-200'
+                  }`}
+                >
+                  工作
+                </button>
+              </div>
 
-                {/* Engine Mode or Google Search grounding toggle */}
-                {isLocalMode ? (
-                  <span
-                    className="inline-flex items-center gap-1 rounded-full border border-amber-300/80 bg-amber-50 px-2 py-1 text-[11px] sm:px-2.5 sm:text-xs font-semibold text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/60 dark:text-amber-300"
-                    title="目前由 EdenNote 本機深度分析引擎提供離線私密運算"
-                  >
-                    <Database size={12} />
-                    <span>本機引擎</span>
-                  </span>
-                ) : (
+              {/* Right: Circle New Chat Button */}
+              <button
+                type="button"
+                onClick={triggerNewChat}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-stone-200/60 text-stone-700 transition hover:bg-stone-200 active:scale-95 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700"
+                title="開啟新對話"
+                aria-label="開啟新對話"
+              >
+                <RotateCcw size={18} strokeWidth={2.2} />
+              </button>
+            </div>
+          ) : (
+            <>
+              <h1 className="shrink-0 truncate text-base font-extrabold tracking-tight text-stone-950 sm:text-xl dark:text-white">{title}</h1>
+              <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
+                {showInstallExperience && !isStandalone && (
                   <button
                     type="button"
-                    onClick={() => setEnableSearch((prev) => !prev)}
-                    className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] sm:px-2.5 sm:text-xs font-semibold whitespace-nowrap transition ${
-                      enableSearch
-                        ? 'bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800'
-                        : 'bg-stone-100 text-stone-400 border border-transparent dark:bg-stone-800 dark:text-stone-500'
-                    }`}
-                    title={enableSearch ? '已開啟 Google 聯網比對' : '已關閉 Google 聯網比對'}
+                    onClick={handleInstallClick}
+                    className="inline-flex shrink-0 items-center gap-1 rounded-full bg-indigo-600 px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm transition-colors hover:bg-indigo-700 active:bg-indigo-800"
+                    title="安裝 手機記事本 App"
                   >
-                    <Globe size={12} />
-                    <span>{enableSearch ? 'Google 聯網開' : '聯網關'}</span>
+                    <Download size={12} strokeWidth={2.5} />
+                    <span className="hidden xs:inline sm:inline">安裝</span>
                   </button>
                 )}
+                {showModeSwitch && <ModeSwitch />}
               </div>
-            ) : (
-              showModeSwitch && <ModeSwitch />
-            )}
-          </div>
+            </>
+          )}
         </div>
       </header>
       <InstallGuideModal isOpen={showInstallGuide} onClose={() => setShowInstallGuide(false)} />

@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ArrowUp,
+  AudioLines,
   Bot,
   Check,
+  ChevronRight,
   CircleDollarSign,
   Clock,
   Copy,
@@ -13,9 +15,12 @@ import {
   LoaderCircle,
   Mic,
   MicOff,
+  NotebookPen,
   PhoneCall,
   PhoneOff,
+  Plus,
   RotateCcw,
+  Search,
   Sparkles,
   TrendingUp,
   Volume2,
@@ -44,9 +49,15 @@ export const AIAssistantPage: React.FC = () => {
     showKeyModal,
     setShowKeyModal,
     enableSearch,
+    setEnableSearch,
     isLocalMode,
     setIsLocalMode,
+    activeTab,
+    setActiveTab,
+    newChatTrigger,
   } = useAI()
+
+  const [showPlusMenu, setShowPlusMenu] = useState(false)
 
   const [events, setEvents] = useState<Event[]>([])
   const [loadingEvents, setLoadingEvents] = useState(true)
@@ -152,6 +163,16 @@ export const AIAssistantPage: React.FC = () => {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isSending])
+
+  // Handle new chat trigger from Header
+  useEffect(() => {
+    if (newChatTrigger > 0) {
+      if (messages.length > 0) {
+        setMessages([])
+        sessionStorage.removeItem(STORAGE_KEY)
+      }
+    }
+  }, [newChatTrigger])
 
   // Cleanup speech synthesis and recognition on unmount
   useEffect(() => {
@@ -621,327 +642,470 @@ export const AIAssistantPage: React.FC = () => {
     })
   }
 
+  // Quick work analytics computations
+  const salaryEvents = events.filter((e) => /薪|調薪|底薪|本薪|獎金|月薪|年終/.test(e.title + ' ' + (e.detail || '')))
+  const overtimeEvents = events.filter((e) => /加班|工時|出勤|值班|打卡/.test(e.title + ' ' + (e.detail || '')))
+  const expenseEvents = events.filter((e) => typeof e.amount === 'number' || /花費|支出|買|元|NT|扣款|費用/.test(e.title + ' ' + (e.detail || '')))
+  const totalExpenses = events.reduce((sum, e) => (typeof e.amount === 'number' ? sum + e.amount : sum), 0)
+
   return (
-    <div className="flex flex-col min-h-[calc(100dvh-135px)] pb-36 sm:pb-40">
-      {/* Top Bar: Database status, Voice TTS toggle, and Clear button */}
-      <section className="sticky top-14 z-10 flex items-center justify-between gap-2 rounded-2xl border border-stone-200/90 bg-white/95 px-3 py-2 sm:px-3.5 sm:py-2.5 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-stone-900/95">
-        <div className="flex items-center gap-2 text-xs font-semibold text-stone-700 dark:text-stone-300">
-          <span className="relative flex h-2.5 w-2.5">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
-            <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500"></span>
-          </span>
-          <span className="flex items-center gap-1">
-            <Database size={13} className="text-indigo-600 dark:text-indigo-400" />
-            <span className="hidden xs:inline">EdenNote 資料庫：</span>
-            {loadingEvents ? (
-              <span className="text-stone-400">載入中…</span>
-            ) : (
-              <strong className="text-indigo-600 dark:text-indigo-300">{events.length} 筆</strong>
-            )}
-          </span>
-        </div>
+    <div className="flex flex-col min-h-[calc(100dvh-130px)] pb-32 sm:pb-36">
+      {activeTab === 'chat' ? (
+        <>
+          {/* Messages area */}
+          <div className="flex-1 space-y-4 pt-2 pb-6">
+            {messages.length === 0 ? (
+              /* ChatGPT-style Empty Canvas with bottom-aligned prompt chips */
+              <div className="flex flex-col justify-end min-h-[calc(100dvh-260px)] pb-2">
+                <div className="flex flex-col items-start gap-2.5 max-w-sm animate-in fade-in duration-300">
+                  <button
+                    type="button"
+                    onClick={() => void handleSend('分析本月生活收支與歷年調薪紀錄')}
+                    className="inline-flex items-center gap-2.5 rounded-2xl bg-stone-200/70 px-4 py-2.5 text-xs font-semibold text-stone-800 shadow-sm transition hover:bg-stone-200 active:scale-95 dark:bg-[#1f2024] dark:text-stone-200 dark:hover:bg-[#2c2d33] text-left"
+                  >
+                    <TrendingUp size={16} className="text-stone-500 dark:text-stone-400 shrink-0" />
+                    <span>分析本月收支與調薪</span>
+                  </button>
 
-        <div className="flex items-center gap-1.5">
-          {/* TTS Audio toggle */}
-          <button
-            type="button"
-            onClick={toggleTTS}
-            className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium transition ${
-              autoTTS
-                ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300'
-                : 'bg-stone-100 text-stone-400 dark:bg-stone-800 dark:text-stone-500'
-            }`}
-            title={autoTTS ? '已開啟語音自動朗讀' : '已關閉語音朗讀'}
-          >
-            {autoTTS ? <Volume2 size={13} /> : <VolumeX size={13} />}
-            <span className="hidden xs:inline">{autoTTS ? '朗讀開' : '朗讀關'}</span>
-          </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setInput('幫我記一筆生活備忘：')
+                      textareaRef.current?.focus()
+                    }}
+                    className="inline-flex items-center gap-2.5 rounded-2xl bg-stone-200/70 px-4 py-2.5 text-xs font-semibold text-stone-800 shadow-sm transition hover:bg-stone-200 active:scale-95 dark:bg-[#1f2024] dark:text-stone-200 dark:hover:bg-[#2c2d33] text-left"
+                  >
+                    <NotebookPen size={16} className="text-stone-500 dark:text-stone-400 shrink-0" />
+                    <span>編寫或編輯記事</span>
+                  </button>
 
-          {/* Clear chat history button */}
-          {messages.length > 0 && (
-            <button
-              type="button"
-              onClick={handleClear}
-              className="inline-flex items-center gap-1 rounded-full border border-stone-200 bg-stone-50 px-2 py-1 text-xs font-medium text-stone-600 hover:bg-stone-100 dark:border-white/10 dark:bg-stone-800 dark:text-stone-300 transition"
-              title="清空對話"
-            >
-              <RotateCcw size={12} />
-              <span className="hidden sm:inline">清空</span>
-            </button>
-          )}
-        </div>
-      </section>
-
-      {/* Prominent Hands-free Voice Call Banner */}
-      <section className="mt-3">
-        <button
-          type="button"
-          onClick={openVoiceCall}
-          className="group relative flex w-full items-center justify-between overflow-hidden rounded-2xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 p-3.5 text-left text-white shadow-lg shadow-indigo-600/20 transition-all hover:scale-[1.01] hover:shadow-xl active:scale-95"
-        >
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-md transition group-hover:scale-110">
-              <PhoneCall size={22} className="animate-pulse text-white" />
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5 font-bold text-sm tracking-tight sm:text-base">
-                <span>🎙️ 開啟免持連續語音對話</span>
-                <span className="rounded-full bg-white/25 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white">
-                  免碰手機
-                </span>
+                  <button
+                    type="button"
+                    onClick={() => void handleSend('查一下最近的醫療看病費用與健檢紀錄')}
+                    className="inline-flex items-center gap-2.5 rounded-2xl bg-stone-200/70 px-4 py-2.5 text-xs font-semibold text-stone-800 shadow-sm transition hover:bg-stone-200 active:scale-95 dark:bg-[#1f2024] dark:text-stone-200 dark:hover:bg-[#2c2d33] text-left"
+                  >
+                    <Search size={16} className="text-stone-500 dark:text-stone-400 shrink-0" />
+                    <span>查詢醫療費用紀錄</span>
+                  </button>
+                </div>
               </div>
-              <p className="mt-0.5 text-xs text-white/80">
-                開車、做家事全程動嘴問、用耳聽，自動查詢與增減記事
-              </p>
-            </div>
-          </div>
-          <div className="hidden sm:flex items-center gap-1 text-xs font-semibold text-white/90">
-            <span>開始通話</span>
-            <span>&rarr;</span>
-          </div>
-        </button>
-      </section>
+            ) : (
+              /* Conversation message thread */
+              messages.map((message) => {
+                const isUser = message.role === 'user'
+                return (
+                  <div
+                    key={message.id}
+                    className={`flex gap-2.5 sm:gap-3 ${isUser ? 'justify-end' : 'justify-start'}`}
+                  >
+                    {!isUser && (
+                      <div className="flex h-8 w-8 shrink-0 select-none items-center justify-center rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 text-white shadow-sm">
+                        <Bot size={18} />
+                      </div>
+                    )}
 
-      {/* Messages area */}
-      <div className="flex-1 space-y-4 py-4 pb-12">
-        {messages.length === 0 ? (
-          /* Empty / Welcome State */
-          <div className="my-auto flex flex-col items-center justify-center py-6 text-center">
-            <div className="relative mb-3 flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-tr from-indigo-600 via-purple-600 to-pink-500 text-white shadow-lg shadow-indigo-500/25">
-              <Sparkles size={32} />
-            </div>
+                    <div
+                      className={`relative max-w-[88%] sm:max-w-[82%] rounded-3xl px-4 py-3 sm:px-5 sm:py-3.5 shadow-sm ${
+                        isUser
+                          ? 'bg-indigo-600 text-white rounded-tr-sm'
+                          : 'border border-stone-200/90 bg-white text-stone-900 rounded-tl-sm dark:border-white/10 dark:bg-[#1c1d22] dark:text-white'
+                      }`}
+                    >
+                      {isUser ? (
+                        <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.content}</p>
+                      ) : (
+                        <div>
+                          <MarkdownMessage content={message.content} />
 
-            <h2 className="text-xl font-bold tracking-tight text-stone-900 sm:text-2xl dark:text-white">
-              EdenNote AI 助理
-            </h2>
-            <p className="mt-2 max-w-md text-xs sm:text-sm leading-relaxed text-stone-500 dark:text-stone-400">
-              我是專屬於您的 EdenNote 智慧生活秘書，能深入閱讀並分析您儲存在本裝置內的個人生活紀錄，並支援全程語音查詢與增減記事！
-            </p>
+                          {/* Web search sources */}
+                          {message.sources && message.sources.length > 0 && (
+                            <div className="mt-3.5 border-t border-stone-100 pt-2.5 dark:border-white/10">
+                              <p className="flex items-center gap-1 text-[11px] font-bold text-stone-400">
+                                <Globe size={12} />
+                                <span>聯網參考來源：</span>
+                              </p>
+                              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                                {message.sources.map((src, sIdx) => (
+                                  <a
+                                    key={sIdx}
+                                    href={src.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex max-w-[220px] items-center gap-1 truncate rounded-full bg-stone-100 px-2.5 py-1 text-[11px] font-medium text-stone-700 transition hover:bg-indigo-50 hover:text-indigo-600 dark:bg-white/10 dark:text-stone-300 dark:hover:bg-indigo-950/60 dark:hover:text-indigo-300"
+                                    title={src.title}
+                                  >
+                                    <span className="truncate">{src.title}</span>
+                                    <ExternalLink size={10} className="shrink-0" />
+                                  </a>
+                                ))}
+                              </div>
+                            </div>
+                          )}
 
-            {/* Quick feature badges */}
-            <div className="mt-4 flex flex-wrap justify-center gap-2 text-xs text-stone-600 dark:text-stone-300">
-              <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-3 py-1 font-medium text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300">
-                <TrendingUp size={13} /> 薪資與加薪速率
-              </span>
-              <span className="inline-flex items-center gap-1 rounded-full bg-purple-50 px-3 py-1 font-medium text-purple-700 dark:bg-purple-950/60 dark:text-purple-300">
-                <Clock size={13} /> 工時與加班統計
-              </span>
-              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 font-medium text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
-                <CircleDollarSign size={13} /> 財務與消費彙整
-              </span>
-            </div>
-
-            {/* Quick Prompts */}
-            <div className="mt-5 flex flex-wrap justify-center gap-2 max-w-md">
-              <button
-                type="button"
-                onClick={() => void handleSend('今天有哪些記事？')}
-                className="rounded-full border border-stone-200 bg-white px-3 py-1.5 text-xs text-stone-700 shadow-sm transition hover:bg-stone-50 hover:border-indigo-300 dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300"
-              >
-                📅 今天有哪些記事？
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleSend('幫我分析歷年加薪')}
-                className="rounded-full border border-stone-200 bg-white px-3 py-1.5 text-xs text-stone-700 shadow-sm transition hover:bg-stone-50 hover:border-indigo-300 dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300"
-              >
-                📈 分析歷年加薪
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleSend('幫我記一下明天上午十點看牙醫')}
-                className="rounded-full border border-stone-200 bg-white px-3 py-1.5 text-xs text-stone-700 shadow-sm transition hover:bg-stone-50 hover:border-indigo-300 dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300"
-              >
-                📝 幫我記明天看牙醫
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleSend('統計加班紀錄')}
-                className="rounded-full border border-stone-200 bg-white px-3 py-1.5 text-xs text-stone-700 shadow-sm transition hover:bg-stone-50 hover:border-indigo-300 dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300"
-              >
-                ⏱️ 統計加班紀錄
-              </button>
-            </div>
-          </div>
-        ) : (
-          /* Conversation message thread */
-          messages.map((message) => {
-            const isUser = message.role === 'user'
-            return (
-              <div
-                key={message.id}
-                className={`flex gap-2.5 sm:gap-3 ${isUser ? 'justify-end' : 'justify-start'}`}
-              >
-                {!isUser && (
-                  <div className="flex h-8 w-8 shrink-0 select-none items-center justify-center rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 text-white shadow-sm">
-                    <Bot size={18} />
-                  </div>
-                )}
-
-                <div
-                  className={`relative max-w-[88%] sm:max-w-[82%] rounded-3xl px-4 py-3 sm:px-5 sm:py-3.5 shadow-sm ${
-                    isUser
-                      ? 'bg-indigo-600 text-white rounded-tr-sm'
-                      : 'border border-stone-200/90 bg-white text-stone-900 rounded-tl-sm dark:border-white/10 dark:bg-stone-900 dark:text-white'
-                  }`}
-                >
-                  {isUser ? (
-                    <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.content}</p>
-                  ) : (
-                    <div>
-                      <MarkdownMessage content={message.content} />
-
-                      {/* Web search sources */}
-                      {message.sources && message.sources.length > 0 && (
-                        <div className="mt-3.5 border-t border-stone-100 pt-2.5 dark:border-white/10">
-                          <p className="flex items-center gap-1 text-[11px] font-bold text-stone-400">
-                            <Globe size={12} />
-                            <span>聯網參考來源：</span>
-                          </p>
-                          <div className="mt-1.5 flex flex-wrap gap-1.5">
-                            {message.sources.map((src, sIdx) => (
-                              <a
-                                key={sIdx}
-                                href={src.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex max-w-[220px] items-center gap-1 truncate rounded-full bg-stone-100 px-2.5 py-1 text-[11px] font-medium text-stone-700 transition hover:bg-indigo-50 hover:text-indigo-600 dark:bg-white/10 dark:text-stone-300 dark:hover:bg-indigo-950/60 dark:hover:text-indigo-300"
-                                title={src.title}
+                          {/* Action buttons (Copy, Read aloud) */}
+                          <div className="mt-2.5 flex items-center justify-between text-[11px] text-stone-400">
+                            <div className="flex items-center gap-2">
+                              <span>{message.timestamp}</span>
+                              {message.isLocalFallback ? (
+                                <span className="inline-flex items-center gap-1 rounded bg-stone-100 px-1.5 py-0.5 text-[10px] font-medium text-stone-600 dark:bg-white/10 dark:text-stone-300">
+                                  ⚡ 本機引擎
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-300">
+                                  ✨ Gemini AI
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => speakVoiceReply(message.content)}
+                                className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-stone-100 hover:text-stone-600 dark:hover:bg-stone-800 dark:hover:text-stone-200"
+                                title="語音朗讀回覆"
                               >
-                                <span className="truncate">{src.title}</span>
-                                <ExternalLink size={10} className="shrink-0" />
-                              </a>
-                            ))}
+                                <Volume2 size={12} />
+                                <span>朗讀</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => copyToClipboard(message.content, message.id)}
+                                className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-stone-100 hover:text-stone-600 dark:hover:bg-stone-800 dark:hover:text-stone-200"
+                                title="複製內容"
+                              >
+                                {copiedId === message.id ? (
+                                  <>
+                                    <Check size={12} className="text-emerald-500" />
+                                    <span className="text-emerald-500">已複製</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Copy size={12} />
+                                    <span>複製</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
                           </div>
                         </div>
                       )}
-
-                      {/* Action buttons (Copy, Read aloud) */}
-                      <div className="mt-2.5 flex items-center justify-between text-[11px] text-stone-400">
-                        <div className="flex items-center gap-2">
-                          <span>{message.timestamp}</span>
-                          {message.isLocalFallback ? (
-                            <span className="inline-flex items-center gap-1 rounded bg-stone-100 px-1.5 py-0.5 text-[10px] font-medium text-stone-600 dark:bg-white/10 dark:text-stone-300">
-                              ⚡ 本機引擎
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-300">
-                              ✨ Gemini AI
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => speakVoiceReply(message.content)}
-                            className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-stone-100 hover:text-stone-600 dark:hover:bg-stone-800 dark:hover:text-stone-200"
-                            title="語音朗讀回覆"
-                          >
-                            <Volume2 size={12} />
-                            <span>朗讀</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => copyToClipboard(message.content, message.id)}
-                            className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-stone-100 hover:text-stone-600 dark:hover:bg-stone-800 dark:hover:text-stone-200"
-                            title="複製內容"
-                          >
-                            {copiedId === message.id ? (
-                              <>
-                                <Check size={12} className="text-emerald-500" />
-                                <span className="text-emerald-500">已複製</span>
-                              </>
-                            ) : (
-                              <>
-                                <Copy size={12} />
-                                <span>複製</span>
-                              </>
-                            )}
-                          </button>
-                        </div>
-                      </div>
                     </div>
-                  )}
-                </div>
 
-                {isUser && (
-                  <div className="flex h-8 w-8 shrink-0 select-none items-center justify-center rounded-2xl bg-stone-200 text-stone-700 dark:bg-stone-800 dark:text-stone-200 font-bold text-xs shadow-sm">
-                    您
+                    {isUser && (
+                      <div className="flex h-8 w-8 shrink-0 select-none items-center justify-center rounded-2xl bg-stone-200 text-stone-700 dark:bg-stone-800 dark:text-stone-200 font-bold text-xs shadow-sm">
+                        您
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            )
-          })
-        )}
+                )
+              })
+            )}
 
-        {/* Loading Indicator */}
-        {isSending && (
-          <div className="flex justify-start gap-2.5 sm:gap-3">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 text-white shadow-sm">
-              <Sparkles size={18} className="animate-spin" />
-            </div>
-            <div className="flex items-center gap-2 rounded-3xl rounded-tl-sm border border-stone-200/90 bg-white px-4 py-3 text-xs sm:text-sm font-medium text-stone-600 shadow-sm dark:border-white/10 dark:bg-stone-900 dark:text-stone-300">
-              <LoaderCircle size={16} className="animate-spin text-indigo-600 dark:text-indigo-400" />
-              <span>EdenNote AI 正在檢索資料庫並思考處理中…</span>
+            {/* Loading Indicator */}
+            {isSending && (
+              <div className="flex justify-start gap-2.5 sm:gap-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 text-white shadow-sm">
+                  <Sparkles size={18} className="animate-spin" />
+                </div>
+                <div className="flex items-center gap-2 rounded-3xl rounded-tl-sm border border-stone-200/90 bg-white px-4 py-3 text-xs sm:text-sm font-medium text-stone-600 shadow-sm dark:border-white/10 dark:bg-[#1c1d22] dark:text-stone-300">
+                  <LoaderCircle size={16} className="animate-spin text-indigo-600 dark:text-indigo-400" />
+                  <span>EdenNote AI 正在檢索資料庫並思考處理中…</span>
+                </div>
+              </div>
+            )}
+
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* ========================================================================= */}
+          {/* CHATGPT-STYLE FLOATING BOTTOM PILL COMPOSER (參照 ChatGPT 底部欄) */}
+          {/* ========================================================================= */}
+          <div
+            className="fixed left-0 right-0 z-30 mx-auto max-w-2xl px-3 sm:px-6 pointer-events-none"
+            style={{ bottom: 'calc(var(--app-bottom-margin, 1.75rem) + 4.25rem)' }}
+          >
+            <div className="pointer-events-auto relative">
+              {/* Plus Action Popup Menu */}
+              {showPlusMenu && (
+                <div className="absolute bottom-full left-0 mb-3 w-64 rounded-3xl border border-stone-200/80 bg-white/95 p-2 shadow-2xl backdrop-blur-xl dark:border-stone-800/90 dark:bg-[#1c1d22]/95 animate-in fade-in slide-in-from-bottom-2 duration-150">
+                  <div className="space-y-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowPlusMenu(false)
+                        setInput('幫我記一筆生活備忘：')
+                        textareaRef.current?.focus()
+                      }}
+                      className="flex w-full items-center gap-2.5 rounded-2xl px-3 py-2 text-left text-xs font-semibold text-stone-700 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800 transition"
+                    >
+                      <NotebookPen size={15} className="text-indigo-500" />
+                      <span>吩咐新增生活記事</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowPlusMenu(false)
+                        void handleSend('請幫我完整分析歷年調薪與工時狀況')
+                      }}
+                      className="flex w-full items-center gap-2.5 rounded-2xl px-3 py-2 text-left text-xs font-semibold text-stone-700 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800 transition"
+                    >
+                      <TrendingUp size={15} className="text-emerald-500" />
+                      <span>統計調薪與工時</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowPlusMenu(false)
+                        void handleSend('統計最近一個月的花費與醫療支出')
+                      }}
+                      className="flex w-full items-center gap-2.5 rounded-2xl px-3 py-2 text-left text-xs font-semibold text-stone-700 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800 transition"
+                    >
+                      <Search size={15} className="text-blue-500" />
+                      <span>查詢近月消費開銷</span>
+                    </button>
+                    <div className="my-1 border-t border-stone-100 dark:border-stone-800" />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowPlusMenu(false)
+                        toggleTTS()
+                      }}
+                      className="flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left text-xs font-semibold text-stone-700 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800 transition"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        {autoTTS ? <Volume2 size={15} className="text-indigo-500" /> : <VolumeX size={15} className="text-stone-400" />}
+                        <span>語音自動朗讀回覆</span>
+                      </div>
+                      <span className="text-[10px] text-stone-400 font-medium">{autoTTS ? '已開啟' : '已關閉'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowPlusMenu(false)
+                        setShowKeyModal(true)
+                      }}
+                      className="flex w-full items-center gap-2.5 rounded-2xl px-3 py-2 text-left text-xs font-semibold text-stone-700 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800 transition"
+                    >
+                      <KeyRound size={15} className="text-amber-500" />
+                      <span>自訂 Gemini API Key</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* The ChatGPT Bottom Pill */}
+              <div className="flex items-center gap-2 rounded-full border border-stone-300/80 bg-white/95 px-2.5 py-1.5 shadow-2xl shadow-black/10 backdrop-blur-xl dark:border-stone-800/90 dark:bg-[#18191d]/95 dark:shadow-black/50">
+                {/* Left: Plus Button */}
+                <button
+                  type="button"
+                  onClick={() => setShowPlusMenu((prev) => !prev)}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-stone-500 transition hover:bg-stone-100 hover:text-stone-900 active:scale-95 dark:text-stone-400 dark:hover:bg-stone-800 dark:hover:text-white"
+                  title="功能選單"
+                >
+                  <Plus size={20} strokeWidth={2.4} />
+                </button>
+
+                {/* Center: Input / Textarea */}
+                <textarea
+                  ref={textareaRef}
+                  rows={1}
+                  value={input}
+                  disabled={isSending}
+                  onChange={(e) => {
+                    setInput(e.target.value)
+                    e.target.style.height = 'auto'
+                    e.target.style.height = `${Math.min(e.target.scrollHeight, 100)}px`
+                  }}
+                  onKeyDown={handleKeyDown}
+                  placeholder={isDictatingInput ? '正在聆聽您的口述...' : '問問 EdenNote AI...'}
+                  className="flex-1 max-h-28 resize-none bg-transparent px-1.5 py-2 text-sm leading-relaxed text-stone-900 placeholder:text-stone-400 focus:outline-none dark:text-stone-100 dark:placeholder:text-stone-500"
+                />
+
+                {/* Right Controls: Dictation Mic, Send button (when typing), and Blue Voice Mode Wave Button */}
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {/* Dictation Mic Button (Speech-to-text dictation into text box) */}
+                  <button
+                    type="button"
+                    onClick={handleDictateClick}
+                    className={`flex h-9 w-9 items-center justify-center rounded-full transition active:scale-95 ${
+                      isDictatingInput
+                        ? 'bg-rose-500 text-white animate-pulse shadow-md shadow-rose-500/30'
+                        : 'text-stone-500 hover:bg-stone-100 hover:text-stone-900 dark:text-stone-300 dark:hover:bg-stone-800 dark:hover:text-white'
+                    }`}
+                    title={isDictatingInput ? '正在語音輸入... 點擊結束' : '麥克風語音輸入'}
+                  >
+                    {isDictatingInput ? <MicOff size={19} /> : <Mic size={19} strokeWidth={2.2} />}
+                  </button>
+
+                  {/* Send Arrow Button (Displayed when typing) */}
+                  {input.trim().length > 0 && (
+                    <button
+                      type="button"
+                      disabled={isSending}
+                      onClick={() => void handleSend()}
+                      aria-label="送出"
+                      className="flex h-9 w-9 items-center justify-center rounded-full bg-stone-900 text-white shadow transition hover:bg-black active:scale-95 dark:bg-white dark:text-black dark:hover:bg-stone-200"
+                    >
+                      {isSending ? (
+                        <LoaderCircle size={16} className="animate-spin" />
+                      ) : (
+                        <ArrowUp size={18} strokeWidth={2.6} />
+                      )}
+                    </button>
+                  )}
+
+                  {/* Blue Audio Wave Button (Exact ChatGPT Blue Voice Mode!) */}
+                  <button
+                    type="button"
+                    onClick={openVoiceCall}
+                    className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 text-white shadow-md shadow-blue-600/30 transition hover:bg-blue-500 active:scale-95"
+                    title="開啟免持連續語音秘書（全程免碰手機）"
+                  >
+                    <AudioLines size={18} strokeWidth={2.4} />
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
-        )}
+        </>
+      ) : (
+        /* ========================================================================= */
+        /* WORK / ANALYSIS MODE (工作模式：數據彙整與智能洞察面板) */
+        /* ========================================================================= */
+        <div className="space-y-4 pt-3 pb-8 animate-in fade-in duration-200">
+          {/* Header Overview Card */}
+          <div className="rounded-3xl border border-stone-200/90 bg-white/90 p-4 shadow-sm dark:border-stone-800 dark:bg-[#1a1b1f]">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold text-stone-900 dark:text-white">
+                  EdenNote 智能工作台
+                </h3>
+                <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
+                  已索引本裝置資料庫共 <strong>{events.length}</strong> 筆生活紀錄
+                </p>
+              </div>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
+                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span>即時同步中</span>
+              </span>
+            </div>
+          </div>
 
-        <div ref={messagesEndRef} />
-      </div>
+          {/* 4 Feature Analytics Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* 1. Salary Card */}
+            <div className="rounded-3xl border border-stone-200/90 bg-white p-4 shadow-sm dark:border-stone-800 dark:bg-[#1c1d22] flex flex-col justify-between">
+              <div>
+                <div className="flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400">
+                    <TrendingUp size={16} />
+                  </div>
+                  <h4 className="text-sm font-bold text-stone-900 dark:text-stone-100">
+                    薪資與加薪歷程
+                  </h4>
+                </div>
+                <p className="text-xs text-stone-500 dark:text-stone-400 mt-2">
+                  已收錄 {salaryEvents.length} 筆調薪與所得相關備忘。
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('chat')
+                  void handleSend('請詳細分析我的歷年加薪幅度與薪資成長曲線')
+                }}
+                className="mt-3 inline-flex items-center justify-between w-full rounded-2xl bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 px-3 py-2 text-xs font-semibold text-stone-700 dark:text-stone-200 transition"
+              >
+                <span>請 AI 深度分析薪資</span>
+                <ChevronRight size={14} />
+              </button>
+            </div>
 
-      {/* Floating Bottom Composer */}
-      <div
-        className="fixed left-0 right-0 z-30 mx-auto max-w-2xl px-3 sm:px-8 pointer-events-none"
-        style={{ bottom: 'calc(var(--app-bottom-margin, 1.75rem) + 4.75rem)' }}
-      >
-        <div className="pointer-events-auto">
-          <div className="relative flex items-end gap-1.5 sm:gap-2 rounded-3xl border-2 border-indigo-400/90 bg-white/95 p-1.5 sm:p-2 shadow-2xl shadow-indigo-950/15 backdrop-blur-md transition-all focus-within:border-indigo-600 focus-within:ring-4 focus-within:ring-indigo-500/20 dark:border-indigo-500/80 dark:bg-stone-900/95 dark:shadow-black/40">
-            {/* Quick Microphone Button for Text Input */}
-            <button
-              type="button"
-              onClick={handleDictateClick}
-              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl transition active:scale-95 ${
-                isDictatingInput
-                  ? 'bg-rose-500 text-white animate-pulse shadow-md shadow-rose-500/30'
-                  : 'bg-stone-100 text-stone-600 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700'
-              }`}
-              title={isDictatingInput ? '正在聆聽語音... 點擊結束' : '語音口述打字'}
-            >
-              {isDictatingInput ? <MicOff size={18} /> : <Mic size={18} />}
-            </button>
+            {/* 2. Overtime & Workhours Card */}
+            <div className="rounded-3xl border border-stone-200/90 bg-white p-4 shadow-sm dark:border-stone-800 dark:bg-[#1c1d22] flex flex-col justify-between">
+              <div>
+                <div className="flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-2xl bg-purple-50 text-purple-600 dark:bg-purple-950/60 dark:text-purple-400">
+                    <Clock size={16} />
+                  </div>
+                  <h4 className="text-sm font-bold text-stone-900 dark:text-stone-100">
+                    工時與加班統計
+                  </h4>
+                </div>
+                <p className="text-xs text-stone-500 dark:text-stone-400 mt-2">
+                  已收錄 {overtimeEvents.length} 筆加班與出勤備忘。
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('chat')
+                  void handleSend('幫我統計總加班工時與最近的加班情況')
+                }}
+                className="mt-3 inline-flex items-center justify-between w-full rounded-2xl bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 px-3 py-2 text-xs font-semibold text-stone-700 dark:text-stone-200 transition"
+              >
+                <span>請 AI 統計加班工時</span>
+                <ChevronRight size={14} />
+              </button>
+            </div>
 
-            <textarea
-              ref={textareaRef}
-              rows={1}
-              value={input}
-              disabled={isSending}
-              onChange={(e) => {
-                setInput(e.target.value)
-                e.target.style.height = 'auto'
-                e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`
-              }}
-              onKeyDown={handleKeyDown}
-              placeholder={isDictatingInput ? '正在聆聽您的口述...' : '問問EdenNote AI，或吩咐記下一筆...'}
-              className="flex-1 max-h-32 resize-none bg-transparent px-2.5 py-2 text-sm leading-relaxed text-stone-900 placeholder:text-stone-400 focus:outline-none dark:text-white dark:placeholder:text-stone-500"
-            />
+            {/* 3. Expenses Card */}
+            <div className="rounded-3xl border border-stone-200/90 bg-white p-4 shadow-sm dark:border-stone-800 dark:bg-[#1c1d22] flex flex-col justify-between">
+              <div>
+                <div className="flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400">
+                    <CircleDollarSign size={16} />
+                  </div>
+                  <h4 className="text-sm font-bold text-stone-900 dark:text-stone-100">
+                    生活消費與財務支出
+                  </h4>
+                </div>
+                <p className="text-xs text-stone-500 dark:text-stone-400 mt-2">
+                  已記錄 {expenseEvents.length} 筆支出，總計 NT$ {totalExpenses.toLocaleString()}。
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('chat')
+                  void handleSend('幫我整理所有消費支出並依類別分析')
+                }}
+                className="mt-3 inline-flex items-center justify-between w-full rounded-2xl bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 px-3 py-2 text-xs font-semibold text-stone-700 dark:text-stone-200 transition"
+              >
+                <span>請 AI 彙整生活開銷</span>
+                <ChevronRight size={14} />
+              </button>
+            </div>
 
-            <button
-              type="button"
-              disabled={!input.trim() || isSending}
-              onClick={() => void handleSend()}
-              aria-label="送出"
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow transition hover:bg-indigo-700 active:scale-95 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-400 dark:disabled:bg-stone-800 dark:disabled:text-stone-600"
-            >
-              {isSending ? (
-                <LoaderCircle size={18} className="animate-spin" />
-              ) : (
-                <ArrowUp size={20} strokeWidth={2.4} />
-              )}
-            </button>
+            {/* 4. Notes & Overview Card */}
+            <div className="rounded-3xl border border-stone-200/90 bg-white p-4 shadow-sm dark:border-stone-800 dark:bg-[#1c1d22] flex flex-col justify-between">
+              <div>
+                <div className="flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400">
+                    <NotebookPen size={16} />
+                  </div>
+                  <h4 className="text-sm font-bold text-stone-900 dark:text-stone-100">
+                    生活備忘與待辦
+                  </h4>
+                </div>
+                <p className="text-xs text-stone-500 dark:text-stone-400 mt-2">
+                  隨時透過語音或打字新增、查詢醫療、工作與生活記事。
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('chat')
+                  void handleSend('今天和本週有哪些重要待辦事項與記事？')
+                }}
+                className="mt-3 inline-flex items-center justify-between w-full rounded-2xl bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 px-3 py-2 text-xs font-semibold text-stone-700 dark:text-stone-200 transition"
+              >
+                <span>檢閱本週待辦與記事</span>
+                <ChevronRight size={14} />
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* ========================================================================= */}
       {/* IMMERSIVE HANDS-FREE VOICE CALL OVERLAY (免動手連續語音生活秘書全螢幕介面) */}

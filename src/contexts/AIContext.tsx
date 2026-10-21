@@ -10,6 +10,10 @@ interface AIContextType {
   setEnableSearch: React.Dispatch<React.SetStateAction<boolean>>
   isLocalMode: boolean
   setIsLocalMode: (local: boolean) => void
+  activeTab: 'chat' | 'work'
+  setActiveTab: (tab: 'chat' | 'work') => void
+  newChatTrigger: number
+  triggerNewChat: () => void
 }
 
 const AIContext = createContext<AIContextType | null>(null)
@@ -19,6 +23,12 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   const [showKeyModal, setShowKeyModal] = useState(false)
   const [enableSearch, setEnableSearch] = useState(true)
   const [isLocalMode, setIsLocalMode] = useState(false)
+  const [activeTab, setActiveTab] = useState<'chat' | 'work'>('chat')
+  const [newChatTrigger, setNewChatTrigger] = useState(0)
+
+  const triggerNewChat = () => {
+    setNewChatTrigger((prev) => prev + 1)
+  }
 
   const setUserApiKey = (key: string) => {
     setUserApiKeyState(key)
@@ -44,6 +54,10 @@ export const AIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         setEnableSearch,
         isLocalMode,
         setIsLocalMode,
+        activeTab,
+        setActiveTab,
+        newChatTrigger,
+        triggerNewChat,
       }}
     >
       {children}
