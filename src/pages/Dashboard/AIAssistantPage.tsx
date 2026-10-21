@@ -284,6 +284,24 @@ export const AIAssistantPage: React.FC = () => {
     })
   }
 
+  // Request microphone permission via WebRTC getUserMedia which explicitly triggers Android system dialog
+  const requestMicrophonePermission = async () => {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+        stream.getTracks().forEach((track) => track.stop())
+        setVoiceError(null)
+        startVoiceCallListening()
+        return true
+      }
+    } catch (err: any) {
+      console.warn('getUserMedia error:', err)
+      setVoiceError('麥克風權限尚未開啟。請長按 EdenNote 圖示進入「應用程式資訊」>「權限」設定為「使用中允許」。')
+      setVoiceCallStatus('error')
+    }
+    return false
+  }
+
   // Stop current recognition
   const stopVoiceRecognition = () => {
     if (silenceTimerRef.current) {
@@ -354,7 +372,7 @@ export const AIAssistantPage: React.FC = () => {
       recognition.onerror = (e: any) => {
         console.warn('SpeechRecognition error:', e.error)
         if (e.error === 'not-allowed') {
-          setVoiceError('請允許麥克風權限以使用免動手語音秘書。')
+          setVoiceError('尚未取得麥克風授權。請點擊下方按鈕，或至手機設定允許 EdenNote 使用麥克風。')
           setVoiceCallStatus('error')
         } else if (e.error === 'no-speech') {
           if (isVoiceCallOpenRef.current && voiceCallStatusRef.current !== 'speaking' && voiceCallStatusRef.current !== 'processing') {
@@ -1040,8 +1058,28 @@ export const AIAssistantPage: React.FC = () => {
               )}
 
               {voiceError && (
-                <div className="mt-4 rounded-2xl bg-rose-950/60 border border-rose-800/80 p-3 text-xs text-rose-300">
-                  {voiceError}
+                <div className="mt-4 rounded-2xl bg-rose-950/80 border border-rose-800/80 p-3.5 text-xs text-rose-200 text-left space-y-2.5 shadow-lg backdrop-blur-md">
+                  <div className="flex items-start gap-2">
+                    <span className="text-rose-400 font-bold shrink-0">⚠️ 權限提示：</span>
+                    <p className="leading-relaxed">{voiceError}</p>
+                  </div>
+                  <div className="pt-0.5">
+                    <button
+                      type="button"
+                      onClick={() => void requestMicrophonePermission()}
+                      className="w-full inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-white font-bold text-xs shadow-md active:scale-95 transition"
+                    >
+                      <Mic size={15} />
+                      <span>點此呼叫 Android 麥克風授權視窗</span>
+                    </button>
+                  </div>
+                  <div className="rounded-xl bg-black/40 p-2.5 text-[11px] text-stone-300 space-y-1">
+                    <p className="font-semibold text-white">📱 若系統未彈出視窗，請手動開啟：</p>
+                    <p>1. 回到手機桌面，長按「EdenNote」圖示</p>
+                    <p>2. 點擊「應用程式資訊」（或 ℹ️ 圖示）</p>
+                    <p>3. 點擊「權限」➜ 找到「麥克風」</p>
+                    <p>4. 勾選「使用應用程式時允許」即可！</p>
+                  </div>
                 </div>
               )}
             </div>
