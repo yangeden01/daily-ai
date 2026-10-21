@@ -103,6 +103,7 @@ export default function SettingsPage() {
   const [gptPullStatus, setGptPullStatus] = useState<'idle' | 'working' | 'success' | 'error'>('idle')
   const [gptPullMessage, setGptPullMessage] = useState<string | null>(null)
   const [showSetupGuide, setShowSetupGuide] = useState(false)
+  const [showAiServices, setShowAiServices] = useState(false)
   const [copiedSnippetType, setCopiedSnippetType] = useState<string | null>(null)
   const [diagnostics, setDiagnostics] = useState<GptSyncDiagnostics | null>(getLatestSyncDiagnostics)
 
@@ -927,169 +928,203 @@ export default function SettingsPage() {
       )}
 
       <p className="section-label mt-8">AI 助理與雲端服務</p>
-      <section className="settings-card p-3.5 sm:p-4" aria-label="AI 助理連線設定">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-stone-900 dark:text-stone-100">
-            <Sparkles size={16} className="text-indigo-600 dark:text-indigo-400" />
-            <h2 className="text-sm font-bold">雲端 Gemini AI 連線端點</h2>
-          </div>
-          {aiHealth.statusText && (
-            <span
-              className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                aiHealth.ok
-                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300'
-                  : 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300'
-              }`}
-            >
-              {aiHealth.ok ? '🟢 ' : '⚠️ '}
-              {aiHealth.statusText}
-            </span>
-          )}
-        </div>
-        <p className="mt-2 text-xs text-stone-500 dark:text-stone-400 leading-relaxed">
-          手機 APK 或離線環境會透過此雲端後端將您的提問交由 Gemini 3.8 Flash AI Agent 進行個人筆記分析與即時聯網回答。
-        </p>
-
-        <div className="mt-3">
-          <label htmlFor="ai-server-input" className="block text-xs font-medium text-stone-700 dark:text-stone-300">
-            自訂伺服器網址 (留空即使用預設 Cloud Run 服務)
-          </label>
-          <div className="mt-1 flex gap-2">
-            <input
-              id="ai-server-input"
-              type="url"
-              className="flex-1 rounded-xl border border-stone-200 bg-stone-50 px-3 py-1.5 text-xs font-mono text-stone-800 placeholder-stone-400 focus:border-indigo-500 focus:bg-white dark:focus:bg-stone-800 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200"
-              placeholder="https://...run.app"
-              value={aiServerUrl}
-              onChange={(e) => handleSaveAiServerUrl(e.target.value)}
-            />
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 rounded-xl border border-stone-300 bg-white px-3 py-1.5 text-xs font-medium text-stone-700 shadow-sm transition hover:bg-stone-50 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200 dark:hover:bg-stone-750"
-              onClick={() => void handleTestAiConnection()}
-              disabled={aiHealth.checking}
-            >
-              {aiHealth.checking ? (
-                <LoaderCircle size={13} className="animate-spin text-indigo-600" />
-              ) : (
-                <Globe size={13} className="text-indigo-600" />
-              )}
-              <span>測試連線</span>
-            </button>
-          </div>
-          <div className="mt-1.5 text-[11px] text-stone-400 dark:text-stone-500">
-            目前生效端點：<code className="text-stone-600 dark:text-stone-300">{activeEndpoint}</code>
-          </div>
-        </div>
-
-        <div className="mt-5 border-t border-stone-200/80 pt-4 dark:border-stone-800">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-stone-900 dark:text-stone-100">
-              <KeyRound size={15} className="text-amber-600 dark:text-amber-400" />
-              <label htmlFor="gemini-key-input" className="text-xs font-bold">
-                自訂 Google Gemini API Key（直連 Google 官方 AI Agent）
-              </label>
+      <section className="settings-card overflow-hidden" aria-label="AI 助理連線設定">
+        <button
+          type="button"
+          onClick={() => setShowAiServices((prev) => !prev)}
+          className="w-full flex items-center justify-between p-3.5 sm:p-4 text-left transition hover:bg-stone-50/70 dark:hover:bg-stone-800/40"
+        >
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400 shrink-0">
+              <Sparkles size={16} />
             </div>
-            {keyTestStatus.msg && (
-              <span
-                className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                  keyTestStatus.ok
-                    ? keyTestStatus.isDepleted
-                      ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
-                      : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300'
-                    : 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300'
-                }`}
-              >
-                {keyTestStatus.ok ? (keyTestStatus.isDepleted ? '🟡 ' : '🟢 ') : '⚠️ '}
-                {keyTestStatus.msg}
-              </span>
-            )}
-          </div>
-          <p className="mt-1.5 text-xs text-stone-500 dark:text-stone-400 leading-relaxed">
-            填入您的 Gemini API Key 後，手機 APK 與網頁版將直接連接 Google 官方 Gemini 3.8 Flash AI Agent，享有最頂級的智慧推理、即時聯網比對與您的個人資料深度融合分析！
-          </p>
-
-          <div className="mt-2.5 flex gap-2">
-            <input
-              id="gemini-key-input"
-              type="password"
-              autoComplete="off"
-              className="flex-1 rounded-xl border border-stone-200 bg-stone-50 px-3 py-1.5 text-xs font-mono text-stone-800 placeholder-stone-400 focus:border-indigo-500 focus:bg-white dark:focus:bg-stone-800 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200"
-              placeholder="貼上 AQ... 或 AIzaSy... 開頭的 Gemini API Key"
-              value={geminiApiKey}
-              onChange={(e) => handleSaveGeminiKey(e.target.value)}
-            />
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 rounded-xl border border-stone-300 bg-white px-3 py-1.5 text-xs font-medium text-stone-700 shadow-sm transition hover:bg-stone-50 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200 dark:hover:bg-stone-750"
-              onClick={() => void handleTestGeminiKey()}
-              disabled={keyTestStatus.testing || !geminiApiKey.trim()}
-            >
-              {keyTestStatus.testing ? (
-                <LoaderCircle size={13} className="animate-spin text-amber-600" />
-              ) : (
-                <KeyRound size={13} className="text-amber-600" />
-              )}
-              <span>驗證金鑰</span>
-            </button>
-          </div>
-
-          <div className="mt-2 flex items-center justify-between text-[11px] text-stone-400 dark:text-stone-500">
-            <span>金鑰僅存於您本機裝置（localStorage），安全加密不外洩。</span>
-            <a
-              href="https://aistudio.google.com/app/apikey"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-0.5 text-indigo-600 hover:underline dark:text-indigo-400"
-            >
-              <span>前往 Google AI Studio 獲取 Key</span>
-              <ExternalLink size={11} />
-            </a>
-          </div>
-        </div>
-
-        {/* 指定雲端備份目標 */}
-        <div className="mt-5 border-t border-stone-200/80 pt-4 dark:border-stone-800">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-stone-900 dark:text-stone-100">
-              <Cloud size={15} className="text-blue-600 dark:text-blue-400" />
-              <label htmlFor="cloud-backup-url-input" className="text-xs font-bold">
-                指定雲端備份目標（Google Drive / 自訂雲端資料庫網址）
-              </label>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-bold text-stone-900 dark:text-stone-100">
+                  雲端 Gemini AI 與備份端點
+                </span>
+                {aiHealth.statusText && (
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                      aiHealth.ok
+                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300'
+                        : 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300'
+                    }`}
+                  >
+                    {aiHealth.ok ? '🟢 ' : '⚠️ '}
+                    {aiHealth.statusText}
+                  </span>
+                )}
+              </div>
+              <p className="mt-0.5 text-xs text-stone-500 dark:text-stone-400">
+                {showAiServices
+                  ? '包含 Gemini 連線端點、自訂 API Key 及雲端備份目標設定'
+                  : '已預設折疊保護以防誤按（點擊展開設定）'}
+              </p>
             </div>
-            {cloudBackupUrl !== DEFAULT_CLOUD_BACKUP_URL && (
-              <button
-                type="button"
-                onClick={handleResetCloudBackupUrl}
-                className="text-[11px] font-medium text-blue-600 hover:underline dark:text-blue-400"
-              >
-                恢復預設值
-              </button>
-            )}
           </div>
-          <p className="mt-1 text-xs text-stone-500 dark:text-stone-400 leading-relaxed">
-            預設匯出至指定 Google Drive 資料夾，亦可輸入其他 Google Drive 資料夾或雲端備份 API 端點。
-          </p>
-          <div className="mt-2.5 flex items-center gap-2">
-            <input
-              id="cloud-backup-url-input"
-              type="url"
-              value={cloudBackupUrl}
-              onChange={(e) => handleCloudBackupUrlChange(e.target.value)}
-              placeholder="https://drive.google.com/drive/folders/..."
-              className="flex-1 rounded-xl border border-stone-200 bg-stone-50 px-3 py-1.5 text-xs font-mono text-stone-800 placeholder-stone-400 focus:border-indigo-500 focus:bg-white dark:focus:bg-stone-800 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200"
-            />
-            <button
-              type="button"
-              onClick={handleOpenCloudUrl}
-              className="inline-flex shrink-0 items-center gap-1 rounded-xl border border-stone-300 bg-white px-3 py-1.5 text-xs font-medium text-stone-700 shadow-sm transition hover:bg-stone-50 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200 dark:hover:bg-stone-750"
-              title="在瀏覽器開啟此雲端資料庫"
-            >
-              <ExternalLink size={13} className="text-blue-600 dark:text-blue-400" />
-              <span>開啟網址</span>
-            </button>
+          <div className="flex items-center gap-1 text-xs font-medium text-stone-500 dark:text-stone-400 shrink-0 ml-2">
+            <span>{showAiServices ? '收合' : '展開'}</span>
+            {showAiServices ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
           </div>
-        </div>
+        </button>
+
+        {showAiServices && (
+          <div className="border-t border-stone-200/80 p-3.5 sm:p-4 dark:border-stone-800 space-y-5">
+            <div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-stone-900 dark:text-stone-100">
+                  <Sparkles size={16} className="text-indigo-600 dark:text-indigo-400" />
+                  <h2 className="text-sm font-bold">雲端 Gemini AI 連線端點</h2>
+                </div>
+              </div>
+              <p className="mt-2 text-xs text-stone-500 dark:text-stone-400 leading-relaxed">
+                手機 APK 或離線環境會透過此雲端後端將您的提問交由 Gemini 3.8 Flash AI Agent 進行個人筆記分析與即時聯網回答。
+              </p>
+
+              <div className="mt-3">
+                <label htmlFor="ai-server-input" className="block text-xs font-medium text-stone-700 dark:text-stone-300">
+                  自訂伺服器網址 (留空即使用預設 Cloud Run 服務)
+                </label>
+                <div className="mt-1 flex gap-2">
+                  <input
+                    id="ai-server-input"
+                    type="url"
+                    className="flex-1 rounded-xl border border-stone-200 bg-stone-50 px-3 py-1.5 text-xs font-mono text-stone-800 placeholder-stone-400 focus:border-indigo-500 focus:bg-white dark:focus:bg-stone-800 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200"
+                    placeholder="https://...run.app"
+                    value={aiServerUrl}
+                    onChange={(e) => handleSaveAiServerUrl(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 rounded-xl border border-stone-300 bg-white px-3 py-1.5 text-xs font-medium text-stone-700 shadow-sm transition hover:bg-stone-50 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200 dark:hover:bg-stone-750"
+                    onClick={() => void handleTestAiConnection()}
+                    disabled={aiHealth.checking}
+                  >
+                    {aiHealth.checking ? (
+                      <LoaderCircle size={13} className="animate-spin text-indigo-600" />
+                    ) : (
+                      <Globe size={13} className="text-indigo-600" />
+                    )}
+                    <span>測試連線</span>
+                  </button>
+                </div>
+                <div className="mt-1.5 text-[11px] text-stone-400 dark:text-stone-500">
+                  目前生效端點：<code className="text-stone-600 dark:text-stone-300">{activeEndpoint}</code>
+                </div>
+              </div>
+            </div>
+
+            <div className="border-t border-stone-200/80 pt-4 dark:border-stone-800">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-stone-900 dark:text-stone-100">
+                  <KeyRound size={15} className="text-amber-600 dark:text-amber-400" />
+                  <label htmlFor="gemini-key-input" className="text-xs font-bold">
+                    自訂 Google Gemini API Key（直連 Google 官方 AI Agent）
+                  </label>
+                </div>
+                {keyTestStatus.msg && (
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                      keyTestStatus.ok
+                        ? keyTestStatus.isDepleted
+                          ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
+                          : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300'
+                        : 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300'
+                    }`}
+                  >
+                    {keyTestStatus.ok ? (keyTestStatus.isDepleted ? '🟡 ' : '🟢 ') : '⚠️ '}
+                    {keyTestStatus.msg}
+                  </span>
+                )}
+              </div>
+              <p className="mt-1.5 text-xs text-stone-500 dark:text-stone-400 leading-relaxed">
+                填入您的 Gemini API Key 後，手機 APK 與網頁版將直接連接 Google 官方 Gemini 3.8 Flash AI Agent，享有最頂級的智慧推理、即時聯網比對與您的個人資料深度融合分析！
+              </p>
+
+              <div className="mt-2.5 flex gap-2">
+                <input
+                  id="gemini-key-input"
+                  type="password"
+                  autoComplete="off"
+                  className="flex-1 rounded-xl border border-stone-200 bg-stone-50 px-3 py-1.5 text-xs font-mono text-stone-800 placeholder-stone-400 focus:border-indigo-500 focus:bg-white dark:focus:bg-stone-800 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200"
+                  placeholder="貼上 AQ... 或 AIzaSy... 開頭的 Gemini API Key"
+                  value={geminiApiKey}
+                  onChange={(e) => handleSaveGeminiKey(e.target.value)}
+                />
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 rounded-xl border border-stone-300 bg-white px-3 py-1.5 text-xs font-medium text-stone-700 shadow-sm transition hover:bg-stone-50 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200 dark:hover:bg-stone-750"
+                  onClick={() => void handleTestGeminiKey()}
+                  disabled={keyTestStatus.testing || !geminiApiKey.trim()}
+                >
+                  {keyTestStatus.testing ? (
+                    <LoaderCircle size={13} className="animate-spin text-amber-600" />
+                  ) : (
+                    <KeyRound size={13} className="text-amber-600" />
+                  )}
+                  <span>驗證金鑰</span>
+                </button>
+              </div>
+
+              <div className="mt-2 flex items-center justify-between text-[11px] text-stone-400 dark:text-stone-500">
+                <span>金鑰僅存於您本機裝置（localStorage），安全加密不外洩。</span>
+                <a
+                  href="https://aistudio.google.com/app/apikey"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-0.5 text-indigo-600 hover:underline dark:text-indigo-400"
+                >
+                  <span>前往 Google AI Studio 獲取 Key</span>
+                  <ExternalLink size={11} />
+                </a>
+              </div>
+            </div>
+
+            {/* 指定雲端備份目標 */}
+            <div className="border-t border-stone-200/80 pt-4 dark:border-stone-800">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-stone-900 dark:text-stone-100">
+                  <Cloud size={15} className="text-blue-600 dark:text-blue-400" />
+                  <label htmlFor="cloud-backup-url-input" className="text-xs font-bold">
+                    指定雲端備份目標（Google Drive / 自訂雲端資料庫網址）
+                  </label>
+                </div>
+                {cloudBackupUrl !== DEFAULT_CLOUD_BACKUP_URL && (
+                  <button
+                    type="button"
+                    onClick={handleResetCloudBackupUrl}
+                    className="text-[11px] font-medium text-blue-600 hover:underline dark:text-blue-400"
+                  >
+                    恢復預設值
+                  </button>
+                )}
+              </div>
+              <p className="mt-1 text-xs text-stone-500 dark:text-stone-400 leading-relaxed">
+                預設匯出至指定 Google Drive 資料夾，亦可輸入其他 Google Drive 資料夾或雲端備份 API 端點。
+              </p>
+              <div className="mt-2.5 flex items-center gap-2">
+                <input
+                  id="cloud-backup-url-input"
+                  type="url"
+                  value={cloudBackupUrl}
+                  onChange={(e) => handleCloudBackupUrlChange(e.target.value)}
+                  placeholder="https://drive.google.com/drive/folders/..."
+                  className="flex-1 rounded-xl border border-stone-200 bg-stone-50 px-3 py-1.5 text-xs font-mono text-stone-800 placeholder-stone-400 focus:border-indigo-500 focus:bg-white dark:focus:bg-stone-800 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200"
+                />
+                <button
+                  type="button"
+                  onClick={handleOpenCloudUrl}
+                  className="inline-flex shrink-0 items-center gap-1 rounded-xl border border-stone-300 bg-white px-3 py-1.5 text-xs font-medium text-stone-700 shadow-sm transition hover:bg-stone-50 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200 dark:hover:bg-stone-750"
+                  title="在瀏覽器開啟此雲端資料庫"
+                >
+                  <ExternalLink size={13} className="text-blue-600 dark:text-blue-400" />
+                  <span>開啟網址</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </section>
 
       {/* ChatGPT 專屬生活秘書連線 */}
