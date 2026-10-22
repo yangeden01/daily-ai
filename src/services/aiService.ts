@@ -818,14 +818,21 @@ export async function testGeminiApiKey(apiKey: string): Promise<{ ok: boolean; m
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
       const msg = err.error?.message || `HTTP ${res.status}`
-      if (res.status === 402 || msg.includes('depleted') || msg.includes('RESOURCE_EXHAUSTED')) {
+      if (res.status === 402) {
         return {
-          ok: true,
+          ok: false,
           isDepleted: true,
-          message: 'Google 驗證成功！此金鑰有效，目前專案尚無預付額度（已啟用本機分析引擎為您解答）。',
+          message: `金鑰有效，但 Google 帳單餘額不足 [402 Payment Required]：${msg}`,
         }
       }
-      return { ok: false, message: `金鑰驗證失敗: ${msg}` }
+      if (res.status === 429) {
+        return {
+          ok: false,
+          isDepleted: true,
+          message: `Google 回傳配額上限或新帳號未啟動配額 [429 Quota Exceeded]：${msg}`,
+        }
+      }
+      return { ok: false, message: `金鑰測試失敗 (HTTP ${res.status}): ${msg}` }
     }
 
     return { ok: true, message: '✨ Gemini 3.8 Flash AI Agent 連線成功！' }
@@ -867,8 +874,17 @@ export function buildGeminiSystemPrompt(events: Event[]): string {
   const fmtZh = (dt: Date) => `${dt.getMonth() + 1} 月 ${dt.getDate()} 日`
   const fmtIso = (dt: Date) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
 
-  const sortedEvents = [...events].sort((a, b) => (b.date || '').localeCompare(a.date || ''))
-  const eventsFormatted = sortedEvents
+  // 當事件眾多時，優先保留所有紀念日/生日、含金額的財務紀錄以及最新生活事件，避免超出 Free Tier TPM 限制 (250k TPM)
+  let prioritizedEvents = [...events].sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+  if (prioritizedEvents.length > 120) {
+    const anniSet = new Set(prioritizedEvents.filter(e => e.recordType === 'anniversary' || (e.category && /生日|紀念日/.test(e.category))))
+    const financeSet = new Set(prioritizedEvents.filter(e => e.amount !== undefined && e.amount !== null).slice(0, 40))
+    const recentSet = new Set(prioritizedEvents.slice(0, 60))
+    const merged = Array.from(new Set([...anniSet, ...financeSet, ...recentSet])).sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+    prioritizedEvents = merged.slice(0, 120)
+  }
+
+  const eventsFormatted = prioritizedEvents
     .map((evt, idx) => {
       const parts = [
         `[${evt.date || '無日期'}]`,
@@ -882,7 +898,7 @@ export function buildGeminiSystemPrompt(events: Event[]): string {
         parts.push(`標籤:${evt.tags.join(',')}`)
       }
       if (evt.detail) {
-        parts.push(`詳情:${evt.detail.replace(/\r?\n/g, ' ').slice(0, 160)}`)
+        parts.push(`詳情:${evt.detail.replace(/\r?\n/g, ' ').slice(0, 140)}`)
       }
       return `${idx + 1}. [ID:${evt.id}] ${parts.filter(Boolean).join(' ')}`
     })
@@ -964,34 +980,55 @@ export async function directGeminiChat(
     parts: [{ text: m.content }],
   }))
 
-  const body: Record<string, unknown> = {
+  const baseBody: Record<string, unknown> = {
     systemInstruction: {
       parts: [{ text: systemPrompt }],
     },
     contents,
   }
 
-  if (enableSearch) {
-    body.tools = [{ googleSearch: {} }]
+  const callEndpoint = async (model: string, withSearch: boolean) => {
+    const body: Record<string, unknown> = { ...baseBody }
+    if (withSearch) {
+      body.tools = [{ googleSearch: {} }]
+    }
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey.trim()}`
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    return { res, body, model, withSearch }
   }
 
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${apiKey.trim()}`
-  const res = await fetch(endpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
+  // 1. 嘗試主力模型 gemini-3.8-flash (若開啟搜尋則帶 googleSearch)
+  let attempt = await callEndpoint('gemini-3.8-flash', enableSearch)
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    const errMsg = err.error?.message || `Gemini API 呼叫失敗: HTTP ${res.status}`
-    const isQuota = res.status === 402 || res.status === 429 || errMsg.includes('depleted') || errMsg.includes('RESOURCE_EXHAUSTED')
+  // 2. 若失敗且啟用搜尋（Google Search 工具在純免費專案常因未綁定帳單被拒絕 400/403/429），自動降級嘗試無搜尋模式
+  if (!attempt.res.ok && enableSearch) {
+    console.warn(`[EdenNote AI] 帶搜尋工具呼叫失敗 (HTTP ${attempt.res.status})，自動嘗試純文字模式...`)
+    attempt = await callEndpoint('gemini-3.8-flash', false)
+  }
+
+  // 3. 若仍遇 429 配額超額，自動嘗試輕量模型 gemini-3.1-flash-lite
+  if (!attempt.res.ok && attempt.res.status === 429) {
+    console.warn(`[EdenNote AI] gemini-3.8-flash 配額受限 (HTTP 429)，自動切換至輕量模型 gemini-3.1-flash-lite...`)
+    attempt = await callEndpoint('gemini-3.1-flash-lite', false)
+  }
+
+  if (!attempt.res.ok) {
+    const err = await attempt.res.json().catch(() => ({}))
+    const errMsg = err.error?.message || `Gemini API 呼叫失敗: HTTP ${attempt.res.status}`
     const errorObj = new Error(errMsg)
-    Object.assign(errorObj, { status: res.status, isQuota })
+    Object.assign(errorObj, {
+      status: attempt.res.status,
+      rawError: err.error,
+      modelUsed: attempt.model,
+    })
     throw errorObj
   }
 
-  const data = await res.json()
+  const data = await attempt.res.json()
   const candidate = data.candidates?.[0]
   const reply = candidate?.content?.parts?.map((p: { text?: string }) => p.text || '').join('') || '（無回覆）'
 
@@ -1006,9 +1043,10 @@ export async function directGeminiChat(
     }
   }
 
-  const promptTokens = Number(data.usageMetadata?.promptTokenCount) || Math.max(1, Math.round(JSON.stringify(body).length / 3.5))
+  const promptTokens = Number(data.usageMetadata?.promptTokenCount) || Math.max(1, Math.round(JSON.stringify(attempt.body).length / 3.5))
   const outputTokens = Number(data.usageMetadata?.candidatesTokenCount) || Math.max(1, Math.round(reply.length / 2))
-  const billing = calculateBillingReceipt(promptTokens, outputTokens, '我的帳單帳戶 Tier 2', 'Gemini 3.8 Flash')
+  const modelLabel = attempt.model === 'gemini-3.1-flash-lite' ? 'Gemini 3.1 Flash-Lite' : 'Gemini 3.8 Flash'
+  const billing = calculateBillingReceipt(promptTokens, outputTokens, '我的帳單帳戶 Tier 2', modelLabel)
 
   return {
     reply,
@@ -1034,16 +1072,28 @@ export async function sendChatMessage(options: SendMessageOptions): Promise<Chat
       return directResult
     } catch (directErr: unknown) {
       console.warn('Direct Gemini call failed, checking error:', directErr)
-      const err = directErr as { status?: number; isQuota?: boolean; message?: string }
-      if (err?.status === 402 || err?.isQuota || String(err?.message).includes('depleted')) {
-        const fallbackReply = localSmartAnalyze(latestUserPrompt, events)
-        const tip = `\n\n---\n*⚡（提示：您提供的 Gemini API Key 已通過 Google 驗證！目前專案尚無預付額度 [402 Depleted]，系統已無縫啟用 EdenNote 深度分析引擎為您解答並精確融合個人紀錄。若需啟用 Google 官方雲端算力，可至 [Google AI Studio](https://ai.studio/projects) 啟用預付點數。）*`
-        const billing = calculateBillingReceipt(0, 0, '我的帳單帳戶 Tier 2 (本機免扣款)', 'EdenNote 本機引擎')
-        return {
-          reply: `${fallbackReply}${tip}`,
-          isLocalFallback: true,
-          billing,
-        }
+      const err = directErr as { status?: number; message?: string; rawError?: { message?: string; status?: string } }
+      const status = err?.status || 500
+      const errorMsg = err?.message || '未知錯誤'
+
+      let reasonText = ''
+      if (status === 402) {
+        reasonText = `目前專案尚無預付額度 [402 Payment Required]，需在 Google AI Studio 儲值預付點數`
+      } else if (status === 429) {
+        reasonText = `Google 雲端回傳配額限制 [429 Quota Exceeded]：${errorMsg}（此為 Google 防濫用機制，新註冊專案可能配額為 0，或達免費層每分鐘速率上限）`
+      } else if (status === 403) {
+        reasonText = `Google 雲端拒絕存取 [403 Forbidden]：${errorMsg}`
+      } else {
+        reasonText = `Google 雲端連線失敗 [HTTP ${status}]：${errorMsg}`
+      }
+
+      const fallbackReply = localSmartAnalyze(latestUserPrompt, events)
+      const tip = `\n\n---\n*⚡（提示：您提供的 Gemini API Key 連線受限【${reasonText}】，系統已自動無縫切換為 EdenNote 深度分析引擎為您解答並精確調閱個人紀錄。）*`
+      const billing = calculateBillingReceipt(0, 0, '我的帳單帳戶 Tier 2 (本機免扣款)', 'EdenNote 本機引擎')
+      return {
+        reply: `${fallbackReply}${tip}`,
+        isLocalFallback: true,
+        billing,
       }
     }
   }
