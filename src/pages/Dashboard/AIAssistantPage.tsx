@@ -771,7 +771,7 @@ export const AIAssistantPage: React.FC = () => {
         role: 'assistant',
         content: errMsg,
         timestamp: new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }),
-        billing: calculateBillingReceipt(0, 0, '我的帳單帳戶 Tier 2 (未扣款)'),
+        billing: calculateBillingReceipt(0, 0, 'Google AI Studio (未扣款)'),
       }
       setMessages((prev) => [...prev, errorMessage])
       setLastAiReply(errMsg)
@@ -915,7 +915,7 @@ export const AIAssistantPage: React.FC = () => {
                           {/* 置底扣款帳單：我的帳單帳戶 Tier 2 */}
                           {(() => {
                             const billing: BillingReceipt = message.billing || {
-                              accountName: '我的帳單帳戶 Tier 2',
+                              accountName: 'Google AI Studio (Free Tier)',
                               inputTokens: 1250,
                               inputCostUsd: (1250 / 1_000_000) * 0.10,
                               outputTokens: Math.max(1, Math.round(message.content.length / 2)),
