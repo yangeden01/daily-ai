@@ -8,7 +8,6 @@ export interface BillingReceipt {
   outputCostUsd: number
   totalCostUsd: number
   totalCostTwd: number
-  currentBalanceUsd: number
   modelName: string
   timestamp: string
 }
@@ -43,39 +42,7 @@ export interface ChatResponse {
   billing?: BillingReceipt
 }
 
-export const TIER2_BALANCE_KEY = 'edennote_tier2_balance_usd'
-export const DEFAULT_INITIAL_BALANCE_USD = 20.50
 export const USD_TO_TWD_RATE = 32.0
-
-export function getTier2Balance(): number {
-  try {
-    const val = localStorage.getItem(TIER2_BALANCE_KEY)
-    if (val !== null) {
-      const num = parseFloat(val)
-      if (!isNaN(num)) {
-        // If previously initialized to the old 20.79 baseline, calibrate down to user's real $20.50 balance
-        if (num >= 20.70 && num <= 20.80) {
-          const deducted = Math.max(0, 20.79 - num)
-          const calibrated = Math.max(0, 20.50 - deducted)
-          setTier2Balance(calibrated)
-          return calibrated
-        }
-        return num
-      }
-    }
-  } catch {
-    // ignore
-  }
-  return DEFAULT_INITIAL_BALANCE_USD
-}
-
-export function setTier2Balance(balance: number): void {
-  try {
-    localStorage.setItem(TIER2_BALANCE_KEY, balance.toFixed(6))
-  } catch {
-    // ignore
-  }
-}
 
 export function calculateBillingReceipt(
   inputTokens: number,
@@ -91,10 +58,6 @@ export function calculateBillingReceipt(
   const totalCostUsd = inputCostUsd + outputCostUsd
   const totalCostTwd = totalCostUsd * USD_TO_TWD_RATE
 
-  const prevBalance = getTier2Balance()
-  const newBalance = Math.max(0, prevBalance - totalCostUsd)
-  setTier2Balance(newBalance)
-
   return {
     accountName,
     inputTokens,
@@ -103,7 +66,6 @@ export function calculateBillingReceipt(
     outputCostUsd,
     totalCostUsd,
     totalCostTwd,
-    currentBalanceUsd: newBalance,
     modelName,
     timestamp: new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
   }
