@@ -37,7 +37,16 @@ import type { BackgroundTheme, TextTheme } from '../../utils/appearance'
 import { loadPhotoStorageMode, savePhotoStorageMode, type PhotoStorageMode } from '../../utils/photoStorage'
 import { APP_VERSION } from '../../version'
 import { saveFile, shareExportedFile, type FileSaveOutcome } from '../../utils/fileSaver'
-import { getApiBaseUrl, checkAiServerHealth, getUserGeminiApiKey, setUserGeminiApiKey, testGeminiApiKey } from '../../services/aiService'
+import {
+  getApiBaseUrl,
+  checkAiServerHealth,
+  getUserGeminiApiKey,
+  setUserGeminiApiKey,
+  testGeminiApiKey,
+  getUserGeminiTier,
+  setUserGeminiTier,
+  type GeminiTier,
+} from '../../services/aiService'
 import { uploadBackupToGoogleDrive } from '../../services/googleDriveService'
 import { eventRepository } from '../../repositories'
 import {
@@ -251,6 +260,7 @@ export default function SettingsPage() {
   }
 
   const [geminiApiKey, setGeminiApiKey] = useState(() => getUserGeminiApiKey())
+  const [geminiTier, setGeminiTierState] = useState<GeminiTier>(() => getUserGeminiTier())
   const [keyTestStatus, setKeyTestStatus] = useState<{ testing?: boolean; ok?: boolean; isDepleted?: boolean; msg?: string }>({})
 
   const handleSaveGeminiKey = (val: string) => {
@@ -259,10 +269,18 @@ export default function SettingsPage() {
     setKeyTestStatus({})
   }
 
+  const handleSetGeminiTier = (tier: GeminiTier) => {
+    setGeminiTierState(tier)
+    setUserGeminiTier(tier)
+  }
+
   const handleTestGeminiKey = async () => {
     setKeyTestStatus({ testing: true })
     const res = await testGeminiApiKey(geminiApiKey)
     setKeyTestStatus({ testing: false, ok: res.ok, isDepleted: res.isDepleted, msg: res.message })
+    if (res.isDepleted) {
+      handleSetGeminiTier('tier2')
+    }
   }
 
   const activeEndpoint = getApiBaseUrl() || '(自動依平台連線預設伺服器)'
@@ -1065,6 +1083,45 @@ export default function SettingsPage() {
                   )}
                   <span>驗證金鑰</span>
                 </button>
+              </div>
+
+              {/* 方案類型選擇 (Free Tier vs Tier 2) */}
+              <div className="mt-3 rounded-2xl border border-stone-200/80 bg-stone-50/70 p-3 dark:border-stone-800 dark:bg-stone-800/40">
+                <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1.5">
+                  金鑰方案類型（決定用量與扣款明細呈現）
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleSetGeminiTier('free')}
+                    className={`flex flex-col items-center justify-center gap-0.5 rounded-xl border p-2 text-center transition ${
+                      geminiTier === 'free'
+                        ? 'border-emerald-500 bg-emerald-50 text-emerald-800 shadow-xs dark:bg-emerald-950/60 dark:text-emerald-200 dark:border-emerald-500'
+                        : 'border-stone-200 bg-white text-stone-600 hover:bg-stone-50 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300'
+                    }`}
+                  >
+                    <span className="text-xs font-bold">✨ 純免費方案 (Free)</span>
+                    <span className="text-[10px] opacity-75">無信用卡・$0 免扣款</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleSetGeminiTier('tier2')}
+                    className={`flex flex-col items-center justify-center gap-0.5 rounded-xl border p-2 text-center transition ${
+                      geminiTier === 'tier2'
+                        ? 'border-indigo-500 bg-indigo-50 text-indigo-800 shadow-xs dark:bg-indigo-950/60 dark:text-indigo-200 dark:border-indigo-500'
+                        : 'border-stone-200 bg-white text-stone-600 hover:bg-stone-50 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300'
+                    }`}
+                  >
+                    <span className="text-xs font-bold">💳 預付方案 (Tier 2)</span>
+                    <span className="text-[10px] opacity-75">有儲值餘額・實支扣款</span>
+                  </button>
+                </div>
+                <p className="mt-1.5 text-[11px] text-stone-400 leading-tight">
+                  {geminiTier === 'free'
+                    ? '💡 全新 Google 帳號請選此項，每次對話明細將標示「✨ Free Tier 免扣款 ($0)」。'
+                    : '💡 已在 Google Cloud 綁定預付帳單請選此項，明細將切換為「💳 Tier 2 儲值扣款」。'}
+                </p>
               </div>
 
               <div className="mt-2 flex items-center justify-between text-[11px] text-stone-400 dark:text-stone-500">

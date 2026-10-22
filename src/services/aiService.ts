@@ -1,7 +1,9 @@
 import type { Event } from '../models/Event'
 
+export type GeminiTier = 'free' | 'tier2'
+
 export interface BillingReceipt {
-  accountName: string // e.g. "我的帳單帳戶 Tier 2"
+  accountName: string // e.g. "Google AI Studio (Free Tier)" or "我的帳單帳戶 Tier 2"
   inputTokens: number
   inputCostUsd: number
   outputTokens: number
@@ -10,6 +12,7 @@ export interface BillingReceipt {
   totalCostTwd: number
   modelName: string
   timestamp: string
+  tier?: GeminiTier
 }
 
 export interface ChatMessage {
@@ -44,12 +47,32 @@ export interface ChatResponse {
 
 export const USD_TO_TWD_RATE = 32.0
 
+export function getUserGeminiTier(): GeminiTier {
+  if (typeof window === 'undefined') return 'free'
+  const stored = localStorage.getItem('eden_user_gemini_tier')
+  if (stored === 'tier2' || stored === 'free') {
+    return stored
+  }
+  return 'free'
+}
+
+export function setUserGeminiTier(tier: GeminiTier): void {
+  if (typeof window === 'undefined') return
+  localStorage.setItem('eden_user_gemini_tier', tier)
+  window.dispatchEvent(new Event('storage'))
+}
+
 export function calculateBillingReceipt(
   inputTokens: number,
   outputTokens: number,
-  accountName: string = 'Google AI Studio (Free Tier)',
-  modelName: string = 'Gemini 3.8 Flash'
+  accountName?: string,
+  modelName: string = 'Gemini 3.8 Flash',
+  tierOverride?: GeminiTier
 ): BillingReceipt {
+  const currentTier = tierOverride || getUserGeminiTier()
+  const defaultAccount = currentTier === 'tier2' ? '我的帳單帳戶 Tier 2' : 'Google AI Studio (Free Tier)'
+  const resolvedAccount = accountName || defaultAccount
+
   // Tier 2 Pay-as-you-go pricing for Gemini Flash (<=128k prompt):
   // Input: $0.10 / 1,000,000 tokens ($0.00000010 / token)
   // Output: $0.40 / 1,000,000 tokens ($0.00000040 / token)
@@ -59,7 +82,7 @@ export function calculateBillingReceipt(
   const totalCostTwd = totalCostUsd * USD_TO_TWD_RATE
 
   return {
-    accountName,
+    accountName: resolvedAccount,
     inputTokens,
     inputCostUsd,
     outputTokens,
@@ -68,6 +91,7 @@ export function calculateBillingReceipt(
     totalCostTwd,
     modelName,
     timestamp: new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+    tier: currentTier,
   }
 }
 
@@ -1089,7 +1113,7 @@ export async function directGeminiChat(
     'gemini-3.1-flash-lite': 'Gemini 3.1 Flash-Lite',
   }
   const modelLabel = modelNameMap[successfulAttempt.model] || successfulAttempt.model
-  const billing = calculateBillingReceipt(promptTokens, outputTokens, 'Google AI Studio (Free Tier)', modelLabel)
+  const billing = calculateBillingReceipt(promptTokens, outputTokens, undefined, modelLabel)
 
   return {
     reply,
@@ -1195,7 +1219,7 @@ export async function sendChatMessage(options: SendMessageOptions): Promise<Chat
     const data = await res.json()
     const promptTokens = Number(data.usageMetadata?.promptTokenCount) || Math.max(1, Math.round(JSON.stringify(messages).length / 3))
     const outputTokens = Number(data.usageMetadata?.candidatesTokenCount) || Math.max(1, Math.round((data.reply || '').length / 2))
-    const billing = calculateBillingReceipt(promptTokens, outputTokens, 'Google AI Studio (Free Tier)', 'Gemini 3.8 Flash')
+    const billing = calculateBillingReceipt(promptTokens, outputTokens, undefined, 'Gemini 3.8 Flash')
 
     return {
       reply: data.reply || '（無回覆內容）',

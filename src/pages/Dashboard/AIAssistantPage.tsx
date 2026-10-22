@@ -46,6 +46,7 @@ import {
   type ChatMessage,
   type EdenNoteActionPayload,
   type BillingReceipt,
+  type GeminiTier,
 } from '../../services/aiService'
 import { useAI } from '../../contexts/AIContext'
 
@@ -55,6 +56,8 @@ export const AIAssistantPage: React.FC = () => {
   const {
     userApiKey,
     setUserApiKey,
+    userTier,
+    setUserTier,
     showKeyModal,
     setShowKeyModal,
     enableSearch,
@@ -124,17 +127,20 @@ export const AIAssistantPage: React.FC = () => {
 
   // User Gemini API Key modal state
   const [keyInput, setKeyInput] = useState(userApiKey)
+  const [selectedTier, setSelectedTier] = useState<GeminiTier>(() => userTier)
   const [keyTestState, setKeyTestState] = useState<{ testing?: boolean; ok?: boolean; isDepleted?: boolean; msg?: string }>({})
 
   useEffect(() => {
     if (showKeyModal) {
       setKeyInput(userApiKey)
+      setSelectedTier(userTier)
       setKeyTestState({})
     }
-  }, [showKeyModal, userApiKey])
+  }, [showKeyModal, userApiKey, userTier])
 
   const handleSaveModalKey = () => {
     setUserApiKey(keyInput.trim())
+    setUserTier(selectedTier)
     setShowKeyModal(false)
   }
 
@@ -142,6 +148,9 @@ export const AIAssistantPage: React.FC = () => {
     setKeyTestState({ testing: true })
     const res = await testGeminiApiKey(keyInput)
     setKeyTestState({ testing: false, ok: res.ok, isDepleted: res.isDepleted, msg: res.message })
+    if (res.isDepleted) {
+      setSelectedTier('tier2')
+    }
     if (res.ok) {
       setUserApiKey(keyInput.trim())
     }
@@ -912,19 +921,16 @@ export const AIAssistantPage: React.FC = () => {
                             </div>
                           )}
 
-                          {/* 置底扣款帳單：我的帳單帳戶 Tier 2 */}
+                          {/* 置底扣款/等值帳單 */}
                           {(() => {
-                            const billing: BillingReceipt = message.billing || {
-                              accountName: 'Google AI Studio (Free Tier)',
-                              inputTokens: 1250,
-                              inputCostUsd: (1250 / 1_000_000) * 0.10,
-                              outputTokens: Math.max(1, Math.round(message.content.length / 2)),
-                              outputCostUsd: (Math.max(1, Math.round(message.content.length / 2)) / 1_000_000) * 0.40,
-                              totalCostUsd: ((1250 / 1_000_000) * 0.10) + ((Math.max(1, Math.round(message.content.length / 2)) / 1_000_000) * 0.40),
-                              totalCostTwd: (((1250 / 1_000_000) * 0.10) + ((Math.max(1, Math.round(message.content.length / 2)) / 1_000_000) * 0.40)) * 32,
-                              modelName: message.isLocalFallback ? 'EdenNote 本機引擎' : 'Gemini 3.8 Flash',
-                              timestamp: message.timestamp,
-                            }
+                            const isTier2 = (message.billing?.tier || userTier) === 'tier2'
+                            const billing: BillingReceipt = message.billing || calculateBillingReceipt(
+                              1250,
+                              Math.max(1, Math.round(message.content.length / 2)),
+                              undefined,
+                              message.isLocalFallback ? 'EdenNote 本機引擎' : 'Gemini 3.8 Flash',
+                              isTier2 ? 'tier2' : 'free'
+                            )
 
                             const formatUsd = (val: number) => {
                               if (val === 0) return '$0.000000 USD'
@@ -935,8 +941,8 @@ export const AIAssistantPage: React.FC = () => {
                               <div className="mt-3 overflow-hidden rounded-2xl border border-stone-200/80 bg-stone-50/80 p-3 text-xs shadow-sm dark:border-white/10 dark:bg-stone-900/60">
                                 <div className="flex items-center justify-between border-b border-stone-200/60 pb-2 mb-2 dark:border-white/10">
                                   <div className="flex items-center gap-1.5 font-bold text-stone-800 dark:text-stone-200">
-                                    <BarChart3 size={14} className="shrink-0 text-sky-600 dark:text-sky-400" />
-                                    <span>API 用量與等值明細</span>
+                                    <BarChart3 size={14} className={`shrink-0 ${isTier2 ? 'text-indigo-600 dark:text-indigo-400' : 'text-sky-600 dark:text-sky-400'}`} />
+                                    <span>{isTier2 ? 'API 用量與扣款明細' : 'API 用量與等值明細'}</span>
                                   </div>
                                   <div className="flex items-center gap-1.5">
                                     <span className="rounded bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-mono font-medium text-sky-700 dark:text-sky-300 border border-sky-500/20">
@@ -956,7 +962,7 @@ export const AIAssistantPage: React.FC = () => {
                                       {billing.inputTokens.toLocaleString()} <span className="text-[10px] font-normal text-stone-400">tokens</span>
                                     </span>
                                     <span className="text-[10px] text-stone-400 dark:text-stone-500 font-mono mt-0.5">
-                                      等值: {formatUsd(billing.inputCostUsd)}
+                                      {isTier2 ? '扣款: ' : '等值: '} {formatUsd(billing.inputCostUsd)}
                                     </span>
                                   </div>
 
@@ -970,26 +976,43 @@ export const AIAssistantPage: React.FC = () => {
                                       {billing.outputTokens.toLocaleString()} <span className="text-[10px] font-normal text-stone-400">tokens</span>
                                     </span>
                                     <span className="text-[10px] text-stone-400 dark:text-stone-500 font-mono mt-0.5">
-                                      等值: {formatUsd(billing.outputCostUsd)}
+                                      {isTier2 ? '扣款: ' : '等值: '} {formatUsd(billing.outputCostUsd)}
                                     </span>
                                   </div>
                                 </div>
 
-                                {/* 總結算與 Free Tier 標籤 */}
-                                <div className="mt-2.5 flex items-center justify-between rounded-xl bg-emerald-500/10 px-2.5 py-2 dark:bg-emerald-500/15 border border-emerald-500/25 dark:border-emerald-500/30">
-                                  <div className="flex items-center gap-1.5 flex-wrap">
-                                    <span className="font-semibold text-emerald-900 dark:text-emerald-200 text-[11px]">商業等值：</span>
-                                    <span className="font-mono font-bold text-emerald-800 dark:text-emerald-300 text-xs">
-                                      {formatUsd(billing.totalCostUsd)}
-                                    </span>
-                                    <span className="text-[10px] text-emerald-700/80 dark:text-emerald-300/80">
-                                      (≈ NT${billing.totalCostTwd.toFixed(3)})
+                                {/* 總結算與方案標籤 */}
+                                {isTier2 ? (
+                                  <div className="mt-2.5 flex items-center justify-between rounded-xl bg-indigo-500/10 px-2.5 py-2 dark:bg-indigo-500/15 border border-indigo-500/25 dark:border-indigo-500/30">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="font-semibold text-indigo-900 dark:text-indigo-200 text-[11px]">預估扣款：</span>
+                                      <span className="font-mono font-bold text-indigo-800 dark:text-indigo-300 text-xs">
+                                        {formatUsd(billing.totalCostUsd)}
+                                      </span>
+                                      <span className="text-[10px] text-indigo-700/80 dark:text-indigo-300/80">
+                                        (≈ NT${billing.totalCostTwd.toFixed(3)})
+                                      </span>
+                                    </div>
+                                    <span className="text-[10px] bg-indigo-600 text-white font-semibold px-2 py-0.5 rounded-full shadow-xs">
+                                      💳 Tier 2 儲值扣款
                                     </span>
                                   </div>
-                                  <span className="text-[10px] bg-emerald-600 text-white font-semibold px-2 py-0.5 rounded-full shadow-xs">
-                                    ✨ Free Tier 免扣款 ($0)
-                                  </span>
-                                </div>
+                                ) : (
+                                  <div className="mt-2.5 flex items-center justify-between rounded-xl bg-emerald-500/10 px-2.5 py-2 dark:bg-emerald-500/15 border border-emerald-500/25 dark:border-emerald-500/30">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="font-semibold text-emerald-900 dark:text-emerald-200 text-[11px]">商業等值：</span>
+                                      <span className="font-mono font-bold text-emerald-800 dark:text-emerald-300 text-xs">
+                                        {formatUsd(billing.totalCostUsd)}
+                                      </span>
+                                      <span className="text-[10px] text-emerald-700/80 dark:text-emerald-300/80">
+                                        (≈ NT${billing.totalCostTwd.toFixed(3)})
+                                      </span>
+                                    </div>
+                                    <span className="text-[10px] bg-emerald-600 text-white font-semibold px-2 py-0.5 rounded-full shadow-xs">
+                                      ✨ Free Tier 免扣款 ($0)
+                                    </span>
+                                  </div>
+                                )}
                               </div>
                             )
                           })()}
@@ -1672,6 +1695,45 @@ export const AIAssistantPage: React.FC = () => {
                     {keyTestState.msg}
                   </p>
                 )}
+              </div>
+
+              {/* 方案類型選擇 (Free Tier vs Tier 2) */}
+              <div className="rounded-2xl border border-stone-200/80 bg-stone-50/70 p-3 dark:border-stone-800 dark:bg-stone-800/40">
+                <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300 mb-1.5">
+                  金鑰方案類型（決定用量與扣款明細呈現）
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTier('free')}
+                    className={`flex flex-col items-center justify-center gap-0.5 rounded-xl border p-2 text-center transition ${
+                      selectedTier === 'free'
+                        ? 'border-emerald-500 bg-emerald-50 text-emerald-800 shadow-xs dark:bg-emerald-950/60 dark:text-emerald-200 dark:border-emerald-500'
+                        : 'border-stone-200 bg-white text-stone-600 hover:bg-stone-50 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300'
+                    }`}
+                  >
+                    <span className="text-xs font-bold">✨ 純免費方案 (Free)</span>
+                    <span className="text-[10px] opacity-75">無信用卡・$0 免扣款</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTier('tier2')}
+                    className={`flex flex-col items-center justify-center gap-0.5 rounded-xl border p-2 text-center transition ${
+                      selectedTier === 'tier2'
+                        ? 'border-indigo-500 bg-indigo-50 text-indigo-800 shadow-xs dark:bg-indigo-950/60 dark:text-indigo-200 dark:border-indigo-500'
+                        : 'border-stone-200 bg-white text-stone-600 hover:bg-stone-50 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300'
+                    }`}
+                  >
+                    <span className="text-xs font-bold">💳 預付方案 (Tier 2)</span>
+                    <span className="text-[10px] opacity-75">有儲值餘額・實支扣款</span>
+                  </button>
+                </div>
+                <p className="mt-1.5 text-[11px] text-stone-400 leading-tight">
+                  {selectedTier === 'free'
+                    ? '💡 全新 Google 帳號請選此項，每次對話明細將標示「✨ Free Tier 免扣款 ($0)」。'
+                    : '💡 已在 Google Cloud 綁定預付帳單請選此項，明細將切換為「💳 Tier 2 儲值扣款」。'}
+                </p>
               </div>
 
               <div className="rounded-xl bg-stone-50 p-2.5 text-[11px] text-stone-500 dark:bg-stone-800/60 dark:text-stone-400">
