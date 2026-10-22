@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
+  ArrowDownLeft,
   ArrowUp,
+  ArrowUpRight,
   AudioLines,
   Bot,
   Check,
@@ -8,6 +10,7 @@ import {
   CircleDollarSign,
   Clock,
   Copy,
+  CreditCard,
   Database,
   ExternalLink,
   Globe,
@@ -19,12 +22,14 @@ import {
   PhoneCall,
   PhoneOff,
   Plus,
+  Receipt,
   RotateCcw,
   Search,
   Sparkles,
   TrendingUp,
   Volume2,
   VolumeX,
+  Wallet,
   X,
 } from 'lucide-react'
 import type { Event } from '../../models/Event'
@@ -36,8 +41,13 @@ import {
   parseEdenNoteAction,
   cleanTextForSpeech,
   chunkSpeechText,
+  calculateBillingReceipt,
+  getTier2Balance,
+  setTier2Balance,
+  DEFAULT_INITIAL_BALANCE_USD,
   type ChatMessage,
   type EdenNoteActionPayload,
+  type BillingReceipt,
 } from '../../services/aiService'
 import { useAI } from '../../contexts/AIContext'
 
@@ -114,6 +124,10 @@ export const AIAssistantPage: React.FC = () => {
     voiceCallStatusRef.current = voiceCallStatus
   }, [voiceCallStatus])
 
+  // Tier 2 Billing Account state
+  const [tier2Balance, setTier2BalanceState] = useState<number>(() => getTier2Balance())
+  const [balanceInput, setBalanceInput] = useState<string>(() => getTier2Balance().toFixed(4))
+
   // User Gemini API Key modal state
   const [keyInput, setKeyInput] = useState(userApiKey)
   const [keyTestState, setKeyTestState] = useState<{ testing?: boolean; ok?: boolean; isDepleted?: boolean; msg?: string }>({})
@@ -121,12 +135,18 @@ export const AIAssistantPage: React.FC = () => {
   useEffect(() => {
     if (showKeyModal) {
       setKeyInput(userApiKey)
+      setBalanceInput(getTier2Balance().toFixed(4))
       setKeyTestState({})
     }
   }, [showKeyModal, userApiKey])
 
   const handleSaveModalKey = () => {
     setUserApiKey(keyInput.trim())
+    const parsedBal = parseFloat(balanceInput)
+    if (!isNaN(parsedBal) && parsedBal >= 0) {
+      setTier2Balance(parsedBal)
+      setTier2BalanceState(parsedBal)
+    }
     setShowKeyModal(false)
   }
 
@@ -734,10 +754,12 @@ export const AIAssistantPage: React.FC = () => {
         timestamp: new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }),
         sources: response.sources,
         isLocalFallback: response.isLocalFallback,
+        billing: response.billing,
       }
 
       setMessages((prev) => [...prev, assistantMessage])
       setLastAiReply(finalReply)
+      setTier2BalanceState(getTier2Balance())
 
       // Audio response feedback
       if (isFromVoiceCall || (autoTTS && isVoiceCallOpenRef.current)) {
@@ -762,9 +784,11 @@ export const AIAssistantPage: React.FC = () => {
         role: 'assistant',
         content: errMsg,
         timestamp: new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }),
+        billing: calculateBillingReceipt(0, 0, '我的帳單帳戶 Tier 2 (未扣款)'),
       }
       setMessages((prev) => [...prev, errorMessage])
       setLastAiReply(errMsg)
+      setTier2BalanceState(getTier2Balance())
 
       if (isFromVoiceCall) {
         speakVoiceReply(errMsg, () => {
@@ -901,6 +925,91 @@ export const AIAssistantPage: React.FC = () => {
                               </div>
                             </div>
                           )}
+
+                          {/* 置底扣款帳單：我的帳單帳戶 Tier 2 */}
+                          {(() => {
+                            const billing: BillingReceipt = message.billing || {
+                              accountName: '我的帳單帳戶 Tier 2',
+                              inputTokens: 1250,
+                              inputCostUsd: (1250 / 1_000_000) * 0.10,
+                              outputTokens: Math.max(1, Math.round(message.content.length / 2)),
+                              outputCostUsd: (Math.max(1, Math.round(message.content.length / 2)) / 1_000_000) * 0.40,
+                              totalCostUsd: ((1250 / 1_000_000) * 0.10) + ((Math.max(1, Math.round(message.content.length / 2)) / 1_000_000) * 0.40),
+                              totalCostTwd: (((1250 / 1_000_000) * 0.10) + ((Math.max(1, Math.round(message.content.length / 2)) / 1_000_000) * 0.40)) * 32,
+                              currentBalanceUsd: tier2Balance,
+                              modelName: message.isLocalFallback ? 'EdenNote 本機引擎' : 'Gemini 3.8 Flash',
+                              timestamp: message.timestamp,
+                            }
+
+                            const formatUsd = (val: number) => {
+                              if (val === 0) return '$0.000000 USD'
+                              return `$${val.toFixed(6)} USD`
+                            }
+
+                            return (
+                              <div className="mt-3 overflow-hidden rounded-2xl border border-amber-500/25 bg-amber-500/5 p-3 text-xs shadow-sm dark:border-amber-400/20 dark:bg-amber-950/20">
+                                <div className="flex items-center justify-between border-b border-amber-500/15 pb-2 mb-2 dark:border-amber-400/15">
+                                  <div className="flex items-center gap-1.5 font-bold text-amber-800 dark:text-amber-300">
+                                    <CreditCard size={14} className="shrink-0 text-amber-600 dark:text-amber-400" />
+                                    <span>{billing.accountName} 扣款帳單</span>
+                                  </div>
+                                  <span className="text-[10px] font-mono text-stone-500 dark:text-stone-400">
+                                    {billing.modelName}
+                                  </span>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-2 text-[11px]">
+                                  {/* 輸入 */}
+                                  <div className="flex flex-col rounded-xl bg-white/85 p-2 shadow-xs dark:bg-stone-900/70 border border-stone-200/60 dark:border-white/5">
+                                    <span className="text-stone-500 dark:text-stone-400 flex items-center gap-1 text-[10px] font-medium">
+                                      <ArrowDownLeft size={11} className="text-sky-500 shrink-0" />
+                                      輸入 (Tokens)
+                                    </span>
+                                    <span className="font-semibold text-stone-900 dark:text-stone-100 mt-0.5 font-mono text-xs">
+                                      {billing.inputTokens.toLocaleString()} <span className="text-[10px] font-normal text-stone-400">tokens</span>
+                                    </span>
+                                    <span className="text-[10px] text-stone-500 dark:text-stone-400 font-mono mt-0.5">
+                                      扣款: {formatUsd(billing.inputCostUsd)}
+                                    </span>
+                                  </div>
+
+                                  {/* 輸出 */}
+                                  <div className="flex flex-col rounded-xl bg-white/85 p-2 shadow-xs dark:bg-stone-900/70 border border-stone-200/60 dark:border-white/5">
+                                    <span className="text-stone-500 dark:text-stone-400 flex items-center gap-1 text-[10px] font-medium">
+                                      <ArrowUpRight size={11} className="text-purple-500 shrink-0" />
+                                      輸出 (Tokens)
+                                    </span>
+                                    <span className="font-semibold text-stone-900 dark:text-stone-100 mt-0.5 font-mono text-xs">
+                                      {billing.outputTokens.toLocaleString()} <span className="text-[10px] font-normal text-stone-400">tokens</span>
+                                    </span>
+                                    <span className="text-[10px] text-stone-500 dark:text-stone-400 font-mono mt-0.5">
+                                      扣款: {formatUsd(billing.outputCostUsd)}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* 總扣款 與 目前結餘 */}
+                                <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-amber-500/10 px-2.5 py-2 dark:bg-amber-400/10 border border-amber-500/20 dark:border-amber-400/20">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="font-semibold text-stone-700 dark:text-stone-300 text-[11px]">總扣款：</span>
+                                    <span className="font-mono font-bold text-amber-700 dark:text-amber-300 text-xs">
+                                      {formatUsd(billing.totalCostUsd)}
+                                    </span>
+                                    <span className="text-[10px] text-stone-500 dark:text-stone-400">
+                                      (≈ NT${billing.totalCostTwd.toFixed(3)})
+                                    </span>
+                                  </div>
+
+                                  <div className="flex items-center gap-1 text-right">
+                                    <span className="text-[11px] font-semibold text-stone-600 dark:text-stone-400">目前結餘：</span>
+                                    <span className="font-mono font-extrabold text-emerald-700 dark:text-emerald-400 text-xs bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
+                                      ${billing.currentBalanceUsd.toFixed(4)} USD
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            )
+                          })()}
 
                           {/* Action buttons (Copy, Read aloud) */}
                           <div className="mt-2.5 flex items-center justify-between text-[11px] text-stone-400">
@@ -1580,6 +1689,40 @@ export const AIAssistantPage: React.FC = () => {
                     {keyTestState.msg}
                   </p>
                 )}
+              </div>
+
+              {/* Tier 2 帳單帳戶結餘設定 */}
+              <div className="rounded-2xl border border-amber-500/25 bg-amber-500/5 p-3 dark:border-amber-400/20 dark:bg-amber-950/20">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-amber-800 dark:text-amber-300">
+                    <CreditCard size={14} className="text-amber-600 dark:text-amber-400" />
+                    <span>我的帳單帳戶 Tier 2 結餘設定</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setBalanceInput(DEFAULT_INITIAL_BALANCE_USD.toFixed(4))}
+                    className="text-[10px] text-amber-700 underline dark:text-amber-300 hover:opacity-80"
+                  >
+                    重設為 $20.79
+                  </button>
+                </div>
+                <div className="mt-2 flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <span className="absolute left-3 top-2 text-xs font-bold text-stone-400">$</span>
+                    <input
+                      type="number"
+                      step="0.0001"
+                      value={balanceInput}
+                      onChange={(e) => setBalanceInput(e.target.value)}
+                      placeholder="20.79"
+                      className="w-full rounded-xl border border-stone-200 bg-white pl-6 pr-14 py-1.5 text-xs font-mono font-semibold text-stone-800 focus:border-amber-500 focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200"
+                    />
+                    <span className="absolute right-3 top-2 text-[10px] font-mono text-stone-400">USD</span>
+                  </div>
+                </div>
+                <p className="mt-1.5 text-[10px] text-stone-500 dark:text-stone-400">
+                  每次 AI 回覆將自動依 Tier 2 官方定價（輸入 $0.10/1M、輸出 $0.40/1M）扣除微額並即時顯示結餘。
+                </p>
               </div>
 
               <div className="rounded-xl bg-stone-50 p-2.5 text-[11px] text-stone-500 dark:bg-stone-800/60 dark:text-stone-400">

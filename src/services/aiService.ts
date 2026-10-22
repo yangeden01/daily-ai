@@ -1,5 +1,18 @@
 import type { Event } from '../models/Event'
 
+export interface BillingReceipt {
+  accountName: string // e.g. "我的帳單帳戶 Tier 2"
+  inputTokens: number
+  inputCostUsd: number
+  outputTokens: number
+  outputCostUsd: number
+  totalCostUsd: number
+  totalCostTwd: number
+  currentBalanceUsd: number
+  modelName: string
+  timestamp: string
+}
+
 export interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
@@ -8,6 +21,7 @@ export interface ChatMessage {
   sources?: Array<{ title: string; url: string }>
   referencedEventIds?: string[]
   isLocalFallback?: boolean
+  billing?: BillingReceipt
 }
 
 export interface SendMessageOptions {
@@ -21,6 +35,69 @@ export interface ChatResponse {
   sources?: Array<{ title: string; url: string }>
   searchQueries?: string[]
   isLocalFallback?: boolean
+  usageMetadata?: {
+    promptTokenCount?: number
+    candidatesTokenCount?: number
+    totalTokenCount?: number
+  }
+  billing?: BillingReceipt
+}
+
+export const TIER2_BALANCE_KEY = 'edennote_tier2_balance_usd'
+export const DEFAULT_INITIAL_BALANCE_USD = 20.79
+export const USD_TO_TWD_RATE = 32.0
+
+export function getTier2Balance(): number {
+  try {
+    const val = localStorage.getItem(TIER2_BALANCE_KEY)
+    if (val !== null) {
+      const num = parseFloat(val)
+      if (!isNaN(num)) return num
+    }
+  } catch {
+    // ignore
+  }
+  return DEFAULT_INITIAL_BALANCE_USD
+}
+
+export function setTier2Balance(balance: number): void {
+  try {
+    localStorage.setItem(TIER2_BALANCE_KEY, balance.toFixed(6))
+  } catch {
+    // ignore
+  }
+}
+
+export function calculateBillingReceipt(
+  inputTokens: number,
+  outputTokens: number,
+  accountName: string = '我的帳單帳戶 Tier 2',
+  modelName: string = 'Gemini 3.8 Flash'
+): BillingReceipt {
+  // Tier 2 Pay-as-you-go pricing for Gemini Flash (<=128k prompt):
+  // Input: $0.10 / 1,000,000 tokens ($0.00000010 / token)
+  // Output: $0.40 / 1,000,000 tokens ($0.00000040 / token)
+  const inputCostUsd = (inputTokens / 1_000_000) * 0.10
+  const outputCostUsd = (outputTokens / 1_000_000) * 0.40
+  const totalCostUsd = inputCostUsd + outputCostUsd
+  const totalCostTwd = totalCostUsd * USD_TO_TWD_RATE
+
+  const prevBalance = getTier2Balance()
+  const newBalance = Math.max(0, prevBalance - totalCostUsd)
+  setTier2Balance(newBalance)
+
+  return {
+    accountName,
+    inputTokens,
+    inputCostUsd,
+    outputTokens,
+    outputCostUsd,
+    totalCostUsd,
+    totalCostTwd,
+    currentBalanceUsd: newBalance,
+    modelName,
+    timestamp: new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+  }
 }
 
 /**
@@ -958,10 +1035,16 @@ export async function directGeminiChat(
     }
   }
 
+  const promptTokens = Number(data.usageMetadata?.promptTokenCount) || Math.max(1, Math.round(JSON.stringify(body).length / 3.5))
+  const outputTokens = Number(data.usageMetadata?.candidatesTokenCount) || Math.max(1, Math.round(reply.length / 2))
+  const billing = calculateBillingReceipt(promptTokens, outputTokens, '我的帳單帳戶 Tier 2', 'Gemini 3.8 Flash')
+
   return {
     reply,
     sources,
     isLocalFallback: false,
+    usageMetadata: data.usageMetadata,
+    billing,
   }
 }
 
@@ -984,9 +1067,11 @@ export async function sendChatMessage(options: SendMessageOptions): Promise<Chat
       if (err?.status === 402 || err?.isQuota || String(err?.message).includes('depleted')) {
         const fallbackReply = localSmartAnalyze(latestUserPrompt, events)
         const tip = `\n\n---\n*⚡（提示：您提供的 Gemini API Key 已通過 Google 驗證！目前專案尚無預付額度 [402 Depleted]，系統已無縫啟用 EdenNote 深度分析引擎為您解答並精確融合個人紀錄。若需啟用 Google 官方雲端算力，可至 [Google AI Studio](https://ai.studio/projects) 啟用預付點數。）*`
+        const billing = calculateBillingReceipt(0, 0, '我的帳單帳戶 Tier 2 (本機免扣款)', 'EdenNote 本機引擎')
         return {
           reply: `${fallbackReply}${tip}`,
           isLocalFallback: true,
+          billing,
         }
       }
     }
@@ -1032,9 +1117,11 @@ export async function sendChatMessage(options: SendMessageOptions): Promise<Chat
         const tip = userApiKey
           ? `\n\n---\n*⚡（提示：您設定的 Gemini API Key 額度已用盡或尚未開通付費專案，系統已啟動 EdenNote 本機深度分析引擎為您解答。）*`
           : `\n\n---\n*⚡（提示：目前預設雲端額度維護中。若想體驗與截圖完全一致的原生「Gemini 3.8 Flash AI Agent」深度對話與即時聯網，您可隨時在「設定」中填入您自己的 Gemini API Key 即可直接啟用！）*`
+        const billing = calculateBillingReceipt(0, 0, '我的帳單帳戶 Tier 2 (本機免扣款)', 'EdenNote 本機引擎')
         return {
           reply: `${fallbackReply}${tip}`,
           isLocalFallback: true,
+          billing,
         }
       }
 
@@ -1042,18 +1129,26 @@ export async function sendChatMessage(options: SendMessageOptions): Promise<Chat
     }
 
     const data = await res.json()
+    const promptTokens = Number(data.usageMetadata?.promptTokenCount) || Math.max(1, Math.round(JSON.stringify(messages).length / 3))
+    const outputTokens = Number(data.usageMetadata?.candidatesTokenCount) || Math.max(1, Math.round((data.reply || '').length / 2))
+    const billing = calculateBillingReceipt(promptTokens, outputTokens, '我的帳單帳戶 Tier 2', 'Gemini 3.8 Flash')
+
     return {
       reply: data.reply || '（無回覆內容）',
       sources: data.sources || [],
       searchQueries: data.searchQueries || [],
       isLocalFallback: false,
+      usageMetadata: data.usageMetadata,
+      billing,
     }
   } catch (err: unknown) {
     console.warn('AI request failed, running local smart fallback:', err)
     const fallbackReply = localSmartAnalyze(latestUserPrompt, events)
+    const billing = calculateBillingReceipt(0, 0, '我的帳單帳戶 Tier 2 (本機免扣款)', 'EdenNote 本機引擎')
     return {
       reply: `${fallbackReply}\n\n---\n*⚡（提示：已透過 EdenNote 本機分析引擎為您檢索並計算資料。）*`,
       isLocalFallback: true,
+      billing,
     }
   }
 }

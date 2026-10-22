@@ -292,6 +292,7 @@ ${eventsFormatted || '（目前資料庫中尚無任何事件紀錄）'}
       reply: text,
       sources: uniqueSources,
       searchQueries: groundingMetadata?.webSearchQueries || [],
+      usageMetadata: response.usageMetadata,
     })
   } catch (err: unknown) {
     const error = err as Error
