@@ -1271,66 +1271,85 @@ export const AIAssistantPage: React.FC = () => {
       {/* IMMERSIVE HANDS-FREE VOICE CALL OVERLAY (免動手連續語音生活秘書全螢幕介面) */}
       {/* ========================================================================= */}
       {isVoiceCallOpen && (
-        <div className="fixed inset-0 z-50 flex flex-col justify-between bg-stone-950/95 p-6 text-white backdrop-blur-2xl animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-50 dark flex flex-col justify-between bg-stone-950/95 p-4 sm:p-6 text-white backdrop-blur-2xl animate-in fade-in duration-300 overflow-x-hidden overflow-y-auto">
           {/* Header */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 text-white shadow-md shadow-indigo-500/30">
+          <div className="flex items-center justify-between gap-2 shrink-0">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 text-white shadow-md shadow-indigo-500/30">
                 <Sparkles size={20} />
               </div>
-              <div>
-                <h3 className="font-extrabold text-base tracking-tight">EdenNote 生活秘書</h3>
-                <p className="text-[11px] text-stone-400">連續語音對話中 • 全程免碰手機</p>
+              <div className="truncate">
+                <h3 className="font-extrabold text-sm sm:text-base tracking-tight truncate">EdenNote 生活秘書</h3>
+                <p className="text-[10px] sm:text-[11px] text-stone-400 truncate">連續語音對話 • 全程免碰手機</p>
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={closeVoiceCall}
-              className="rounded-full bg-white/10 p-2 text-stone-300 transition hover:bg-white/20 active:scale-90"
-              title="關閉語音對話"
-            >
-              <X size={20} />
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              {/* API Key Icon / Status Button */}
+              <button
+                type="button"
+                onClick={() => setShowKeyModal(true)}
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold backdrop-blur-md transition active:scale-95 border shadow-sm ${
+                  userApiKey
+                    ? 'border-indigo-400/50 bg-indigo-500/25 text-indigo-200 hover:bg-indigo-500/35'
+                    : 'border-amber-400/50 bg-amber-500/25 text-amber-200 hover:bg-amber-500/35 animate-pulse'
+                }`}
+                title="查詢或更換 Gemini API Key"
+                aria-label="API Key 設定"
+              >
+                <KeyRound size={15} className={userApiKey ? 'text-indigo-300' : 'text-amber-300'} />
+                <span className="text-[11px] font-medium">{userApiKey ? 'Gemini Key' : '設定 Key'}</span>
+              </button>
+
+              {/* Close Button */}
+              <button
+                type="button"
+                onClick={closeVoiceCall}
+                className="rounded-full bg-white/10 p-2 text-stone-300 transition hover:bg-white/20 active:scale-90"
+                title="關閉語音對話"
+              >
+                <X size={18} />
+              </button>
+            </div>
           </div>
 
           {/* Center Visual: The Animated Audio Orb & Status */}
-          <div className="my-auto flex flex-col items-center justify-center text-center">
+          <div className="my-auto flex flex-col items-center justify-center text-center w-full max-w-full min-w-0 px-2 sm:px-4 py-2">
             {/* Status Pill */}
-            <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-xs font-semibold backdrop-blur-md">
+            <div className="mb-6 sm:mb-8 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-xs font-semibold backdrop-blur-md max-w-full truncate">
               {voiceCallStatus === 'listening' && (
                 <>
-                  <span className="relative flex h-2.5 w-2.5">
+                  <span className="relative flex h-2.5 w-2.5 shrink-0">
                     <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
                     <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500"></span>
                   </span>
-                  <span className="text-emerald-400">正在聆聽中… 請直接開口說話</span>
+                  <span className="text-emerald-400 truncate">正在聆聽中… 請直接開口說話</span>
                 </>
               )}
               {voiceCallStatus === 'processing' && (
                 <>
-                  <LoaderCircle size={14} className="animate-spin text-purple-400" />
-                  <span className="text-purple-300">正在思考並檢索 EdenNote 資料庫…</span>
+                  <LoaderCircle size={14} className="animate-spin text-purple-400 shrink-0" />
+                  <span className="text-purple-300 truncate">正在思考並檢索 EdenNote 資料庫…</span>
                 </>
               )}
               {voiceCallStatus === 'speaking' && (
                 <>
-                  <Volume2 size={14} className="animate-bounce text-pink-400" />
-                  <span className="text-pink-300">生活秘書正在用語音回答您…</span>
+                  <Volume2 size={14} className="animate-bounce text-pink-400 shrink-0" />
+                  <span className="text-pink-300 truncate">生活秘書正在用語音回答您…</span>
                 </>
               )}
               {voiceCallStatus === 'paused' && (
-                <span className="text-amber-300 font-medium">⏸️ 靜音等待中 • 點擊圓圈隨時開口</span>
+                <span className="text-amber-300 font-medium truncate">⏸️ 靜音等待中 • 點擊圓圈隨時開口</span>
               )}
-              {voiceCallStatus === 'error' && <span className="text-rose-400">麥克風連線異常</span>}
-              {voiceCallStatus === 'unsupported' && <span className="text-rose-400">不支援語音辨識</span>}
+              {voiceCallStatus === 'error' && <span className="text-rose-400 truncate">麥克風連線異常</span>}
+              {voiceCallStatus === 'unsupported' && <span className="text-rose-400 truncate">不支援語音辨識</span>}
             </div>
 
             {/* Glowing Radial Audio Orb */}
             <div className="relative flex items-center justify-center">
               {/* Outer Glow Ring */}
               <div
-                className={`absolute h-48 w-48 rounded-full bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 blur-2xl opacity-40 transition-all duration-700 ${
+                className={`absolute h-44 w-44 sm:h-48 sm:w-48 rounded-full bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 blur-2xl opacity-40 transition-all duration-700 ${
                   voiceCallStatus === 'listening'
                     ? 'scale-125 opacity-70 animate-pulse'
                     : voiceCallStatus === 'speaking'
@@ -1351,7 +1370,7 @@ export const AIAssistantPage: React.FC = () => {
                     setVoiceCallStatus('paused')
                   }
                 }}
-                className={`relative flex h-36 w-36 items-center justify-center rounded-full bg-gradient-to-tr from-indigo-600 via-purple-600 to-pink-500 shadow-2xl shadow-purple-600/50 transition-all duration-500 active:scale-95 ${
+                className={`relative flex h-32 w-32 sm:h-36 sm:w-36 items-center justify-center rounded-full bg-gradient-to-tr from-indigo-600 via-purple-600 to-pink-500 shadow-2xl shadow-purple-600/50 transition-all duration-500 active:scale-95 ${
                   voiceCallStatus === 'listening'
                     ? 'scale-105 shadow-emerald-500/40'
                     : voiceCallStatus === 'speaking'
@@ -1361,46 +1380,60 @@ export const AIAssistantPage: React.FC = () => {
                 title={voiceCallStatus === 'listening' ? '點擊暫停' : '點擊開始說話'}
               >
                 {voiceCallStatus === 'listening' ? (
-                  <Mic size={48} className="animate-pulse text-white" />
+                  <Mic size={44} className="animate-pulse text-white" />
                 ) : voiceCallStatus === 'speaking' ? (
-                  <Volume2 size={48} className="animate-pulse text-white" />
+                  <Volume2 size={44} className="animate-pulse text-white" />
                 ) : voiceCallStatus === 'paused' ? (
-                  <MicOff size={44} className="text-white/80" />
+                  <MicOff size={40} className="text-white/80" />
                 ) : (
-                  <Sparkles size={48} className="text-white" />
+                  <Sparkles size={44} className="text-white" />
                 )}
               </button>
             </div>
 
-            {/* Realtime Live Speech Subtitle */}
-            <div className="mt-8 max-w-md px-4">
+            {/* Realtime Live Speech Subtitle & AI Response Box with Strict Screen Wrapping */}
+            <div className="mt-6 sm:mt-8 w-full max-w-md mx-auto min-w-0 px-2">
               {liveTranscript ? (
-                <p className="text-base sm:text-lg font-medium text-white/95 leading-relaxed">
+                <p className="text-sm sm:text-base font-medium text-white/95 leading-relaxed break-words [overflow-wrap:anywhere]">
                   “{liveTranscript}”
                 </p>
               ) : (
-                <p className="text-xs sm:text-sm text-stone-400 leading-relaxed">
-                  您可以說：
-                  <br />
-                  <span className="font-semibold text-stone-300">「幫我查上週看醫生的費用」</span>、
-                  <span className="font-semibold text-stone-300">「幫我記明天下午看牙醫」</span>、
-                  <span className="font-semibold text-stone-300">「查加薪紀錄」</span>
-                </p>
+                <div className="text-xs sm:text-sm text-stone-400 leading-relaxed">
+                  <p className="text-stone-500 text-[11px] mb-1.5">您可以試著說：</p>
+                  <div className="flex flex-wrap items-center justify-center gap-1.5">
+                    <span className="rounded-full bg-white/5 border border-white/10 px-2.5 py-1 text-[11px] text-stone-300">
+                      「幫我查上週看醫生的費用」
+                    </span>
+                    <span className="rounded-full bg-white/5 border border-white/10 px-2.5 py-1 text-[11px] text-stone-300">
+                      「幫我記明天下午看牙醫」
+                    </span>
+                    <span className="rounded-full bg-white/5 border border-white/10 px-2.5 py-1 text-[11px] text-stone-300">
+                      「查加薪紀錄」
+                    </span>
+                  </div>
+                </div>
               )}
 
-              {/* Last Spoken AI Reply Snippet */}
+              {/* Last Spoken AI Reply Card - Clean auto-wrapping strictly inside screen boundaries */}
               {lastAiReply && !liveTranscript && (
-                <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-3 text-xs text-stone-300 text-left">
-                  <p className="font-bold text-indigo-300 mb-1">🤖 秘書回覆：</p>
-                  <p className="line-clamp-3 leading-relaxed">{lastAiReply}</p>
+                <div className="mt-4 w-full max-w-md mx-auto min-w-0 rounded-2xl border border-white/10 bg-white/5 p-3.5 sm:p-4 text-xs text-stone-200 text-left backdrop-blur-md shadow-lg overflow-hidden">
+                  <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-white/10">
+                    <p className="font-bold text-indigo-300 flex items-center gap-1.5">
+                      <span>🤖 秘書回覆</span>
+                    </p>
+                    <span className="text-[10px] text-stone-400">EdenNote AI</span>
+                  </div>
+                  <div className="max-h-48 sm:max-h-60 overflow-y-auto pr-1 text-stone-200 text-xs sm:text-sm leading-relaxed break-words [overflow-wrap:anywhere] [word-break:break-word]">
+                    <MarkdownMessage content={lastAiReply} />
+                  </div>
                 </div>
               )}
 
               {voiceError && (
-                <div className="mt-4 rounded-2xl bg-rose-950/80 border border-rose-800/80 p-3.5 text-xs text-rose-200 text-left space-y-2.5 shadow-lg backdrop-blur-md">
+                <div className="mt-4 w-full max-w-md mx-auto min-w-0 rounded-2xl bg-rose-950/80 border border-rose-800/80 p-3.5 text-xs text-rose-200 text-left space-y-2.5 shadow-lg backdrop-blur-md">
                   <div className="flex items-start gap-2">
                     <span className="text-rose-400 font-bold shrink-0">⚠️ 權限提示：</span>
-                    <p className="leading-relaxed">{voiceError}</p>
+                    <p className="leading-relaxed break-words [overflow-wrap:anywhere]">{voiceError}</p>
                   </div>
                   <div className="pt-0.5">
                     <button
@@ -1475,7 +1508,7 @@ export const AIAssistantPage: React.FC = () => {
 
       {/* Gemini API Key Configuration Modal */}
       {showKeyModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="w-full max-w-md rounded-3xl border border-stone-200 bg-white p-5 shadow-2xl dark:border-stone-800 dark:bg-stone-900">
             <div className="flex items-center justify-between pb-3 border-b border-stone-100 dark:border-stone-800">
               <div className="flex items-center gap-2">

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import { Download, RotateCcw, SlidersHorizontal } from 'lucide-react'
+import { Download, KeyRound, RotateCcw } from 'lucide-react'
 import { usePWA } from '../../contexts/PWAContext'
 import { useAI } from '../../contexts/AIContext'
 import ModeSwitch from '../ModeSwitch/ModeSwitch'
@@ -17,7 +17,7 @@ const pageTitles: Record<string, string> = {
 export default function Header() {
   const { pathname, search } = useLocation()
   const { isStandalone, showInstallExperience, canPromptInstall, install } = usePWA()
-  const { setShowKeyModal, activeTab, setActiveTab, triggerNewChat } = useAI()
+  const { userApiKey, setShowKeyModal, activeTab, setActiveTab, triggerNewChat } = useAI()
   const [showInstallGuide, setShowInstallGuide] = useState(false)
   const mode = appModeFromSearch(search)
   const isNotes = mode === 'notes'
@@ -46,15 +46,20 @@ export default function Header() {
         <div className="mx-auto flex h-16 max-w-2xl items-center justify-between gap-2 px-3.5 sm:px-6">
           {isAIMode ? (
             <div className="flex w-full items-center justify-between">
-              {/* Left: Circle Settings / Menu Button */}
+              {/* Left: Gemini API Key Setting / Status */}
               <button
                 type="button"
                 onClick={() => setShowKeyModal(true)}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-stone-200/60 text-stone-700 transition hover:bg-stone-200 active:scale-95 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700"
-                title="AI 設定與金鑰配置"
-                aria-label="AI 設定"
+                className={`flex h-10 items-center gap-1.5 rounded-full px-2.5 sm:px-3 transition active:scale-95 ${
+                  userApiKey
+                    ? 'bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-950/60 dark:text-indigo-300 dark:border-indigo-800'
+                    : 'bg-stone-200/70 text-stone-700 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700'
+                }`}
+                title="查詢或更換 Gemini API Key"
+                aria-label="API Key 設定"
               >
-                <SlidersHorizontal size={18} strokeWidth={2.2} />
+                <KeyRound size={16} strokeWidth={2.2} className={userApiKey ? 'text-indigo-600 dark:text-indigo-400' : 'text-stone-600 dark:text-stone-400'} />
+                <span className="text-xs font-bold hidden xs:inline">{userApiKey ? 'Gemini Key' : 'API Key'}</span>
               </button>
 
               {/* Center: Segmented Pill Switch [ 對話 | 工作 ] */}

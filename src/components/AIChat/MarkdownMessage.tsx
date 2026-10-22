@@ -158,7 +158,7 @@ export const MarkdownMessage: React.FC<Props> = ({ content }) => {
     // Headings
     if (line.startsWith('### ')) {
       elements.push(
-        <h3 key={i} className="mt-3.5 mb-1.5 text-base font-bold text-stone-950 dark:text-white">
+        <h3 key={i} className="mt-3.5 mb-1.5 text-base font-bold text-stone-950 dark:text-white break-words [overflow-wrap:anywhere]">
           {renderInline(line.slice(4))}
         </h3>
       )
@@ -166,7 +166,7 @@ export const MarkdownMessage: React.FC<Props> = ({ content }) => {
     }
     if (line.startsWith('#### ')) {
       elements.push(
-        <h4 key={i} className="mt-2.5 mb-1 text-sm font-bold text-stone-900 dark:text-stone-100">
+        <h4 key={i} className="mt-2.5 mb-1 text-sm font-bold text-stone-900 dark:text-stone-100 break-words [overflow-wrap:anywhere]">
           {renderInline(line.slice(5))}
         </h4>
       )
@@ -174,7 +174,7 @@ export const MarkdownMessage: React.FC<Props> = ({ content }) => {
     }
     if (line.startsWith('# ') || line.startsWith('## ')) {
       elements.push(
-        <h2 key={i} className="mt-4 mb-2 text-lg font-extrabold text-stone-950 dark:text-white">
+        <h2 key={i} className="mt-4 mb-2 text-lg font-extrabold text-stone-950 dark:text-white break-words [overflow-wrap:anywhere]">
           {renderInline(line.replace(/^#+\s*/, ''))}
         </h2>
       )
@@ -186,7 +186,7 @@ export const MarkdownMessage: React.FC<Props> = ({ content }) => {
       elements.push(
         <blockquote
           key={i}
-          className="my-2 border-l-4 border-indigo-500 bg-indigo-50/50 py-1.5 px-3 text-xs sm:text-sm text-stone-700 italic dark:bg-indigo-950/20 dark:text-stone-300"
+          className="my-2 border-l-4 border-indigo-500 bg-indigo-50/50 py-1.5 px-3 text-xs sm:text-sm text-stone-700 italic dark:bg-indigo-950/20 dark:text-stone-300 break-words [overflow-wrap:anywhere]"
         >
           {renderInline(line.slice(2))}
         </blockquote>
@@ -197,7 +197,7 @@ export const MarkdownMessage: React.FC<Props> = ({ content }) => {
     // Bullet lists
     if (/^\s*[-*]\s+/.test(line)) {
       elements.push(
-        <li key={i} className="ml-4 list-disc text-sm leading-6 text-stone-800 dark:text-stone-200">
+        <li key={i} className="ml-4 list-disc text-sm leading-6 text-stone-800 dark:text-stone-200 break-words [overflow-wrap:anywhere]">
           {renderInline(line.replace(/^\s*[-*]\s+/, ''))}
         </li>
       )
@@ -208,9 +208,9 @@ export const MarkdownMessage: React.FC<Props> = ({ content }) => {
     const numMatch = line.match(/^(\d+)\.\s+(.*)/)
     if (numMatch) {
       elements.push(
-        <div key={i} className="ml-2 flex items-start gap-1.5 text-sm leading-6 text-stone-800 dark:text-stone-200">
+        <div key={i} className="ml-2 flex items-start gap-1.5 text-sm leading-6 text-stone-800 dark:text-stone-200 break-words [overflow-wrap:anywhere]">
           <span className="font-semibold text-indigo-600 dark:text-indigo-400 shrink-0">{numMatch[1]}.</span>
-          <span className="flex-1">{renderInline(numMatch[2])}</span>
+          <span className="flex-1 break-words [overflow-wrap:anywhere]">{renderInline(numMatch[2])}</span>
         </div>
       )
       continue
@@ -224,7 +224,7 @@ export const MarkdownMessage: React.FC<Props> = ({ content }) => {
 
     // Regular paragraph
     elements.push(
-      <p key={i} className="text-sm leading-relaxed text-stone-800 dark:text-stone-200">
+      <p key={i} className="text-sm leading-relaxed text-stone-800 dark:text-stone-200 break-words [overflow-wrap:anywhere]">
         {renderInline(line)}
       </p>
     )
@@ -234,5 +234,5 @@ export const MarkdownMessage: React.FC<Props> = ({ content }) => {
     flushTable('end')
   }
 
-  return <div className="space-y-1">{elements}</div>
+  return <div className="space-y-1 w-full max-w-full min-w-0 break-words [overflow-wrap:anywhere] [word-break:break-word]">{elements}</div>
 }
