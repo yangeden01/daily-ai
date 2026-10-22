@@ -44,7 +44,7 @@ export interface ChatResponse {
 }
 
 export const TIER2_BALANCE_KEY = 'edennote_tier2_balance_usd'
-export const DEFAULT_INITIAL_BALANCE_USD = 20.79
+export const DEFAULT_INITIAL_BALANCE_USD = 20.50
 export const USD_TO_TWD_RATE = 32.0
 
 export function getTier2Balance(): number {
@@ -52,7 +52,16 @@ export function getTier2Balance(): number {
     const val = localStorage.getItem(TIER2_BALANCE_KEY)
     if (val !== null) {
       const num = parseFloat(val)
-      if (!isNaN(num)) return num
+      if (!isNaN(num)) {
+        // If previously initialized to the old 20.79 baseline, calibrate down to user's real $20.50 balance
+        if (num >= 20.70 && num <= 20.80) {
+          const deducted = Math.max(0, 20.79 - num)
+          const calibrated = Math.max(0, 20.50 - deducted)
+          setTier2Balance(calibrated)
+          return calibrated
+        }
+        return num
+      }
     }
   } catch {
     // ignore

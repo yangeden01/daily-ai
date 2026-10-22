@@ -19,6 +19,7 @@ import {
   Mic,
   MicOff,
   NotebookPen,
+  Pencil,
   PhoneCall,
   PhoneOff,
   Plus,
@@ -127,6 +128,8 @@ export const AIAssistantPage: React.FC = () => {
   // Tier 2 Billing Account state
   const [tier2Balance, setTier2BalanceState] = useState<number>(() => getTier2Balance())
   const [balanceInput, setBalanceInput] = useState<string>(() => getTier2Balance().toFixed(4))
+  const [showBalanceSyncModal, setShowBalanceSyncModal] = useState(false)
+  const [syncBalanceInput, setSyncBalanceInput] = useState('')
 
   // User Gemini API Key modal state
   const [keyInput, setKeyInput] = useState(userApiKey)
@@ -951,9 +954,9 @@ export const AIAssistantPage: React.FC = () => {
                                 <div className="flex items-center justify-between border-b border-amber-500/15 pb-2 mb-2 dark:border-amber-400/15">
                                   <div className="flex items-center gap-1.5 font-bold text-amber-800 dark:text-amber-300">
                                     <CreditCard size={14} className="shrink-0 text-amber-600 dark:text-amber-400" />
-                                    <span>{billing.accountName} 扣款帳單</span>
+                                    <span>Tier 2 扣款帳單</span>
                                   </div>
-                                  <span className="text-[10px] font-mono text-stone-500 dark:text-stone-400">
+                                  <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-mono font-medium text-amber-700 dark:text-amber-300">
                                     {billing.modelName}
                                   </span>
                                 </div>
@@ -1002,9 +1005,18 @@ export const AIAssistantPage: React.FC = () => {
 
                                   <div className="flex items-center gap-1 text-right">
                                     <span className="text-[11px] font-semibold text-stone-600 dark:text-stone-400">目前結餘：</span>
-                                    <span className="font-mono font-extrabold text-emerald-700 dark:text-emerald-400 text-xs bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
-                                      ${billing.currentBalanceUsd.toFixed(4)} USD
-                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setSyncBalanceInput(tier2Balance.toFixed(4))
+                                        setShowBalanceSyncModal(true)
+                                      }}
+                                      className="inline-flex items-center gap-1 font-mono font-extrabold text-emerald-700 dark:text-emerald-400 text-xs bg-emerald-500/10 hover:bg-emerald-500/20 px-2 py-0.5 rounded-md border border-emerald-500/25 active:scale-95 transition"
+                                      title="點擊校準 Google 帳單餘額"
+                                    >
+                                      <span>${tier2Balance.toFixed(4)} USD</span>
+                                      <Pencil size={10} className="text-emerald-600 dark:text-emerald-400 opacity-60 ml-0.5" />
+                                    </button>
                                   </div>
                                 </div>
                               </div>
@@ -1759,6 +1771,94 @@ export const AIAssistantPage: React.FC = () => {
                 className="rounded-xl bg-indigo-600 px-4 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-indigo-700 active:scale-95"
               >
                 儲存並啟用
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Balance Sync Modal */}
+      {showBalanceSyncModal && (
+        <div className="fixed inset-0 z-[75] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="w-full max-w-sm rounded-3xl border border-stone-200 bg-white p-5 shadow-2xl dark:border-stone-800 dark:bg-stone-900">
+            <div className="flex items-center justify-between border-b border-stone-100 pb-3 dark:border-stone-800">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">
+                  <CreditCard size={18} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-stone-900 dark:text-stone-100">
+                    校準 Google 帳單餘額
+                  </h3>
+                  <p className="text-[11px] text-stone-500 dark:text-stone-400">
+                    同步 Google AI Studio 實際可用額度
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowBalanceSyncModal(false)}
+                className="rounded-full p-1 text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              <p className="text-xs leading-relaxed text-stone-600 dark:text-stone-300">
+                若您在 Google Cloud / AI Studio 控制台看到的最新餘額不同（例如截圖中的 <strong>$20.50</strong>），可在此直接校準，後續每次調用將以此基準繼續即時扣款！
+              </p>
+
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setSyncBalanceInput('20.5000')}
+                  className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-500/20 dark:text-amber-300"
+                >
+                  ⚡ 一鍵設為 $20.50 (最新官方金額)
+                </button>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 dark:text-stone-300">
+                  目前實際餘額 (USD)
+                </label>
+                <div className="relative mt-1">
+                  <span className="absolute left-3 top-2 text-xs font-bold text-stone-400">$</span>
+                  <input
+                    type="number"
+                    step="0.0001"
+                    value={syncBalanceInput}
+                    onChange={(e) => setSyncBalanceInput(e.target.value)}
+                    placeholder="20.50"
+                    className="w-full rounded-xl border border-stone-200 bg-stone-50 pl-6 pr-14 py-2 text-xs font-mono font-bold text-stone-800 focus:border-amber-500 focus:bg-white focus:outline-none dark:border-stone-700 dark:bg-stone-800 dark:text-stone-200"
+                  />
+                  <span className="absolute right-3 top-2 text-[10px] font-mono text-stone-400">USD</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowBalanceSyncModal(false)}
+                className="rounded-xl px-3 py-1.5 text-xs font-medium text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-800"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const parsed = parseFloat(syncBalanceInput)
+                  if (!isNaN(parsed) && parsed >= 0) {
+                    setTier2Balance(parsed)
+                    setTier2BalanceState(parsed)
+                  }
+                  setShowBalanceSyncModal(false)
+                }}
+                className="rounded-xl bg-amber-600 px-4 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-amber-700 active:scale-95"
+              >
+                確定校準
               </button>
             </div>
           </div>
