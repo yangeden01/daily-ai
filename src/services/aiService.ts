@@ -830,49 +830,81 @@ export async function testGeminiApiKey(apiKey: string): Promise<{ ok: boolean; m
       return { ok: false, message: `金鑰無效：${err.error?.message || `HTTP ${checkRes.status}`}` }
     }
 
-    // 2. 測試 Gemini 生成能力與額度狀態（優先測 3.8 Flash，若遇 503 尖峰負載自動轉測 3.1 Flash-Lite）
-    let res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${key}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: '請只回覆「連線成功」四個字' }] }],
-      }),
-    })
+    // 2. 測試 Gemini 生成能力與額度狀態（候選模型依序嘗試，避免單一模型 20次/日 上限卡死）
+    const testModels = [
+      { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash' },
+      { id: 'gemini-3.1-flash-lite', label: 'Gemini 3.1 Flash-Lite' },
+      { id: 'gemini-flash-latest', label: 'Gemini Flash' },
+    ]
 
-    let usedModel = 'Gemini 3.8 Flash'
-    if (!res.ok && res.status === 503) {
-      console.warn('testGeminiApiKey: gemini-3.8-flash returned 503, testing gemini-3.1-flash-lite...')
-      res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${key}`, {
+    let finalOk = false
+    let finalModelLabel = ''
+    let hit38Limit = false
+    let lastErrDetail = ''
+    let is402 = false
+
+    for (const testModel of testModels) {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${testModel.id}:generateContent?key=${key}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: '請只回覆「連線成功」四個字' }] }],
         }),
       })
-      usedModel = 'Gemini 3.1 Flash-Lite (官方負載備援)'
-    }
 
-    if (!res.ok) {
+      if (res.ok) {
+        finalOk = true
+        finalModelLabel = testModel.label
+        break
+      }
+
       const err = await res.json().catch(() => ({}))
       const msg = err.error?.message || `HTTP ${res.status}`
+      lastErrDetail = msg
+
       if (res.status === 402) {
-        return {
-          ok: false,
-          isDepleted: true,
-          message: `金鑰有效，但 Google 帳單餘額不足 [402 Payment Required]：${msg}`,
-        }
+        is402 = true
+        break
       }
+
       if (res.status === 429) {
-        return {
-          ok: false,
-          isDepleted: true,
-          message: `Google 回傳配額上限或新帳號未啟動配額 [429 Quota Exceeded]：${msg}`,
+        if (testModel.id === 'gemini-3.8-flash') {
+          hit38Limit = true
         }
+        console.warn(`[testGeminiApiKey] 模型 ${testModel.id} 回傳 429 配額限制，嘗試下一備援模型...`)
+        continue
       }
-      return { ok: false, message: `金鑰測試失敗 (HTTP ${res.status}): ${msg}` }
+
+      if (res.status === 503) {
+        console.warn(`[testGeminiApiKey] 模型 ${testModel.id} 回傳 503 尖峰負載，嘗試下一備援模型...`)
+        continue
+      }
     }
 
-    return { ok: true, message: `✨ ${usedModel} 連線成功！` }
+    if (is402) {
+      return {
+        ok: false,
+        isDepleted: true,
+        message: `金鑰有效，但 Google 帳單餘額不足 [402 Payment Required]：${lastErrDetail}`,
+      }
+    }
+
+    if (finalOk) {
+      if (hit38Limit) {
+        return {
+          ok: true,
+          message: `✨ ${finalModelLabel} 連線成功！（Gemini 3.8 Flash 今日 20 次免費額度已滿，已自動無縫備援為 ${finalModelLabel} 繼續提供免費服務）`,
+        }
+      }
+      return { ok: true, message: `✨ ${finalModelLabel} 連線成功！` }
+    }
+
+    // 若全部模型都 429 或失敗
+    return {
+      ok: false,
+      isDepleted: true,
+      message: `Google 回傳配額上限 [429 Quota Exceeded]：${lastErrDetail}`,
+    }
   } catch (err) {
     return {
       ok: false,
@@ -1038,7 +1070,7 @@ export async function directGeminiChat(
     return { res, body, model, withSearch }
   }
 
-  const candidateModels = ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite']
+  const candidateModels = ['gemini-3.8-flash', 'gemini-3.1-flash-lite', 'gemini-flash-latest']
   let successfulAttempt: { res: Response; body: Record<string, unknown>; model: string; withSearch: boolean } | null = null
   let lastError: Error | null = null
 
@@ -1109,8 +1141,8 @@ export async function directGeminiChat(
   const outputTokens = Number(data.usageMetadata?.candidatesTokenCount) || Math.max(1, Math.round(reply.length / 2))
   const modelNameMap: Record<string, string> = {
     'gemini-3.8-flash': 'Gemini 3.8 Flash',
-    'gemini-3.5-flash': 'Gemini 3.5 Flash',
     'gemini-3.1-flash-lite': 'Gemini 3.1 Flash-Lite',
+    'gemini-flash-latest': 'Gemini Flash',
   }
   const modelLabel = modelNameMap[successfulAttempt.model] || successfulAttempt.model
   const billing = calculateBillingReceipt(promptTokens, outputTokens, undefined, modelLabel)
