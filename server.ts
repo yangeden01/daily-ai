@@ -229,33 +229,52 @@ ${eventsFormatted || '（目前資料庫中尚無任何事件紀錄）'}
       config.tools = [{ googleSearch: {} }]
     }
 
-    let response
-    try {
-      response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents,
-        config,
-      })
-    } catch (apiErr: unknown) {
-      const errObj = apiErr as { status?: number; message?: string }
-      console.error('Gemini API call failed:', errObj)
+    const candidateModels = ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite']
+    let response: any
+    let lastApiErr: unknown
 
-      const errMsg = typeof errObj?.message === 'string' ? errObj.message : String(apiErr)
+    for (const model of candidateModels) {
+      try {
+        response = await ai.models.generateContent({
+          model,
+          contents,
+          config,
+        })
+        break
+      } catch (apiErr: unknown) {
+        lastApiErr = apiErr
+        const errObj = apiErr as { status?: number; message?: string }
+        const errMsg = typeof errObj?.message === 'string' ? errObj.message : String(apiErr)
+        const isTemporaryLoadError =
+          errObj?.status === 503 ||
+          errObj?.status === 429 ||
+          errMsg.includes('high demand') ||
+          errMsg.includes('RESOURCE_EXHAUSTED')
+
+        if (isTemporaryLoadError) {
+          console.warn(`[server.ts] ${model} 負載過高或超額 (${errObj?.status || '503'})，自動嘗試下一備援模型...`)
+          continue
+        }
+        break
+      }
+    }
+
+    if (!response) {
+      const errObj = lastApiErr as { status?: number; message?: string }
+      console.error('Gemini API call failed on all models:', errObj)
+      const errMsg = typeof errObj?.message === 'string' ? errObj.message : String(lastApiErr)
       const isQuotaError =
         errObj?.status === 402 ||
         errObj?.status === 429 ||
         errMsg.includes('credits are depleted') ||
         errMsg.includes('402') ||
         errMsg.includes('RESOURCE_EXHAUSTED') ||
-        errMsg.includes('Quota exceeded') ||
-        errMsg.includes('quota')
+        errMsg.includes('Quota exceeded')
 
       return res.status(isQuotaError ? 402 : (errObj?.status || 500)).json({
-        error: isQuotaError
-          ? 'GEMINI_QUOTA_DEPLETED'
-          : errObj?.message || 'Gemini API 呼叫失敗',
+        error: isQuotaError ? 'GEMINI_QUOTA_DEPLETED' : errObj?.message || 'Gemini API 呼叫失敗',
         message: errObj?.message || '發生錯誤',
-        raw: String(apiErr),
+        raw: String(lastApiErr),
       })
     }
 

@@ -806,14 +806,27 @@ export async function testGeminiApiKey(apiKey: string): Promise<{ ok: boolean; m
       return { ok: false, message: `金鑰無效：${err.error?.message || `HTTP ${checkRes.status}`}` }
     }
 
-    // 2. 測試 Gemini 3.8 Flash 生成能力與額度狀態
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${key}`, {
+    // 2. 測試 Gemini 生成能力與額度狀態（優先測 3.8 Flash，若遇 503 尖峰負載自動轉測 3.1 Flash-Lite）
+    let res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${key}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ parts: [{ text: '請只回覆「連線成功」四個字' }] }],
       }),
     })
+
+    let usedModel = 'Gemini 3.8 Flash'
+    if (!res.ok && res.status === 503) {
+      console.warn('testGeminiApiKey: gemini-3.8-flash returned 503, testing gemini-3.1-flash-lite...')
+      res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${key}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: '請只回覆「連線成功」四個字' }] }],
+        }),
+      })
+      usedModel = 'Gemini 3.1 Flash-Lite (官方負載備援)'
+    }
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
@@ -835,7 +848,7 @@ export async function testGeminiApiKey(apiKey: string): Promise<{ ok: boolean; m
       return { ok: false, message: `金鑰測試失敗 (HTTP ${res.status}): ${msg}` }
     }
 
-    return { ok: true, message: '✨ Gemini 3.8 Flash AI Agent 連線成功！' }
+    return { ok: true, message: `✨ ${usedModel} 連線成功！` }
   } catch (err) {
     return {
       ok: false,
@@ -1001,34 +1014,59 @@ export async function directGeminiChat(
     return { res, body, model, withSearch }
   }
 
-  // 1. 嘗試主力模型 gemini-3.8-flash (若開啟搜尋則帶 googleSearch)
-  let attempt = await callEndpoint('gemini-3.8-flash', enableSearch)
+  const candidateModels = ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite']
+  let successfulAttempt: { res: Response; body: Record<string, unknown>; model: string; withSearch: boolean } | null = null
+  let lastError: Error | null = null
 
-  // 2. 若失敗且啟用搜尋（Google Search 工具在純免費專案常因未綁定帳單被拒絕 400/403/429），自動降級嘗試無搜尋模式
-  if (!attempt.res.ok && enableSearch) {
-    console.warn(`[EdenNote AI] 帶搜尋工具呼叫失敗 (HTTP ${attempt.res.status})，自動嘗試純文字模式...`)
-    attempt = await callEndpoint('gemini-3.8-flash', false)
-  }
+  for (const model of candidateModels) {
+    // 1. 先嘗試（若開啟搜尋則帶 googleSearch）
+    let attempt = await callEndpoint(model, enableSearch)
 
-  // 3. 若仍遇 429 配額超額，自動嘗試輕量模型 gemini-3.1-flash-lite
-  if (!attempt.res.ok && attempt.res.status === 429) {
-    console.warn(`[EdenNote AI] gemini-3.8-flash 配額受限 (HTTP 429)，自動切換至輕量模型 gemini-3.1-flash-lite...`)
-    attempt = await callEndpoint('gemini-3.1-flash-lite', false)
-  }
+    // 2. 若帶搜尋工具失敗 (400, 403, 429)，自動降級嘗試無搜尋純文字模式
+    if (!attempt.res.ok && enableSearch) {
+      console.warn(`[EdenNote AI] 模型 ${model} 帶搜尋呼叫失敗 (HTTP ${attempt.res.status})，自動嘗試純文字模式...`)
+      attempt = await callEndpoint(model, false)
+    }
 
-  if (!attempt.res.ok) {
+    if (attempt.res.ok) {
+      successfulAttempt = attempt
+      break
+    }
+
+    // 3. 解析錯誤：若為 503 (High Demand 尖峰負載) 或 429 (Rate Limit 配額上限) 或 500/502/504，自動切換至下一個備援模型重試
     const err = await attempt.res.json().catch(() => ({}))
-    const errMsg = err.error?.message || `Gemini API 呼叫失敗: HTTP ${attempt.res.status}`
+    const errMsg = err.error?.message || `HTTP ${attempt.res.status}`
     const errorObj = new Error(errMsg)
     Object.assign(errorObj, {
       status: attempt.res.status,
       rawError: err.error,
       modelUsed: attempt.model,
     })
-    throw errorObj
+    lastError = errorObj
+
+    const isTemporaryLoadError =
+      attempt.res.status === 503 ||
+      attempt.res.status === 429 ||
+      attempt.res.status === 500 ||
+      attempt.res.status === 502 ||
+      attempt.res.status === 504 ||
+      errMsg.includes('high demand') ||
+      errMsg.includes('RESOURCE_EXHAUSTED')
+
+    if (isTemporaryLoadError) {
+      console.warn(`[EdenNote AI] 模型 ${model} 遭遇暫時負載或頻率限制 (HTTP ${attempt.res.status}: ${errMsg})，自動切換至下一備援模型...`)
+      continue
+    } else {
+      // 帳單不足或認證失效等重大錯誤直接拋出
+      break
+    }
   }
 
-  const data = await attempt.res.json()
+  if (!successfulAttempt) {
+    throw lastError || new Error('所有 Gemini 模型連線均受限')
+  }
+
+  const data = await successfulAttempt.res.json()
   const candidate = data.candidates?.[0]
   const reply = candidate?.content?.parts?.map((p: { text?: string }) => p.text || '').join('') || '（無回覆）'
 
@@ -1043,9 +1081,14 @@ export async function directGeminiChat(
     }
   }
 
-  const promptTokens = Number(data.usageMetadata?.promptTokenCount) || Math.max(1, Math.round(JSON.stringify(attempt.body).length / 3.5))
+  const promptTokens = Number(data.usageMetadata?.promptTokenCount) || Math.max(1, Math.round(JSON.stringify(successfulAttempt.body).length / 3.5))
   const outputTokens = Number(data.usageMetadata?.candidatesTokenCount) || Math.max(1, Math.round(reply.length / 2))
-  const modelLabel = attempt.model === 'gemini-3.1-flash-lite' ? 'Gemini 3.1 Flash-Lite' : 'Gemini 3.8 Flash'
+  const modelNameMap: Record<string, string> = {
+    'gemini-3.8-flash': 'Gemini 3.8 Flash',
+    'gemini-3.5-flash': 'Gemini 3.5 Flash',
+    'gemini-3.1-flash-lite': 'Gemini 3.1 Flash-Lite',
+  }
+  const modelLabel = modelNameMap[successfulAttempt.model] || successfulAttempt.model
   const billing = calculateBillingReceipt(promptTokens, outputTokens, '我的帳單帳戶 Tier 2', modelLabel)
 
   return {
