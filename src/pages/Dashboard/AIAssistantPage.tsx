@@ -4,6 +4,7 @@ import {
   ArrowUp,
   ArrowUpRight,
   AudioLines,
+  BarChart3,
   Bot,
   Check,
   ChevronRight,
@@ -931,20 +932,22 @@ export const AIAssistantPage: React.FC = () => {
                             }
 
                             return (
-                              <div className="mt-3 overflow-hidden rounded-2xl border border-amber-500/25 bg-amber-500/5 p-3 text-xs shadow-sm dark:border-amber-400/20 dark:bg-amber-950/20">
-                                <div className="flex items-center justify-between border-b border-amber-500/15 pb-2 mb-2 dark:border-amber-400/15">
-                                  <div className="flex items-center gap-1.5 font-bold text-amber-800 dark:text-amber-300">
-                                    <CreditCard size={14} className="shrink-0 text-amber-600 dark:text-amber-400" />
-                                    <span>Tier 2 扣款帳單</span>
+                              <div className="mt-3 overflow-hidden rounded-2xl border border-stone-200/80 bg-stone-50/80 p-3 text-xs shadow-sm dark:border-white/10 dark:bg-stone-900/60">
+                                <div className="flex items-center justify-between border-b border-stone-200/60 pb-2 mb-2 dark:border-white/10">
+                                  <div className="flex items-center gap-1.5 font-bold text-stone-800 dark:text-stone-200">
+                                    <BarChart3 size={14} className="shrink-0 text-sky-600 dark:text-sky-400" />
+                                    <span>API 用量與等值明細</span>
                                   </div>
-                                  <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-mono font-medium text-amber-700 dark:text-amber-300">
-                                    {billing.modelName}
-                                  </span>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="rounded bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-mono font-medium text-sky-700 dark:text-sky-300 border border-sky-500/20">
+                                      {billing.modelName}
+                                    </span>
+                                  </div>
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-2 text-[11px]">
                                   {/* 輸入 */}
-                                  <div className="flex flex-col rounded-xl bg-white/85 p-2 shadow-xs dark:bg-stone-900/70 border border-stone-200/60 dark:border-white/5">
+                                  <div className="flex flex-col rounded-xl bg-white/95 p-2 shadow-xs dark:bg-stone-900/90 border border-stone-200/60 dark:border-white/5">
                                     <span className="text-stone-500 dark:text-stone-400 flex items-center gap-1 text-[10px] font-medium">
                                       <ArrowDownLeft size={11} className="text-sky-500 shrink-0" />
                                       輸入 (Tokens)
@@ -952,13 +955,13 @@ export const AIAssistantPage: React.FC = () => {
                                     <span className="font-semibold text-stone-900 dark:text-stone-100 mt-0.5 font-mono text-xs">
                                       {billing.inputTokens.toLocaleString()} <span className="text-[10px] font-normal text-stone-400">tokens</span>
                                     </span>
-                                    <span className="text-[10px] text-stone-500 dark:text-stone-400 font-mono mt-0.5">
-                                      扣款: {formatUsd(billing.inputCostUsd)}
+                                    <span className="text-[10px] text-stone-400 dark:text-stone-500 font-mono mt-0.5">
+                                      等值: {formatUsd(billing.inputCostUsd)}
                                     </span>
                                   </div>
 
                                   {/* 輸出 */}
-                                  <div className="flex flex-col rounded-xl bg-white/85 p-2 shadow-xs dark:bg-stone-900/70 border border-stone-200/60 dark:border-white/5">
+                                  <div className="flex flex-col rounded-xl bg-white/95 p-2 shadow-xs dark:bg-stone-900/90 border border-stone-200/60 dark:border-white/5">
                                     <span className="text-stone-500 dark:text-stone-400 flex items-center gap-1 text-[10px] font-medium">
                                       <ArrowUpRight size={11} className="text-purple-500 shrink-0" />
                                       輸出 (Tokens)
@@ -966,25 +969,25 @@ export const AIAssistantPage: React.FC = () => {
                                     <span className="font-semibold text-stone-900 dark:text-stone-100 mt-0.5 font-mono text-xs">
                                       {billing.outputTokens.toLocaleString()} <span className="text-[10px] font-normal text-stone-400">tokens</span>
                                     </span>
-                                    <span className="text-[10px] text-stone-500 dark:text-stone-400 font-mono mt-0.5">
-                                      扣款: {formatUsd(billing.outputCostUsd)}
+                                    <span className="text-[10px] text-stone-400 dark:text-stone-500 font-mono mt-0.5">
+                                      等值: {formatUsd(billing.outputCostUsd)}
                                     </span>
                                   </div>
                                 </div>
 
-                                {/* 總花費 */}
-                                <div className="mt-2.5 flex items-center justify-between rounded-xl bg-amber-500/10 px-2.5 py-2 dark:bg-amber-400/10 border border-amber-500/20 dark:border-amber-400/20">
+                                {/* 總結算與 Free Tier 標籤 */}
+                                <div className="mt-2.5 flex items-center justify-between rounded-xl bg-emerald-500/10 px-2.5 py-2 dark:bg-emerald-500/15 border border-emerald-500/25 dark:border-emerald-500/30">
                                   <div className="flex items-center gap-1.5 flex-wrap">
-                                    <span className="font-semibold text-stone-700 dark:text-stone-300 text-[11px]">本次總花費：</span>
-                                    <span className="font-mono font-bold text-amber-700 dark:text-amber-300 text-xs">
+                                    <span className="font-semibold text-emerald-900 dark:text-emerald-200 text-[11px]">商業等值：</span>
+                                    <span className="font-mono font-bold text-emerald-800 dark:text-emerald-300 text-xs">
                                       {formatUsd(billing.totalCostUsd)}
                                     </span>
-                                    <span className="text-[10px] text-stone-500 dark:text-stone-400">
+                                    <span className="text-[10px] text-emerald-700/80 dark:text-emerald-300/80">
                                       (≈ NT${billing.totalCostTwd.toFixed(3)})
                                     </span>
                                   </div>
-                                  <span className="text-[10px] text-amber-700/80 dark:text-amber-300/80 font-medium">
-                                    Tier 2 計費
+                                  <span className="text-[10px] bg-emerald-600 text-white font-semibold px-2 py-0.5 rounded-full shadow-xs">
+                                    ✨ Free Tier 免扣款 ($0)
                                   </span>
                                 </div>
                               </div>
